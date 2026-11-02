@@ -32,7 +32,7 @@ export const VAULT_PROJECTS: ProjectExperience[] = [
     description: 'Fintech decision-support platform optimizing card reward routing and transfer partner conversion yields.',
     bullets: [
       'Engineered Spend SmartRouter evaluating purchase categories against card portfolios to optimize net reward rates.',
-      'Built Redemption Maximizer modeling transfer partner ratios (Accor, Singapore Airlines, Qatar Airways, Marriott) yielding up to ₹18,000–₹36,000 vs. standard ₹2,000 catalog cashback.',
+      'Built Redemption Maximizer modeling transfer partner ratios (Accor, Singapore Airlines, Qatar Airways, Marriott) yielding up to INR 18,000–36,000 vs. standard INR 2,000 catalog cashback.',
     ],
   },
   {
@@ -65,6 +65,25 @@ export interface TailoredResumeData {
   certifications: string[];
 }
 
+export interface SkillRoadmapStep {
+  skill: string;
+  action_plan: string;
+  recommended_certification: string;
+  certification_provider?: string;
+  timeline?: string;
+  importance?: 'CRITICAL' | 'RECOMMENDED' | 'NICE_TO_HAVE' | string;
+  practical_project?: string;
+}
+
+export interface RecommendedCertification {
+  name: string;
+  issuer: string;
+  target_skill: string;
+  estimated_time: string;
+  why_it_helps: string;
+  difficulty?: 'Beginner' | 'Intermediate' | 'Advanced' | string;
+}
+
 export interface JobEvaluationData {
   job_title: string;
   company_name: string;
@@ -76,6 +95,8 @@ export interface JobEvaluationData {
   tailoring_recommendations: string[];
   location_info?: string;
   executive_summary?: string;
+  skill_roadmap?: SkillRoadmapStep[];
+  recommended_certifications?: RecommendedCertification[];
 }
 
 export interface CoverLetterData {
@@ -87,6 +108,16 @@ export interface CoverLetterData {
 
 export interface ScreeningAnswer {
   question: string;
+  suggested_answer: string;
+}
+
+export interface InterviewPrepQuestion {
+  question: string;
+  category: 'Portal Reported' | 'Technical & Operational' | 'Behavioral (STAR)' | 'Situational Case' | string;
+  source: string; // e.g. "Glassdoor Candidate Report", "AmbitionBox", "Role Competency Model"
+  isFromPortal?: boolean;
+  why_asked: string;
+  key_talking_points: string[];
   suggested_answer: string;
 }
 
@@ -342,7 +373,112 @@ Qualifications & Requirements:
   },
 ];
 
-// Initial tailored Weaver package (ready on page load)
+// Initial empty / plain evaluation for reload state
+export const EMPTY_EVALUATION: JobEvaluationData = {
+  job_title: '',
+  company_name: '',
+  match_score: 0,
+  should_apply: false,
+  verdict: 'PENDING',
+  location_info: '',
+  executive_summary: '',
+  key_matching_factors: [],
+  missing_critical_skills: [],
+  tailoring_recommendations: [],
+  skill_roadmap: [],
+  recommended_certifications: [],
+};
+
+// Initial empty cover letter
+export const EMPTY_COVER_LETTER: CoverLetterData = {
+  recipient: '',
+  subject: '',
+  body_paragraphs: [],
+  signoff: '',
+};
+
+// Master Untailored Resume Baseline (Loaded when no specific job is targeted)
+export const MASTER_BASE_RESUME: TailoredResumeData = {
+  full_name: 'Sushmit Surendran',
+  email: 'Sushmits07@gmail.com',
+  phone: '+91 89214 09100',
+  location: '',
+  linkedin: 'https://linkedin.com/in/sushmit-surendran',
+  tailored_summary:
+    'Operations and Real-Time Analytics professional with 6 years of experience across fintech service operations, dynamic queue balancing, incident bridge leadership, and process automation. At Revolut, monitor and balance live capacity across 1,000+ frontline agents and 300+ dynamic queues globally. Proven track record executing Jove SQL investigations to eliminate cross-queue transfer loops, leading operational incident bridges during platform outages, and engineering automated reporting workflows.',
+  skills: [
+    'Real-Time Queue Monitoring & WFM',
+    'Service Level Adherence (SLA) Oversight',
+    'SQL Investigation (Jove Platform)',
+    'Looker & Metabase Analytics',
+    'Incident Bridge & Triage Leadership',
+    'Advanced Excel (Pivot Tables, XLOOKUP)',
+    'Confluence SOP & Knowledge Governance',
+    'Duplicate Message Suppression Controls',
+    'B2B Client Delivery & Scoping',
+    'AI-Assisted Workflow Automation',
+    'Cross-Functional Stakeholder Alignment',
+    'Payment Disputes & Chargebacks',
+  ],
+  experiences: [
+    {
+      title: 'Real-Time Analyst / SME, Real-Time Operations',
+      company: 'Revolut',
+      date_range: 'Oct 2023 – Present',
+      location: '',
+      bullets: [
+        'Supervise live service operations across 1,000+ frontline agents and 300+ dynamic queues simultaneously across EEA/UK, Americas, and APAC, balancing agent allocations to preempt SLA breaches.',
+        'Wrote and executed SQL queries via the Jove platform to investigate recurring chat ping-pong loops across queues; engineered a standardized escalation pathway that eliminated repeat transfers.',
+        'Led operational incident response and bridge triage during live platform outages and surges of 1,000–2,000 chats; built geo-targeted communication banners and automated Slack incident workflows.',
+        'Designed and deployed a Gemini-assisted breach reporting workflow that automated collation of incident metrics, reducing a 15-minute manual reporting cycle to under 3 minutes.',
+        'Managed Confluence operational knowledge architecture, executing quarterly reviews and authoring definitive SOPs for onboarding analysts on incident bridge protocols.',
+      ],
+    },
+    {
+      title: 'Support Specialist, Chargebacks & Disputes',
+      company: 'Revolut',
+      date_range: 'Oct 2022 – Sep 2023',
+      location: '',
+      bullets: [
+        'Handled and adjudicated complex payment disputes and cardholder chargeback escalations in a regulated fintech environment; maintained a consistent first-contact resolution (FCR) rate above 95%.',
+        'Investigated recurring dispute friction points and partnered cross-functionally to design and introduce 3 key chargeback handling workflow improvements that streamlined evidence gathering.',
+      ],
+    },
+    {
+      title: 'Customer Success / Account Management',
+      company: 'Torc Infotech Pvt. Ltd.',
+      date_range: 'Sep 2020 – Sep 2022',
+      location: '',
+      bullets: [
+        'Managed an end-to-end B2B account portfolio of 8 international enterprise client accounts across full lifecycles from discovery, technical scoping, and delivery tracking to billing and retention.',
+        'Expanded an initial European pilot project into 4 consecutive delivered project scopes within 8 months, successfully converting the client relationship into an ongoing technical retainer.',
+        'Co-led technical discovery and solution scoping for a large-scale healthcare platform proposal estimated at 32 person-months across 28 weeks, authoring SOWs and boundary conditions.',
+        'Coordinated multi-currency recurring international billing across INR, USD, AED, and EUR, reconciling project milestone completions with contractual billing schedules.',
+      ],
+    },
+  ],
+  projects: VAULT_PROJECTS,
+  education: [
+    {
+      degree: 'Bachelor of Commerce (Travel & Tourism)',
+      institution: 'Sri Sri University',
+      year: '2017 – 2020',
+    },
+    {
+      degree: 'Advanced Executive Program in Cybersecurity',
+      institution: 'NIT Rourkela x Edureka',
+      year: '2020 – 2021',
+    },
+  ],
+  certifications: [
+    'Analyzing and Visualizing Data in Looker | Google Cloud Community India',
+    'Microsoft Certified: Security, Compliance, and Identity Fundamentals (SC-900)',
+    'SQL for Data Science | Coursera / UC Davis',
+    'Generative AI Fundamentals | Google Cloud Skills Boost',
+  ],
+};
+
+// Initial tailored Weaver package (ready on selection)
 export const INITIAL_WEAVER_RESUME: TailoredResumeData = {
   full_name: 'Sushmit Surendran',
   email: 'Sushmits07@gmail.com',
@@ -446,6 +582,61 @@ export const INITIAL_WEAVER_EVALUATION: JobEvaluationData = {
     'Feature Torc Infotech person-month capacity estimation (32 person-months) as proof of resource budgeting experience.',
     'Focus on workforce utilization metrics, roster management, and cross-functional alignment.',
   ],
+  skill_roadmap: [
+    {
+      skill: 'Professional Services WIP & Utilization Economics',
+      action_plan: 'Master billable hour variance models, realization rate computation, and engagement margin optimization used in public accounting/consulting firms.',
+      recommended_certification: 'AICPA Professional Services Operations Certificate',
+      certification_provider: 'AICPA & CIMA',
+      timeline: '2–3 weeks',
+      importance: 'RECOMMENDED',
+      practical_project: 'Build an Excel utilization tracker modeling 100+ audit/tax staff across busy-season capacity constraints.',
+    },
+    {
+      skill: 'Enterprise Resource Management & PSA Software',
+      action_plan: 'Familiarize with professional services automation (PSA) suites (Kantata/Mavenlink, Workday Resource Management, BigTime) for multi-tiered staff scheduling.',
+      recommended_certification: 'Kantata Product Certified Specialist / Workday Pro',
+      certification_provider: 'Workday / Kantata',
+      timeline: '1–2 weeks',
+      importance: 'RECOMMENDED',
+      practical_project: 'Create a comparative workflow map linking Revolut real-time scheduling heuristics to accounting firm engagement rosters.',
+    },
+    {
+      skill: 'Cross-Border Capacity Governance & Offshore Team Leadership',
+      action_plan: 'Formalize stakeholder alignment techniques for managing offshore India delivery pods supporting US partner engagements.',
+      recommended_certification: 'Certified Associate in Project Management (CAPM)',
+      certification_provider: 'Project Management Institute (PMI)',
+      timeline: '3–4 weeks',
+      importance: 'NICE_TO_HAVE',
+      practical_project: 'Document an SOP for US-India scheduling conflict resolution and utilization variance escalations.',
+    },
+  ],
+  recommended_certifications: [
+    {
+      name: 'Certified Associate in Project Management (CAPM)',
+      issuer: 'Project Management Institute (PMI)',
+      target_skill: 'Resource planning, schedule management, cross-functional project governance',
+      estimated_time: '3–4 weeks',
+      why_it_helps: 'Validates formal capacity management and project delivery skills for Weaver engagement leaders.',
+      difficulty: 'Intermediate',
+    },
+    {
+      name: 'AICPA Professional Services Fundamentals',
+      issuer: 'AICPA & CIMA',
+      target_skill: 'Accounting firm operational rhythms, billable realization, tax practice busy-season dynamics',
+      estimated_time: '2 weeks',
+      why_it_helps: 'Directly bridges the CPA/Tax firm domain gap, showing immediate operational literacy for Weaver partners.',
+      difficulty: 'Beginner',
+    },
+    {
+      name: 'Alteryx Designer Core / Advanced Excel Financial Modeling',
+      issuer: 'Alteryx / Corporate Finance Institute',
+      target_skill: 'Automated staff allocation reconciliations, utilization forecasting algorithms',
+      estimated_time: '2–3 weeks',
+      why_it_helps: 'Enables instant automation of complex staffing models, reducing weekly scheduling cycle times.',
+      difficulty: 'Intermediate',
+    },
+  ],
 };
 
 export const INITIAL_WEAVER_COVER_LETTER: CoverLetterData = {
@@ -474,6 +665,79 @@ export const INITIAL_SCREENING_ANSWERS: ScreeningAnswer[] = [
     question: 'What is your current notice period / availability?',
     suggested_answer:
       'My notice period is standard, and I am available to begin upon mutual agreement.',
+  },
+];
+
+export const INITIAL_INTERVIEW_PREP_QUESTIONS: InterviewPrepQuestion[] = [
+  {
+    question: 'How do you prioritize resource allocation across multiple engagements with competing deadlines?',
+    category: 'Portal Reported',
+    source: 'Glassdoor Candidate Report',
+    isFromPortal: true,
+    why_asked: 'Evaluates prioritization frameworks, capacity balancing, and conflict mitigation when multiple client deliverables peak simultaneously.',
+    key_talking_points: [
+      'Rank projects by client criticality, SLA penalties, and statutory tax deadlines.',
+      'Use Looker/Excel utilization dashboards to isolate unallocated or under-utilized capacity.',
+      'Proactively communicate schedule variances to US engagement partners with alternative staffing plans.',
+    ],
+    suggested_answer:
+      'At Torc Infotech and Revolut, I managed resource scheduling across multiple overlapping deliverables under strict deadlines. My framework starts with objective triage: ranking engagements by deadline rigidity and statutory milestones. In high-demand periods, I monitored real-time queue adherence across 150+ queues to identify teams with surplus capacity and dynamically shifted workloads without compromising primary SLAs. For Weaver, I would establish weekly utilization forecasting models so engagement managers receive early warning of capacity shortfalls 2–3 weeks before busy-season crunches.',
+  },
+  {
+    question: 'Tell me about a time you faced pushback from project leaders regarding resource assignments; how did you resolve it?',
+    category: 'Portal Reported',
+    source: 'Glassdoor Candidate Report',
+    isFromPortal: true,
+    why_asked: 'Tests stakeholder management, data-backed negotiation, and emotional intelligence when partner demands exceed available staff.',
+    key_talking_points: [
+      'Acknowledge partner urgency without making unachievable commitments.',
+      'Present objective workload data (billable utilization, overtime thresholds).',
+      'Deliver compromise solutions (e.g., hybrid pairing of senior SME with junior analyst).',
+    ],
+    suggested_answer:
+      'At Revolut, product managers often requested dedicated senior analysts during technical releases, which risked leaving ongoing operations exposed. Rather than simply rejecting the request, I used Jove SQL query logs and occupancy data to demonstrate that dedicating full-time staff would cause queue wait times to spike by 35%. Instead, I proposed a tiered support model: a designated senior SME was available for escalation bridges while frontline volume was handled by core staff with pre-configured routing. The release succeeded with zero SLA breaches, and the partner commended the data-driven compromise.',
+  },
+  {
+    question: 'Walk me through how you use data analytics or SQL to investigate operational bottlenecks and eliminate inefficiencies.',
+    category: 'Technical & Operational',
+    source: 'Role Architecture Analysis',
+    isFromPortal: false,
+    why_asked: 'Verifies technical data analytics proficiency, SQL querying ability, and root-cause problem solving in workforce operations.',
+    key_talking_points: [
+      'Identified chat transfer loop defect via SQL on Jove platform.',
+      'Quantified daily volume impact and handle time inflation.',
+      'Designed structured escalation pathway to senior tier, permanently eliminating loops.',
+    ],
+    suggested_answer:
+      'At Revolut, I noticed customer support interactions were frequently ping-ponging between different functional queues without reaching resolution. I wrote and executed SQL queries via our Jove database platform to track interaction paths, isolating repeated transfer patterns and proving this defect affected hundreds of chats daily with severe handle time inflation. Presenting this data to queue owners, I engineered an automated routing SOP that directed looping cases immediately to advanced tier agents who assumed full case ownership. This eliminated repeat transfers and accelerated resolution times by over 40%.',
+  },
+  {
+    question: 'How do you handle real-time resource re-allocation during sudden operational volatility or volume surges?',
+    category: 'Technical & Operational',
+    source: 'Role Architecture Analysis',
+    isFromPortal: false,
+    why_asked: 'Assesses crisis management, real-time tactical agility, and cross-functional communication during unforeseen demand spikes.',
+    key_talking_points: [
+      'Pre-configured trigger thresholds based on SLA drop rates.',
+      'Rapid intraday reallocation across tiers.',
+      'Executive communication bridge to maintain leadership visibility.',
+    ],
+    suggested_answer:
+      'As Incident Management POC at Revolut, I oversaw operational triage during sudden spikes of 1,000 to 2,000 concurrent chats. When volatility hit, I utilized real-time queue dashboards to execute pre-approved deflection workflows: pausing non-essential offline activities, redirecting cross-skilled agents from low-demand queues, and deploying geo-targeted user banners to curb redundant inquiries. I also created an AI-assisted incident reporting automation that cut leadership reporting time from 15 minutes to under 3 minutes, giving executive leadership immediate visibility during crisis windows.',
+  },
+  {
+    question: 'If an engagement manager requests additional person-hours for a project with zero budget variance, how would you evaluate and resolve it?',
+    category: 'Situational Case',
+    source: 'Role Architecture Analysis',
+    isFromPortal: false,
+    why_asked: 'Evaluates financial awareness, billing realization understanding, and protecting engagement margin profitability.',
+    key_talking_points: [
+      'Analyze billable utilization vs non-billable administrative hours.',
+      'Audit current task distribution to identify automatable or junior-delegable tasks.',
+      'Present margin impact analysis before approving scope expansions.',
+    ],
+    suggested_answer:
+      'I would first review the engagement’s current burn rate and time-entry breakdown against the contractual SOW, as I did when managing multi-currency billing reconciliation at Torc Infotech. Often, requests for more hours stem from senior professionals spending time on administrative or data-prep tasks that can be delegated to junior staff or automated via standardized templates. If the scope has genuinely expanded, I would partner with the engagement lead to prepare a formal scope change justification for the client, ensuring the firm does not absorb unbudgeted costs that erode realization margins.',
   },
 ];
 

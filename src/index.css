@@ -2,15 +2,133 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+:root {
+  /* Apple Design System */
+  --apple-bg: #FBFBFD;
+  --apple-surface: #FFFFFF;
+  --apple-surface-2: #F5F5F7;
+  --apple-surface-3: #E8E8ED;
+  --apple-text: #1D1D1F;
+  --apple-text-2: #6E6E73;
+  --apple-text-3: #86868B;
+  --apple-blue: #0071E3;
+  --apple-blue-hover: #0077ED;
+  --apple-green: #34C759;
+  --apple-orange: #FF9500;
+  --apple-red: #FF3B30;
+  --apple-border: rgba(0, 0, 0, 0.06);
+  --apple-border-visible: #D2D2D7;
+  --apple-fill-gray: rgba(120, 120, 128, 0.12);
+
+  /* Typography */
+  --font-display: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
 @layer base {
-  body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--apple-bg);
+    color: var(--apple-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--apple-bg);
+    color: var(--apple-text);
+    min-height: 100vh;
+    letter-spacing: -0.01em;
+  }
+
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* Apple Typography */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+/* Apple Card */
+.apple-card {
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-border);
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.apple-card:hover {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* Apple Label/Badge */
+.apple-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--apple-fill-gray);
+  color: var(--apple-text-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.apple-badge-blue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--apple-blue);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* Apple Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+  background-clip: content-box;
+}
+
+/* Animate fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease forwards;
 }
 
 /* Forced page-break rules for resume content sections, headings, and bullet points */
@@ -53,9 +171,9 @@ ul {
     color: #111111 !important;
     padding: 0 !important;
     margin: 0 !important;
+    background-image: none !important;
   }
 
-  /* Hide everything except the printable resume container */
   .no-print, nav, header, aside, .action-toolbar, .troubleshooter-panel, .screen-only {
     display: none !important;
   }
@@ -76,7 +194,6 @@ ul {
     border: none !important;
   }
 
-  /* Forced rules to guarantee bullet points and headers never split awkwardly across pages */
   h1, h2, h3, h4,
   .resume-heading,
   .resume-header {

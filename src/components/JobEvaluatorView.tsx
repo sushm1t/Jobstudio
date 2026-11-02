@@ -13,6 +13,13 @@ import {
   Globe,
   Compass,
   Filter,
+  GraduationCap,
+  Award,
+  BookOpen,
+  Clock,
+  Target,
+  TrendingUp,
+  Milestone,
 } from 'lucide-react';
 import { JobEvaluationData, JobOpportunity, PRESET_JOBS } from '../data/defaultData';
 
@@ -60,6 +67,15 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
     message: string;
   } | null>(null);
 
+  // Autonomous Web Job Discovery
+  const [isDiscovering, setIsDiscovering] = useState<boolean>(false);
+  const [discoveryLocation, setDiscoveryLocation] = useState<string>('India (Remote / Hybrid)');
+  const [discoveryFeedback, setDiscoveryFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
+
   const categories = [
     'All',
     'Real-Time Operations & WFM',
@@ -67,9 +83,70 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
     'Resource & Capacity Planning',
     'Implementation Operations',
     'Business Operations & Analytics',
+    'Product Operations',
   ];
 
-  const platforms = ['All', 'UltiPro', 'Oracle Cloud HCM', 'Greenhouse', 'LinkedIn', 'Lever', 'Ashby', 'Workable'];
+  const platforms = [
+    'All',
+    'SmartRecruiters',
+    'Greenhouse',
+    'Lever',
+    'Ashby',
+    'LinkedIn',
+    'UltiPro',
+    'Oracle Cloud HCM',
+    'Workable',
+  ];
+
+  // Autonomous Web Job Discovery Agent using Google Search Grounding
+  const handleAutoDiscoverJobs = async () => {
+    setIsDiscovering(true);
+    setDiscoveryFeedback(null);
+    try {
+      const res = await fetch('/api/discover-jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: discoveryLocation,
+          roles: [
+            'Real-Time Analyst / Workforce Management',
+            'Product Operations Specialist',
+            'Incident Management / Service Operations Lead',
+            'Business Operations Analyst',
+            'Operations Analyst',
+          ],
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to auto-discover jobs across the web.');
+      }
+
+      if (data.opportunities && data.opportunities.length > 0) {
+        if (onAddOpportunities) {
+          onAddOpportunities(data.opportunities);
+        }
+        onSelectPreset(data.opportunities[0].id);
+        setDiscoveryFeedback({
+          type: 'success',
+          message: `Discovered and verified ${data.opportunities.length} live matching vacancies across Google Search!`,
+        });
+      } else {
+        setDiscoveryFeedback({
+          type: 'error',
+          message: 'No live jobs matching the criteria were returned. Please try searching with a broader location.',
+        });
+      }
+    } catch (err: any) {
+      setDiscoveryFeedback({
+        type: 'error',
+        message: err.message || 'Error auto-discovering jobs across the web.',
+      });
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
 
   // Handle URL scraping via Firecrawl or direct fetch
   const handleScrapeUrl = async () => {
@@ -173,113 +250,182 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
     return matchesCategory && matchesPlatform && matchesSearch;
   });
 
-  const getPlatformBadgeStyle = (platform: string) => {
-    switch (platform.toLowerCase()) {
-      case 'linkedin':
-        return 'bg-sky-50 text-sky-700 border-sky-200';
-      case 'greenhouse':
-        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-      case 'lever':
-        return 'bg-amber-50 text-amber-800 border-amber-200';
-      case 'ashby':
-        return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'ultipro':
-        return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'oracle cloud hcm':
-        return 'bg-orange-50 text-orange-800 border-orange-200';
-      default:
-        return 'bg-slate-50 text-slate-700 border-slate-200';
-    }
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return 'text-[#34C759]';
+    if (score >= 75) return 'text-[#0071E3]';
+    if (score >= 60) return 'text-[#FF9500]';
+    return 'text-[#FF3B30]';
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      {/* Target Job Selection Card */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Hero Banner */}
+      <div
+        className="relative overflow-hidden rounded-3xl p-8 sm:p-14 text-center space-y-5"
+        style={{
+          background: 'linear-gradient(135deg, #1D1D1F 0%, #2C2C2E 40%, #3A3A3C 100%)',
+        }}
+      >
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40"
+          style={{
+            background: 'radial-gradient(circle at 30% 20%, rgba(0, 113, 227, 0.4), transparent 50%), radial-gradient(circle at 70% 80%, rgba(88, 86, 214, 0.3), transparent 50%)',
+          }}
+        />
+
+        <div className="relative z-10 flex flex-col items-center space-y-4">
+          <span className="apple-badge-blue text-[11px] tracking-wider">
+            JOB EVALUATOR
+          </span>
+
+          <h1 className="font-display text-3xl sm:text-5xl md:text-[56px] text-white font-semibold tracking-tight leading-[1.05]">
+            Find your next role.
+          </h1>
+
+          <p className="text-white/70 max-w-lg text-sm sm:text-base font-normal leading-relaxed">
+            Match scoring, ATS materials, and application intelligence — all in one place.
+          </p>
+        </div>
+      </div>
+
+      {/* Target Opportunities Card */}
+      <div className="apple-card p-6 sm:p-8 space-y-5">
+        {/* Header & Mode Switcher */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-[rgba(0,0,0,0.06)]">
           <div>
-            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Compass className="w-5 h-5 text-indigo-600" />
-              <span>Target Opportunities & Match Intelligence</span>
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Verified live opportunities matching Sushmit Surendran's master qualifications. Only confirmed active postings are displayed.
+            <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#1D1D1F]">
+              Target Opportunities
+            </h2>
+            <p className="text-sm text-[#86868B] mt-1">
+              Live roles matched against your profile with automated ATS tailoring.
             </p>
           </div>
 
-          {/* Mode Switcher */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs font-medium">
+          {/* Apple Segmented Control */}
+          <div className="flex items-center p-1 bg-[#F5F5F7] rounded-xl text-[13px] font-medium self-start sm:self-auto shrink-0">
             <button
               onClick={() => setActiveInputMode('preset')}
-              className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              className={`px-4 py-2 rounded-[10px] transition-all cursor-pointer ${
                 activeInputMode === 'preset'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#1D1D1F] shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.04)] font-semibold'
+                  : 'text-[#86868B] hover:text-[#1D1D1F]'
               }`}
             >
-              Confirmed Opportunities ({opportunities.length})
+              Live Roles ({opportunities.length})
             </button>
             <button
               onClick={() => setActiveInputMode('custom')}
-              className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              className={`px-4 py-2 rounded-[10px] transition-all cursor-pointer ${
                 activeInputMode === 'custom'
-                  ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#1D1D1F] shadow-[0_1px_4px_rgba(0,0,0,0.08),0_0_1px_rgba(0,0,0,0.04)] font-semibold'
+                  : 'text-[#86868B] hover:text-[#1D1D1F]'
               }`}
             >
-              Paste Custom JD / URL
+              Paste Custom JD
             </button>
           </div>
         </div>
 
-        {/* Target Roles Supported by Master Vault */}
-        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Eligible Target Specializations (Verified Master Vault)</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              'Business Operations',
-              'Product Operations',
-              'Implementation Operations',
-              'Process Improvement',
-              'Incident Management',
-              'Real-Time Operations SME',
-              'Operations Analyst',
-              'Service Delivery',
-              'AI Operations',
-            ].map((role) => (
-              <span
-                key={role}
-                className="text-[11px] px-2.5 py-0.5 bg-white border border-slate-200 text-slate-700 rounded-md font-medium shadow-2xs"
-              >
-                {role}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Verified Target Opportunities Area */}
+        {/* Live Opportunities Mode */}
         {activeInputMode === 'preset' ? (
           <div className="space-y-4">
-            {/* Live Listing Verification Bar */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="text-xs font-bold text-slate-900">
-                    Verify & Add Live Job Listing
-                  </span>
-                </div>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  Confirmed actual listings only — dummy or dead listings are rejected
-                </span>
+            {/* Control Bar */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 text-[13px]">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-[#86868B] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Filter by title, company, or skill..."
+                  className="w-full pl-10 pr-3 py-2 bg-[#F5F5F7] border-0 rounded-xl text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3] transition-all"
+                />
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2">
+              {/* Category */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="py-2 px-3 bg-[#F5F5F7] border-0 rounded-xl text-[#1D1D1F] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+              >
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c === 'All' ? 'All Specializations' : c}
+                  </option>
+                ))}
+              </select>
+
+              {/* Location */}
+              <select
+                value={discoveryLocation}
+                onChange={(e) => setDiscoveryLocation(e.target.value)}
+                className="py-2 px-3 bg-[#F5F5F7] border-0 rounded-xl text-[#1D1D1F] font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
+              >
+                <option value="India (Remote / Hybrid)">India (Remote / Hybrid)</option>
+                <option value="Remote, India">Fully Remote (India)</option>
+                <option value="Bengaluru / Hyderabad, India">Bengaluru / Hyderabad</option>
+                <option value="Global Remote">Worldwide Remote</option>
+              </select>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                {(searchFilter || selectedCategory !== 'All' || selectedPlatform !== 'All' || selectedJobId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchFilter('');
+                      setSelectedCategory('All');
+                      setSelectedPlatform('All');
+                      onSelectPreset('');
+                    }}
+                    className="px-3 py-2 text-[13px] text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] rounded-xl transition-colors cursor-pointer whitespace-nowrap font-medium"
+                    title="Clear filters and deselected job"
+                  >
+                    Clear All
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleAutoDiscoverJobs}
+                  disabled={isDiscovering}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] rounded-full transition-colors cursor-pointer disabled:opacity-50"
+                  title="Scan Google Search for live matching jobs"
+                >
+                  {isDiscovering ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Scanning...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Auto-Scan</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInput(!showUrlInput)}
+                  className={`px-3 py-2 font-medium rounded-xl transition-colors cursor-pointer ${
+                    showUrlInput
+                      ? 'bg-[#E8E8ED] text-[#1D1D1F] font-semibold'
+                      : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]'
+                  }`}
+                  title="Import a specific job URL"
+                >
+                  {showUrlInput ? 'Close' : '+ Import URL'}
+                </button>
+              </div>
+            </div>
+
+            {/* Import URL Box */}
+            {showUrlInput && (
+              <div className="p-3 bg-[#F5F5F7] rounded-2xl flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
-                  <Globe className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Globe className="w-4 h-4 text-[#86868B] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="url"
                     value={verifyUrlInput}
@@ -290,176 +436,105 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                         handleVerifyLiveJob();
                       }
                     }}
-                    placeholder="Paste active vacancy URL (LinkedIn, Greenhouse, Lever, Ashby, Workday, UltiPro, etc.)..."
-                    className="w-full pl-8 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 bg-white"
+                    placeholder="Paste job link (LinkedIn, SmartRecruiters, Greenhouse, Ashby, Workday)..."
+                    className="w-full pl-10 pr-3 py-2 text-[13px] bg-white border-0 rounded-xl text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => handleVerifyLiveJob()}
                   disabled={isVerifyingListing || !verifyUrlInput.trim()}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  className="px-4 py-2 text-[13px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] rounded-full transition-colors cursor-pointer disabled:opacity-50 shrink-0"
                 >
-                  {isVerifyingListing ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Verifying Live URL...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Verify & Add Listing</span>
-                    </>
-                  )}
+                  {isVerifyingListing ? 'Verifying...' : 'Verify & Add'}
                 </button>
               </div>
+            )}
 
-              {verificationFeedback && (
-                <div
-                  className={`p-2.5 rounded-lg text-xs flex items-start gap-2 ${
-                    verificationFeedback.type === 'success'
-                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
-                      : 'bg-rose-50 border border-rose-200 text-rose-900'
-                  }`}
-                >
-                  {verificationFeedback.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            {/* Notification Feedback */}
+            {(discoveryFeedback || verificationFeedback) && (
+              <div
+                className={`p-3 rounded-2xl text-[13px] flex items-center justify-between gap-2 ${
+                  (discoveryFeedback?.type || verificationFeedback?.type) === 'success'
+                    ? 'bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20'
+                    : 'bg-[#FF3B30]/10 text-[#D70015] border border-[#FF3B30]/20'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {(discoveryFeedback?.type || verificationFeedback?.type) === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                   )}
-                  <div className="space-y-0.5">
-                    <span className="font-semibold block">
-                      {verificationFeedback.type === 'success'
-                        ? 'Confirmed Active Listing'
-                        : 'Verification Failed (Unverified Listings Are Not Displayed)'}
-                    </span>
-                    <span>{verificationFeedback.message}</span>
-                  </div>
+                  <span>{discoveryFeedback?.message || verificationFeedback?.message}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Filter and Search Row */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1 mr-1">
-                  <Filter className="w-3.5 h-3.5" />
-                  <span>Category:</span>
-                </span>
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-2.5 py-1 text-xs rounded-lg transition-colors cursor-pointer ${
-                      selectedCategory === cat
-                        ? 'bg-slate-900 text-white font-semibold shadow-xs'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder="Filter by company or role..."
-                  className="w-full pl-8 pr-3 py-1 text-xs border border-slate-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-
-            {/* Platform Filter Row */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-slate-100">
-              <span className="text-slate-500 font-medium shrink-0">Platform:</span>
-              {platforms.map((p) => (
                 <button
-                  key={p}
-                  onClick={() => setSelectedPlatform(p)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer shrink-0 ${
-                    selectedPlatform === p
-                      ? 'bg-indigo-100 text-indigo-900 font-bold border border-indigo-300'
-                      : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200'
-                  }`}
+                  onClick={() => {
+                    setDiscoveryFeedback(null);
+                    setVerificationFeedback(null);
+                  }}
+                  className="text-[#86868B] hover:text-[#1D1D1F] text-xs font-bold shrink-0"
                 >
-                  {p}
+                  ✕
                 </button>
-              ))}
-            </div>
+              </div>
+            )}
 
-            {/* Confirmed Opportunity Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+            {/* Opportunities Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
               {filteredOpportunities.map((job) => {
                 const isSelected = selectedJobId === job.id;
                 return (
                   <div
                     key={job.id}
                     onClick={() => onSelectPreset(job.id)}
-                    className={`p-4 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-3 relative ${
+                    className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-3 ${
                       isSelected
-                        ? 'bg-indigo-50/70 border-indigo-600 ring-2 ring-indigo-600 shadow-xs'
-                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80'
+                        ? 'bg-white border-[#0071E3] ring-2 ring-[#0071E3]/20 shadow-[0_4px_20px_rgba(0,113,227,0.1)]'
+                        : 'bg-white border-[rgba(0,0,0,0.06)] hover:border-[#D2D2D7] hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]'
                     }`}
                   >
-                    <div className="space-y-2">
-                      {/* Top Meta: Company, Platform Badge, Match Score */}
+                    <div className="space-y-3">
+                      {/* Top Meta */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                          <span className="font-display text-[13px] font-semibold text-[#1D1D1F] flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-[#86868B]" />
                             <span>{job.company}</span>
                           </span>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${getPlatformBadgeStyle(
-                              job.platform
-                            )}`}
-                          >
+                          <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-[rgba(120,120,128,0.12)] text-[#6E6E73]">
                             {job.platform}
-                          </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold uppercase tracking-wider flex items-center gap-0.5">
-                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                            <span>Verified</span>
                           </span>
                         </div>
 
-                        <span
-                          className={`text-xs font-bold font-mono px-2 py-0.5 rounded-full ${
-                            job.matchScore >= 90
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-indigo-100 text-indigo-800'
-                          }`}
-                        >
-                          {job.matchScore}% Match
+                        <span className={`text-sm font-bold tabular-nums ${getScoreColor(job.matchScore)}`}>
+                          {job.matchScore}%
                         </span>
                       </div>
 
                       {/* Job Title */}
-                      <h3 className="text-sm font-bold text-slate-900 line-clamp-1">
+                      <h3 className="font-display text-base font-semibold text-[#1D1D1F] line-clamp-1">
                         {job.title}
                       </h3>
 
                       {/* Location */}
-                      <div className="text-xs text-slate-500 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                      <div className="text-[13px] text-[#86868B] flex items-center gap-1">
+                        <MapPin className="w-3 h-3 shrink-0" />
                         <span className="truncate">{job.location}</span>
                       </div>
 
-                      {/* Eligibility Highlight Box */}
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-700 leading-snug">
-                        <span className="font-semibold text-slate-900">Why You're Eligible: </span>
+                      {/* Why You're Eligible */}
+                      <div className="p-3 rounded-xl bg-[#F5F5F7] text-[12px] text-[#6E6E73] leading-snug">
+                        <span className="font-semibold text-[#1D1D1F]">Why you match: </span>
                         <span>{job.matchHighlight}</span>
                       </div>
                     </div>
 
                     {/* Action Bar */}
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                      <div className="flex items-center gap-1.5 font-medium text-indigo-600">
-                        <span>{isSelected ? '✓ Selected Target' : 'Click to Target'}</span>
-                      </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-[rgba(0,0,0,0.04)] text-[13px]">
+                      <span className={`font-medium ${isSelected ? 'text-[#0071E3] font-semibold' : 'text-[#86868B]'}`}>
+                        {isSelected ? '✓ Selected' : 'Click to select'}
+                      </span>
 
                       {job.applyUrl && (
                         <a
@@ -467,7 +542,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-indigo-600 font-semibold transition-colors hover:underline"
+                          className="inline-flex items-center gap-1 text-[12px] text-[#0071E3] font-medium transition-colors hover:underline"
                           title="Open verified live posting in new tab"
                         >
                           <span>Open on {job.platform}</span>
@@ -481,10 +556,10 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             </div>
 
             {filteredOpportunities.length === 0 && (
-              <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2">
-                <AlertCircle className="w-6 h-6 text-slate-400 mx-auto" />
-                <h4 className="text-xs font-bold text-slate-800">No verified listings match this filter</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              <div className="p-10 text-center bg-[#F5F5F7] border border-dashed border-[#D2D2D7] rounded-2xl space-y-2">
+                <AlertCircle className="w-6 h-6 text-[#86868B] mx-auto" />
+                <h4 className="font-display text-sm font-semibold text-[#1D1D1F]">No listings match this filter</h4>
+                <p className="text-[13px] text-[#86868B] max-w-sm mx-auto">
                   Only confirmed live job postings are displayed. Paste an active vacancy URL above to verify and add it.
                 </p>
                 <button
@@ -493,7 +568,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     setSelectedPlatform('All');
                     setSearchFilter('');
                   }}
-                  className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer pt-1"
+                  className="text-[13px] text-[#0071E3] font-medium hover:underline cursor-pointer pt-1"
                 >
                   Reset Filters
                 </button>
@@ -503,8 +578,8 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
         ) : (
           <div className="space-y-4">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-700">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[13px] font-medium text-[#1D1D1F]">
                   Job Posting URL (Optional)
                 </label>
                 {customUrl.trim() && (
@@ -512,7 +587,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     type="button"
                     onClick={handleScrapeUrl}
                     disabled={isScraping}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 cursor-pointer transition-colors"
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#0071E3] hover:text-[#0077ED] disabled:opacity-50 cursor-pointer transition-colors"
                   >
                     {isScraping ? (
                       <>
@@ -534,7 +609,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                   value={customUrl}
                   onChange={(e) => setCustomUrl(e.target.value)}
                   placeholder="https://recruiting2.ultipro.com/WEA1003WEAV/... or Greenhouse / Lever / Workday URL"
-                  className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500"
+                  className="flex-1 px-4 py-2.5 text-[13px] bg-[#F5F5F7] border-0 rounded-xl text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3]"
                 />
                 {customUrl.trim() && (
                   <>
@@ -542,15 +617,15 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                       type="button"
                       onClick={() => handleVerifyLiveJob(customUrl)}
                       disabled={isVerifyingListing}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors shrink-0 disabled:opacity-50"
+                      className="px-4 py-2 bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-full text-[13px] font-semibold cursor-pointer transition-colors shrink-0 disabled:opacity-50"
                     >
-                      {isVerifyingListing ? 'Verifying...' : 'Verify Live Listing'}
+                      {isVerifyingListing ? 'Verifying...' : 'Verify Listing'}
                     </button>
                     <button
                       type="button"
                       onClick={handleScrapeUrl}
                       disabled={isScraping}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0"
+                      className="px-4 py-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] rounded-full text-[13px] font-medium cursor-pointer transition-colors shrink-0"
                     >
                       {isScraping ? 'Extracting...' : 'Fetch Text'}
                     </button>
@@ -560,16 +635,16 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
               {scrapeNotification && (
                 <div
-                  className={`mt-2 p-2.5 rounded-lg text-xs flex items-start gap-2 ${
+                  className={`mt-3 p-3 rounded-xl text-[13px] flex items-start gap-2 ${
                     scrapeNotification.type === 'success'
-                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
-                      : 'bg-amber-50 text-amber-900 border border-amber-200'
+                      ? 'bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20'
+                      : 'bg-[#FF9500]/10 text-[#C93400] border border-[#FF9500]/20'
                   }`}
                 >
                   {scrapeNotification.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   )}
                   <span>{scrapeNotification.message}</span>
                 </div>
@@ -577,7 +652,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-700 block mb-1">
+              <label className="text-[13px] font-medium text-[#1D1D1F] block mb-2">
                 Job Description Text (Paste full JD here)
               </label>
               <textarea
@@ -585,147 +660,350 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                 onChange={(e) => setCustomJobText(e.target.value)}
                 rows={5}
                 placeholder="Paste the job description, key requirements, and company info here..."
-                className="w-full p-3 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 font-sans"
+                className="w-full p-4 text-[13px] bg-[#F5F5F7] border-0 rounded-xl text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:ring-2 focus:ring-[#0071E3] font-sans leading-relaxed"
               />
             </div>
           </div>
         )}
 
-        {/* Selected Target Summary & Action Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          <div className="text-xs text-slate-500">
-            Selected Target Opportunity:{' '}
-            <span className="font-bold text-slate-900">
-              {evaluation.job_title}
-            </span>{' '}
-            at <span className="font-semibold text-slate-800">{evaluation.company_name}</span>
-          </div>
+      </div>
 
-          <button
-            onClick={onEvaluate}
-            disabled={isLoading}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-60 whitespace-nowrap"
-          >
-            {isLoading ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Tailoring Resume & Materials with Gemini...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Evaluate & Tailor Resume for this Role</span>
-              </>
+      {evaluation.job_title && evaluation.match_score > 0 ? (
+        <>
+          {/* Evaluation Card */}
+          <div className="apple-card p-6 sm:p-8 space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="flex items-center gap-5">
+                {/* Score Circle */}
+                <div className={`relative w-16 h-16 rounded-full bg-[#F5F5F7] border-2 ${
+                  evaluation.match_score >= 80 ? 'border-[#34C759]' : evaluation.match_score >= 60 ? 'border-[#0071E3]' : 'border-[#FF9500]'
+                } flex flex-col items-center justify-center shrink-0`}>
+                  <span className={`font-display text-lg font-bold tabular-nums ${getScoreColor(evaluation.match_score)}`}>
+                    {evaluation.match_score}%
+                  </span>
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-[#86868B]">
+                    MATCH
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`apple-badge text-[11px] ${evaluation.should_apply ? 'bg-[#34C759]/10 text-[#248A3D]' : 'bg-[#FF9500]/10 text-[#C93400]'}`}>
+                      {evaluation.verdict.replace('_', ' ')}
+                    </span>
+                    <span className="text-[13px] text-[#86868B] font-medium">
+                      {evaluation.should_apply ? '✓ Recommended' : 'Low Overlap'}
+                    </span>
+                  </div>
+                  <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#1D1D1F]">
+                    {evaluation.job_title}
+                  </h2>
+                  <div className="text-[13px] text-[#86868B] flex items-center gap-2 font-medium">
+                    <span className="text-[#1D1D1F] font-semibold">{evaluation.company_name}</span>
+                    {evaluation.location_info && (
+                      <>
+                        <span className="text-[#D2D2D7]">·</span>
+                        <span>{evaluation.location_info}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action CTAs */}
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={onEvaluate}
+                  disabled={isLoading}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-white bg-[#0071E3] hover:bg-[#0077ED] rounded-full transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Tailoring Materials...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Tailor Application</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={onProceedToResume}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold text-[#1D1D1F] bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <span>View Resume</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#86868B]" />
+                </button>
+              </div>
+            </div>
+
+            {evaluation.executive_summary && (
+              <p className="text-[13px] text-[#6E6E73] border-t border-[rgba(0,0,0,0.06)] pt-4 leading-relaxed">
+                <span className="font-semibold text-[#1D1D1F]">Assessment: </span>
+                {evaluation.executive_summary}
+              </p>
             )}
-          </button>
-        </div>
-      </div>
-
-      {/* Match Score & Verdict Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="flex items-center gap-5">
-          {/* Big Circular Score */}
-          <div className="relative w-20 h-20 rounded-full bg-slate-50 border-4 border-indigo-600 flex flex-col items-center justify-center shrink-0 shadow-xs">
-            <span className="text-2xl font-extrabold text-slate-900 tabular-nums">
-              {evaluation.match_score}
-            </span>
-            <span className="text-[10px] font-mono text-slate-500 -mt-1">/ 100</span>
           </div>
 
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                {evaluation.verdict.replace('_', ' ')}
-              </span>
-              <span className="text-xs text-slate-500 font-mono">
-                {evaluation.should_apply ? '✓ Recommended to Apply' : 'Skip Role'}
-              </span>
+          {/* 2-Column: Key Qualifications & Tailoring Strategy */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Key Qualifications */}
+            <div className="apple-card p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="apple-badge-blue text-[11px]">FIT FACTORS</span>
+                <h3 className="font-display font-semibold text-base text-[#1D1D1F]">Matching Qualifications</h3>
+              </div>
+              <ul className="space-y-2.5 text-[13px] text-[#6E6E73]">
+                {evaluation.key_matching_factors.map((factor, idx) => (
+                  <li key={idx} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#34C759] shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{factor}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">
-              {evaluation.job_title}
-            </h2>
-            <div className="text-xs text-slate-600 flex items-center gap-3">
-              <span>{evaluation.company_name}</span>
-              {evaluation.location_info && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span>{evaluation.location_info}</span>
-                </>
-              )}
+
+            {/* Tailoring Strategy */}
+            <div className="apple-card p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="apple-badge text-[11px]">STRATEGY</span>
+                <h3 className="font-display font-semibold text-base text-[#1D1D1F]">Tailoring Recommendations</h3>
+              </div>
+              <ul className="space-y-2.5 text-[13px] text-[#6E6E73]">
+                {evaluation.tailoring_recommendations.map((rec, idx) => (
+                  <li key={idx} className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#F5F5F7] text-[#6E6E73] text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <span className="leading-relaxed">{rec}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
-        </div>
 
-        <button
-          onClick={onProceedToResume}
-          className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-        >
-          <span>View Tailored ATS Resume</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          {/* Skill-Building Roadmap & Certifications */}
+          {(() => {
+            const roadmapSteps =
+              evaluation.skill_roadmap && evaluation.skill_roadmap.length > 0
+                ? evaluation.skill_roadmap
+                : evaluation.missing_critical_skills.map((gap, i) => ({
+                    skill: gap.split('(')[0].replace(/mitigated by.*$/i, '').trim(),
+                    action_plan: `Master core operational methodologies and industry frameworks related to: ${gap}.`,
+                    recommended_certification: 'Industry Professional Certification',
+                    certification_provider: 'Accredited Provider',
+                    timeline: '2–4 weeks',
+                    importance: i === 0 ? 'CRITICAL' : 'RECOMMENDED',
+                    practical_project: 'Build a targeted portfolio case study demonstrating practical application of this competency.',
+                  }));
 
-      {/* Executive Summary */}
-      {evaluation.executive_summary && (
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed">
-          <span className="font-semibold text-slate-900">Executive Assessment: </span>
-          {evaluation.executive_summary}
+            const certifications =
+              evaluation.recommended_certifications && evaluation.recommended_certifications.length > 0
+                ? evaluation.recommended_certifications
+                : [
+                    {
+                      name: 'PL-300: Microsoft Power BI Data Analyst',
+                      issuer: 'Microsoft',
+                      target_skill: 'Advanced reporting, dashboard analytics & operational data modeling',
+                      estimated_time: '2–3 weeks',
+                      why_it_helps: 'Strong ATS keyword validation for analytics and business operations roles.',
+                      difficulty: 'Intermediate',
+                    },
+                    {
+                      name: 'ITIL 4 Foundation / Six Sigma Green Belt',
+                      issuer: 'AXELOS / ASQ',
+                      target_skill: 'Structured incident governance and process defect elimination',
+                      estimated_time: '3–4 weeks',
+                      why_it_helps: 'Universally recognized standard for operational management and SLA integrity.',
+                      difficulty: 'Intermediate',
+                    },
+                  ];
+
+            const gapPercentage = Math.max(0, 100 - evaluation.match_score);
+
+            return (
+              <div className="apple-card p-6 sm:p-8 space-y-6">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-[rgba(0,0,0,0.06)]">
+                  <div className="space-y-1">
+                    <h3 className="font-display text-xl sm:text-2xl font-semibold text-[#1D1D1F]">
+                      Skill Roadmap & Certifications
+                    </h3>
+                    <p className="text-[13px] text-[#86868B]">
+                      Learning milestones and certifications to bridge gaps and reach 100% eligibility.
+                    </p>
+                  </div>
+
+                  <div className="shrink-0">
+                    {gapPercentage > 0 ? (
+                      <span className="apple-badge text-[11px]">
+                        {gapPercentage}% TO BRIDGE
+                      </span>
+                    ) : (
+                      <span className="apple-badge bg-[#34C759]/10 text-[#248A3D] text-[11px]">
+                        100% MATCH
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2-Column Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Column 1: Learning Roadmap */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-[#1D1D1F] font-display font-semibold text-[13px] uppercase tracking-wider">
+                      <Milestone className="w-4 h-4 text-[#86868B]" />
+                      <span>Learning Roadmap</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {roadmapSteps.map((step, idx) => {
+                        const isCritical = step.importance === 'CRITICAL';
+                        return (
+                          <div
+                            key={idx}
+                            className="p-4 rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#FAFAFA] text-[13px] space-y-3"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-6 h-6 rounded-full bg-[#0071E3] text-white text-[11px] font-semibold flex items-center justify-center shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-display font-semibold text-[#1D1D1F] text-[14px]">
+                                  {step.skill}
+                                </span>
+                              </div>
+
+                              <span className={`apple-badge text-[10px] ${isCritical ? 'bg-[#FF3B30]/10 text-[#D70015]' : ''}`}>
+                                {step.importance || 'RECOMMENDED'}
+                              </span>
+                            </div>
+
+                            <p className="text-[#6E6E73] leading-relaxed pl-[34px]">
+                              {step.action_plan}
+                            </p>
+
+                            <div className="pt-2 border-t border-[rgba(0,0,0,0.04)] pl-[34px] flex flex-wrap gap-2 text-[11px]">
+                              {step.timeline && (
+                                <span className="inline-flex items-center gap-1 text-[#6E6E73] bg-white border border-[rgba(0,0,0,0.06)] px-2.5 py-1 rounded-lg font-medium">
+                                  <Clock className="w-3 h-3 text-[#86868B]" />
+                                  <span>{step.timeline}</span>
+                                </span>
+                              )}
+
+                              {step.recommended_certification && (
+                                <span className="inline-flex items-center gap-1 text-[#0071E3] bg-white border border-[rgba(0,0,0,0.06)] px-2.5 py-1 rounded-lg font-semibold">
+                                  <Award className="w-3 h-3" />
+                                  <span>{step.recommended_certification}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {step.practical_project && (
+                              <div className="ml-[34px] p-3 rounded-xl bg-white border border-[rgba(0,0,0,0.06)] text-[12px] text-[#6E6E73] flex items-start gap-2">
+                                <Target className="w-3.5 h-3.5 text-[#86868B] shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-semibold text-[#1D1D1F]">Project: </span>
+                                  <span>{step.practical_project}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Column 2: Certifications */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-[#1D1D1F] font-display font-semibold text-[13px] uppercase tracking-wider">
+                      <Award className="w-4 h-4 text-[#86868B]" />
+                      <span>Target Certifications</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {certifications.map((cert, idx) => (
+                        <div
+                          key={idx}
+                          className="p-4 rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#FAFAFA] text-[13px] space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-display font-semibold text-[#1D1D1F] text-[14px]">
+                                {cert.name}
+                              </h4>
+                              <span className="text-[12px] text-[#0071E3] font-medium block mt-0.5">
+                                {cert.issuer}
+                              </span>
+                            </div>
+
+                            {cert.difficulty && (
+                              <span className="apple-badge text-[10px]">
+                                {cert.difficulty}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-[#6E6E73] text-[12px] flex items-start gap-2">
+                            <BookOpen className="w-3.5 h-3.5 text-[#86868B] shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-semibold text-[#1D1D1F]">Validates: </span>
+                              <span>{cert.target_skill}</span>
+                            </div>
+                          </div>
+
+                          <div className="p-3 rounded-xl bg-white border border-[rgba(0,0,0,0.06)] text-[12px] text-[#6E6E73]">
+                            <span className="font-semibold text-[#1D1D1F]">Impact: </span>
+                            <span>{cert.why_it_helps}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 text-[11px] text-[#86868B] font-medium border-t border-[rgba(0,0,0,0.04)]">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>Prep: {cert.estimated_time}</span>
+                            </span>
+                            <span className="text-[#34C759] font-semibold">
+                              ATS Approved ✓
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tip Banner */}
+                <div className="p-4 rounded-2xl bg-[#F5F5F7] flex items-start sm:items-center gap-3 text-[13px]">
+                  <Lightbulb className="w-5 h-5 text-[#FF9500] shrink-0" />
+                  <div className="leading-relaxed text-[#6E6E73]">
+                    <span className="font-semibold text-[#1D1D1F]">Tip: </span>
+                    <span>
+                      Completing even 1 targeted certification or documenting the suggested project in your resume can elevate a {evaluation.match_score}% match into a top-tier interview invitation.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      ) : (
+        <div className="apple-card p-12 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-[#F5F5F7] flex items-center justify-center mx-auto">
+            <Compass className="w-7 h-7 text-[#86868B]" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-display text-xl sm:text-2xl font-semibold text-[#1D1D1F]">
+              Select a Role to Begin
+            </h3>
+            <p className="text-[13px] sm:text-sm text-[#86868B] max-w-md mx-auto leading-relaxed">
+              Choose an opportunity from the live list above or switch to &quot;Paste Custom JD&quot; to evaluate your match score and generate tailored materials.
+            </p>
+          </div>
         </div>
       )}
-
-      {/* Grid: Strengths, Gaps, Recommendations */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Key Strengths */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <h3>Key Matching Qualifications</h3>
-          </div>
-          <ul className="space-y-2.5 text-xs text-slate-700">
-            {evaluation.key_matching_factors.map((factor, idx) => (
-              <li key={idx} className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
-                <span className="leading-relaxed">{factor}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Missing Skills / Gaps */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 text-amber-700 font-bold text-sm">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <h3>Potential Gaps & Mitigation</h3>
-          </div>
-          <ul className="space-y-2.5 text-xs text-slate-700">
-            {evaluation.missing_critical_skills.map((gap, idx) => (
-              <li key={idx} className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
-                <span className="leading-relaxed">{gap}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* Tailoring Recommendations */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 text-indigo-700 font-bold text-sm">
-          <Lightbulb className="w-4 h-4 shrink-0" />
-          <h3>Resume & Interview Tailoring Strategy</h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {evaluation.tailoring_recommendations.map((rec, idx) => (
-            <div
-              key={idx}
-              className="p-3 rounded-lg bg-indigo-50/50 border border-indigo-100 text-xs text-slate-800 leading-relaxed flex items-start gap-2"
-            >
-              <span className="text-indigo-600 font-bold">#{idx + 1}</span>
-              <span>{rec}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };

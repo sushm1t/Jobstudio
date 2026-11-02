@@ -29,7 +29,7 @@ interface ResumeDocumentProps {
  * Ensures date ranges are strictly pure dates (e.g. "Oct 2023 – Present", "Oct 2022 – Sep 2023")
  * and strips any trailing operational tags (e.g. "· Remote / Regulated Fintech") or location tags.
  */
-export function formatTimelineDate(rawDate: string): string {
+function formatTimelineDate(rawDate: string): string {
   if (!rawDate) return '';
   // 1. Try matching pure timeline pattern: e.g. "Oct 2023 – Present", "Oct 2022 — Sep 2023", "Sep 2020 - Sep 2022"
   const match = rawDate.match(
@@ -49,8 +49,8 @@ export function formatTimelineDate(rawDate: string): string {
 export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
   resume,
   setResume,
-  jobTitle = 'Senior Associate – Resource Management',
-  companyName = 'Weaver',
+  jobTitle = '',
+  companyName = '',
   onRegenerateWithAi,
   isAiGenerating,
 }) => {
@@ -67,12 +67,15 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
-    const safeTitle = (companyName + '_' + jobTitle).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeTitle = (companyName && jobTitle)
+      ? (companyName + '_' + jobTitle).replace(/[^a-zA-Z0-9_-]/g, '_')
+      : 'Master';
     const fileName = `${safeTitle}_${resume.full_name.replace(/\s+/g, '_')}_Resume.pdf`;
     const success = await downloadResumeAsPdf(
       'printable-resume-container',
       fileName,
-      fitSinglePage
+      fitSinglePage,
+      resume
     );
     setIsDownloading(false);
     if (success) {
@@ -242,143 +245,137 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
   }[spacingDensity];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Action and Control Bar */}
-      <div className="no-print bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-            <FileCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
-              <span>ATS-Optimized Resume Document</span>
-              <span className="text-xs font-normal text-slate-500 font-mono">
-                [Single-Column Standard]
-              </span>
+    <div className="space-y-5 max-w-5xl mx-auto">
+      {/* Apple-style Control Bar */}
+      <div className="no-print bg-white rounded-2xl border border-[rgba(0,0,0,0.06)] shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-[var(--font-display)] text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              {jobTitle ? 'Tailored ATS Resume' : 'Master Career Resume'}
             </h2>
-            <p className="text-xs text-slate-500">
-              Tailored for <span className="font-semibold text-slate-800">{jobTitle}</span> at{' '}
-              <span className="font-semibold text-slate-800">{companyName}</span>
-            </p>
+            <span
+              className={`text-[11px] font-semibold rounded-md px-2 py-0.5 ${
+                jobTitle
+                  ? 'bg-[#0071E3] text-white'
+                  : 'bg-[rgba(120,120,128,0.12)] text-[#6E6E73]'
+              }`}
+            >
+              {jobTitle ? 'Single-Column ATS' : 'Master Baseline'}
+            </span>
           </div>
+          <p className="text-xs text-[#6E6E73] mt-1">
+            {jobTitle && companyName ? (
+              <>
+                Optimized for <span className="font-semibold text-[#1D1D1F]">{jobTitle}</span> at{' '}
+                <span className="font-semibold text-[#1D1D1F]">{companyName}</span>
+              </>
+            ) : (
+              'Untailored master career baseline · Select a job in Job Evaluator to generate targeted tailoring'
+            )}
+          </p>
         </div>
 
-        {/* Toolbar Controls */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-          {/* 1-Page Fit Toggle */}
-          <button
-            onClick={() => setFitSinglePage(!fitSinglePage)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
-              fitSinglePage
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-            title="Ensures document scales and fits exactly onto 1 pristine page without mid-line splitting"
-          >
-            {fitSinglePage ? <Minimize2 className="w-3.5 h-3.5 text-emerald-600" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            <span>{fitSinglePage ? '1-Page Fit: ON' : '1-Page Fit: OFF'}</span>
-          </button>
-
-          {/* Density Selector */}
-          <div className="inline-flex items-center rounded-lg bg-slate-100 p-0.5 text-xs font-medium text-slate-600">
+        {/* Controls Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto justify-start md:justify-end text-xs">
+          {/* Apple-style Segmented Density Switcher */}
+          <div className="inline-flex items-center rounded-full bg-[#F5F5F7] border border-[rgba(0,0,0,0.06)] p-1 text-xs font-medium text-[#6E6E73]">
             <button
               onClick={() => setSpacingDensity('compact')}
-              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-full transition-all duration-200 cursor-pointer ${
                 spacingDensity === 'compact'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
-                  : 'hover:text-slate-900'
+                  ? 'bg-white text-[#1D1D1F] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.12)]'
+                  : 'hover:text-[#1D1D1F]'
               }`}
-              title="Compact density: Ideal for fitting comprehensive experience onto 1 page"
             >
-              Compact (1-Page)
+              1-Page Fit
             </button>
             <button
               onClick={() => setSpacingDensity('standard')}
-              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-full transition-all duration-200 cursor-pointer ${
                 spacingDensity === 'standard'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
-                  : 'hover:text-slate-900'
+                  ? 'bg-white text-[#1D1D1F] font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.12)]'
+                  : 'hover:text-[#1D1D1F]'
               }`}
             >
               Standard
             </button>
           </div>
 
-          {/* Edit / Preview Toggle */}
+          {/* Edit Toggle */}
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border transition-all duration-200 cursor-pointer ${
               isEditing
-                ? 'bg-indigo-100 text-indigo-900 border border-indigo-200 font-semibold'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                ? 'bg-[#0071E3] border-[#0071E3] text-white font-semibold'
+                : 'bg-[#F5F5F7] border-[rgba(0,0,0,0.06)] text-[#1D1D1F] hover:bg-[#E8E8ED]'
             }`}
           >
             {isEditing ? <Eye className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
-            <span>{isEditing ? 'Preview Mode' : 'Edit Bullets'}</span>
+            <span>{isEditing ? 'Preview' : 'Edit Bullets'}</span>
           </button>
 
-          {/* PM Projects (Credit Pilot / LazyTrip) Toggle */}
+          {/* PM Projects Toggle */}
           <button
             onClick={toggleProductProjects}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border transition-all duration-200 cursor-pointer ${
               hasProjects
-                ? 'bg-amber-100 text-amber-900 border border-amber-300 font-semibold hover:bg-amber-200'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                ? 'bg-[#0071E3] text-white border-[#0071E3] font-semibold'
+                : 'bg-[#F5F5F7] border-[rgba(0,0,0,0.06)] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#E8E8ED]'
             }`}
-            title={
-              hasProjects
-                ? 'Click to Chuck Product Projects (Credit Pilot / LazyTrip) — recommended for Ops/WFM roles to keep 1 page'
-                : 'Click to Add Product Projects (Credit Pilot & LazyTrip) — only needed for PM / Product Management roles'
-            }
+            title="Toggle Product Projects (Credit Pilot & LazyTrip)"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>{hasProjects ? 'PM Projects: ON (Chuck)' : 'PM Projects: Chucked'}</span>
+            <span>{hasProjects ? 'Projects: ON' : '+ Add Projects'}</span>
           </button>
 
+          {/* Copy Plaintext */}
           <button
             onClick={handleCopyPlainText}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#F5F5F7] border border-[rgba(0,0,0,0.06)] hover:bg-[#E8E8ED] text-[#1D1D1F] transition-all duration-200 cursor-pointer"
           >
             {copiedText ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Copied!</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#34C759]" />
+                <span>Copied</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy Plaintext</span>
+                <Copy className="w-3.5 h-3.5 text-[#86868B]" />
+                <span>Copy Text</span>
               </>
             )}
           </button>
 
+          {/* Print / System Dialog */}
           <button
             onClick={printResumeVector}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-            title="Opens system print dialog to save as pure vector PDF with automatic page-break preservation"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#F5F5F7] border border-[rgba(0,0,0,0.06)] hover:bg-[#E8E8ED] text-[#1D1D1F] transition-all duration-200 cursor-pointer"
+            title="Opens system print dialog to save as pure vector PDF"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print / Vector PDF</span>
+            <Printer className="w-3.5 h-3.5 text-[#86868B]" />
+            <span>Print</span>
           </button>
 
+          {/* Download ATS PDF Button */}
           <button
             onClick={handleDownloadPdf}
             disabled={isDownloading}
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors shadow-xs cursor-pointer disabled:opacity-60 ${
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full font-semibold transition-all duration-200 cursor-pointer disabled:opacity-50 ${
               downloadSuccess
-                ? 'bg-emerald-600 text-white'
-                : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white'
+                ? 'bg-[#34C759] text-white'
+                : 'bg-[#0071E3] hover:bg-[#0077ED] text-white shadow-xs'
             }`}
+            title="Download ATS-compliant PDF with 100% selectable vector text"
           >
             {downloadSuccess ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>PDF Downloaded!</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                <span>Saved PDF</span>
               </>
             ) : (
               <>
-                <Download className="w-3.5 h-3.5" />
-                <span>{isDownloading ? 'Exporting...' : 'Download PDF'}</span>
+                <Download className="w-3.5 h-3.5 text-white" />
+                <span>{isDownloading ? 'Generating...' : 'Download ATS PDF'}</span>
               </>
             )}
           </button>
@@ -389,7 +386,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
       <div className="flex justify-center">
         <div
           id="printable-resume-container"
-          className={`w-full max-w-[816px] bg-white border border-slate-200 shadow-sm rounded-none sm:rounded-sm text-slate-900 font-sans ${densityStyles.containerPadding}`}
+          className={`w-full max-w-[816px] bg-white border border-[rgba(0,0,0,0.06)] shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-none sm:rounded-2xl text-[#1D1D1F] font-sans ${densityStyles.containerPadding}`}
           style={{
             boxSizing: 'border-box',
           }}
@@ -404,23 +401,23 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
               .replace(/\/$/, '');
 
             return (
-              <header className={`resume-header border-b-2 border-slate-900 text-center sm:text-left ${densityStyles.headerMargin}`}>
-                <h1 className="text-2xl sm:text-[26px] font-bold tracking-tight text-slate-900 uppercase">
+              <header className={`resume-header border-b-2 border-[#1D1D1F] text-center sm:text-left ${densityStyles.headerMargin}`}>
+                <h1 className="text-2xl sm:text-[26px] font-bold tracking-tight text-[#1D1D1F] uppercase">
                   {resume.full_name}
                 </h1>
-                <div className="mt-1 text-xs sm:text-[13px] text-slate-700 flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-0.5">
+                <div className="mt-1 text-xs sm:text-[13px] text-[#6E6E73] flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-0.5">
                   <a
                     href={`mailto:${resume.email}`}
-                    className="text-slate-800 hover:text-indigo-600 hover:underline transition-colors"
+                    className="text-[#1D1D1F] hover:text-[#0071E3] hover:underline transition-colors duration-200"
                     data-pdf-link={`mailto:${resume.email}`}
                     title="Send Email"
                   >
                     {resume.email}
                   </a>
-                  <span className="text-slate-400">|</span>
+                  <span className="text-[#D2D2D7]">|</span>
                   <a
                     href={`tel:${resume.phone.replace(/[^0-9+]/g, '')}`}
-                    className="text-slate-800 hover:text-indigo-600 hover:underline transition-colors"
+                    className="text-[#1D1D1F] hover:text-[#0071E3] hover:underline transition-colors duration-200"
                     data-pdf-link={`tel:${resume.phone.replace(/[^0-9+]/g, '')}`}
                     title="Call Phone Number"
                   >
@@ -431,17 +428,17 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                    !resume.location.toLowerCase().includes('kochi') &&
                    !resume.location.toLowerCase().includes('hyderabad') && (
                     <>
-                      <span className="text-slate-400">|</span>
+                      <span className="text-[#D2D2D7]">|</span>
                       <span>{resume.location}</span>
                     </>
                   )}
-                  <span className="text-slate-400">|</span>
+                  <span className="text-[#D2D2D7]">|</span>
                   <a
                     id="resume-linkedin-link"
                     href={normalizedLinkedIn}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-indigo-600 hover:text-indigo-800 font-semibold underline decoration-indigo-400 underline-offset-2 transition-colors inline-flex items-center gap-0.5"
+                    className="text-[#0071E3] hover:text-[#0077ED] font-semibold underline decoration-[#0071E3]/40 underline-offset-2 transition-colors duration-200 inline-flex items-center gap-0.5"
                     data-pdf-link={normalizedLinkedIn}
                     title="Open LinkedIn Profile"
                   >
@@ -454,7 +451,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
           {/* Section: Professional Summary */}
           <section className={`resume-section break-inside-avoid ${densityStyles.sectionMargin}`}>
-            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-300 ${densityStyles.sectionHeadingMargin}`}>
+            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[#1D1D1F] border-b border-[#D2D2D7] ${densityStyles.sectionHeadingMargin}`}>
               Professional Summary
             </h2>
             {isEditing ? (
@@ -462,10 +459,10 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                 value={resume.tailored_summary}
                 onChange={(e) => updateSummary(e.target.value)}
                 rows={4}
-                className="w-full p-2 text-xs sm:text-sm border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 font-sans leading-relaxed"
+                className="w-full p-2 text-xs sm:text-sm border border-[#D2D2D7] rounded-xl focus:ring-1 focus:ring-[#0071E3] focus:border-[#0071E3] font-sans leading-relaxed outline-none transition-all duration-200"
               />
             ) : (
-              <p className={`text-slate-800 text-justify ${densityStyles.summaryText}`}>
+              <p className={`text-[#1D1D1F] text-justify ${densityStyles.summaryText}`}>
                 {resume.tailored_summary}
               </p>
             )}
@@ -473,7 +470,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
           {/* Section: Core Competencies */}
           <section className={`resume-section break-inside-avoid ${densityStyles.sectionMargin}`}>
-            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-300 ${densityStyles.sectionHeadingMargin}`}>
+            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[#1D1D1F] border-b border-[#D2D2D7] ${densityStyles.sectionHeadingMargin}`}>
               Core Competencies & Key Technical Stack
             </h2>
             {isEditing ? (
@@ -482,12 +479,12 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                   {resume.skills.map((skill, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-slate-100 border border-slate-200 rounded text-slate-800"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-[#F5F5F7] border border-[rgba(0,0,0,0.06)] rounded-lg text-[#1D1D1F]"
                     >
                       <span>{skill}</span>
                       <button
                         onClick={() => removeSkill(index)}
-                        className="text-slate-400 hover:text-red-600 cursor-pointer"
+                        className="text-[#86868B] hover:text-red-500 cursor-pointer transition-colors duration-200"
                       >
                         ×
                       </button>
@@ -501,18 +498,18 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                     onChange={(e) => setNewSkill(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addSkill()}
                     placeholder="Add skill (e.g. Looker, Resource Planning)..."
-                    className="text-xs px-2.5 py-1 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 flex-1"
+                    className="text-xs px-2.5 py-1.5 border border-[#D2D2D7] rounded-xl focus:ring-1 focus:ring-[#0071E3] focus:border-[#0071E3] flex-1 outline-none transition-all duration-200"
                   />
                   <button
                     onClick={addSkill}
-                    className="px-3 py-1 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 cursor-pointer"
+                    className="px-3.5 py-1.5 text-xs bg-[#0071E3] text-white rounded-full hover:bg-[#0077ED] cursor-pointer transition-all duration-200 font-medium"
                   >
                     Add
                   </button>
                 </div>
               </div>
             ) : (
-              <p className={`text-slate-800 ${densityStyles.skillsText}`}>
+              <p className={`text-[#1D1D1F] ${densityStyles.skillsText}`}>
                 {resume.skills.join('  •  ')}
               </p>
             )}
@@ -520,7 +517,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
           {/* Section: Work Experience */}
           <section className={`resume-section break-inside-avoid ${densityStyles.sectionMargin}`}>
-            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-300 ${densityStyles.sectionHeadingMargin}`}>
+            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[#1D1D1F] border-b border-[#D2D2D7] ${densityStyles.sectionHeadingMargin}`}>
               Professional Experience
             </h2>
             <div className={densityStyles.expSpacing}>
@@ -531,17 +528,17 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                   <div key={expIdx} className="exp-block experience-item space-y-0.5 break-inside-avoid" style={{ pageBreakInside: 'avoid' }}>
                     <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5">
                       <div className={densityStyles.expTitle}>
-                        <strong className="font-bold text-slate-950">{exp.title}</strong>{' '}
-                        <span className="text-slate-400">|</span>{' '}
-                        <span className="font-semibold text-slate-800">{exp.company}</span>
+                        <strong className="font-bold text-[#1D1D1F]">{exp.title}</strong>{' '}
+                        <span className="text-[#D2D2D7]">|</span>{' '}
+                        <span className="font-semibold text-[#1D1D1F]">{exp.company}</span>
                       </div>
-                      <div className={`text-slate-600 tabular-nums font-mono ${densityStyles.expMeta}`}>
+                      <div className={`text-[#6E6E73] tabular-nums font-mono ${densityStyles.expMeta}`}>
                         {cleanDate}
                       </div>
                     </div>
 
                   {/* Bullet points */}
-                  <ul className={`list-disc pl-4 sm:pl-5 text-slate-800 text-justify ${densityStyles.bulletSpacing} ${densityStyles.bulletText}`}>
+                  <ul className={`list-disc pl-4 sm:pl-5 text-[#1D1D1F] text-justify ${densityStyles.bulletSpacing} ${densityStyles.bulletText}`}>
                     {exp.bullets.map((bullet, bulletIdx) => (
                       <li key={bulletIdx} className="resume-bullet group break-inside-avoid" style={{ pageBreakInside: 'avoid' }}>
                         {isEditing ? (
@@ -550,11 +547,11 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                               value={bullet}
                               onChange={(e) => updateBullet(expIdx, bulletIdx, e.target.value)}
                               rows={2}
-                              className="w-full text-xs p-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500"
+                              className="w-full text-xs p-1.5 border border-[#D2D2D7] rounded-xl focus:ring-1 focus:ring-[#0071E3] focus:border-[#0071E3] outline-none transition-all duration-200"
                             />
                             <button
                               onClick={() => removeBullet(expIdx, bulletIdx)}
-                              className="text-slate-400 hover:text-red-600 p-1 shrink-0 cursor-pointer"
+                              className="text-[#86868B] hover:text-red-500 p-1 shrink-0 cursor-pointer transition-colors duration-200"
                               title="Delete bullet"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -570,7 +567,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                   {isEditing && (
                     <button
                       onClick={() => addBullet(expIdx)}
-                      className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer"
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-[#0071E3] hover:text-[#0077ED] font-medium cursor-pointer transition-colors duration-200"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Add Bullet Point</span>
@@ -585,18 +582,18 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
           {/* Section: Selected Projects & Proof of Work (Only included for PM roles) */}
           {hasProjects ? (
             <section className={`resume-section break-inside-avoid ${densityStyles.sectionMargin}`} style={{ pageBreakInside: 'avoid' }}>
-              <div className={`flex items-center justify-between border-b border-slate-300 ${densityStyles.sectionHeadingMargin}`}>
-                <h2 className="resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-slate-900">
+              <div className={`flex items-center justify-between border-b border-[#D2D2D7] ${densityStyles.sectionHeadingMargin}`}>
+                <h2 className="resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[#1D1D1F]">
                   Selected Proof of Work & AI/Product Projects
                 </h2>
                 {isEditing && (
                   <button
                     type="button"
                     onClick={chuckProjects}
-                    className="no-print text-[11px] text-amber-700 hover:text-amber-900 font-semibold cursor-pointer underline decoration-amber-400"
+                    className="no-print text-[11px] text-[#0071E3] hover:text-[#0077ED] font-semibold cursor-pointer underline decoration-[#0071E3]/40 transition-colors duration-200"
                     title="Omit projects for operations / resource management / WFM roles"
                   >
-                    Chuck All Projects (Omit for Ops/WFM)
+                    Remove All Projects (Omit for Ops/WFM)
                   </button>
                 )}
               </div>
@@ -605,17 +602,17 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                   <div key={pIdx} className="exp-block project-item space-y-0.5 break-inside-avoid" style={{ pageBreakInside: 'avoid' }}>
                     <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5">
                       <div className={densityStyles.expTitle}>
-                        <strong className="font-bold text-slate-950">{proj.name}</strong>{' '}
+                        <strong className="font-bold text-[#1D1D1F]">{proj.name}</strong>{' '}
                         {proj.role && (
                           <>
-                            <span className="text-slate-400">|</span>{' '}
-                            <span className="font-semibold text-slate-800">{proj.role}</span>
+                            <span className="text-[#D2D2D7]">|</span>{' '}
+                            <span className="font-semibold text-[#1D1D1F]">{proj.role}</span>
                           </>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         {proj.target_alignment && (
-                          <div className={`text-indigo-600 font-medium ${densityStyles.expMeta}`}>
+                          <div className={`text-[#0071E3] font-medium ${densityStyles.expMeta}`}>
                             {proj.target_alignment}
                           </div>
                         )}
@@ -628,7 +625,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                                 projects: (prev.projects || []).filter((_, idx) => idx !== pIdx),
                               }))
                             }
-                            className="no-print text-slate-400 hover:text-red-600 p-0.5 cursor-pointer"
+                            className="no-print text-[#86868B] hover:text-red-500 p-0.5 cursor-pointer transition-colors duration-200"
                             title="Delete this project"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -637,11 +634,11 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                       </div>
                     </div>
                     {proj.description && (
-                      <p className={`text-slate-700 italic text-[11px] sm:text-xs leading-snug`}>
+                      <p className={`text-[#6E6E73] italic text-[11px] sm:text-xs leading-snug`}>
                         {proj.description}
                       </p>
                     )}
-                    <ul className={`list-disc pl-4 sm:pl-5 text-slate-800 text-justify ${densityStyles.bulletSpacing} ${densityStyles.bulletText}`}>
+                    <ul className={`list-disc pl-4 sm:pl-5 text-[#1D1D1F] text-justify ${densityStyles.bulletSpacing} ${densityStyles.bulletText}`}>
                       {proj.bullets.map((b, bIdx) => (
                         <li key={bIdx} className="resume-bullet break-inside-avoid" style={{ pageBreakInside: 'avoid' }}>
                           <span>{b}</span>
@@ -654,17 +651,17 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             </section>
           ) : (
             isEditing && (
-              <div className="no-print p-3 mb-3 bg-slate-50 border border-dashed border-slate-300 rounded-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+              <div className="no-print p-4 mb-3 bg-[#F5F5F7] border border-dashed border-[#D2D2D7] rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
                 <div>
-                  <span className="font-bold text-slate-900">Proof of Work / Product Projects:</span>{' '}
-                  <span className="text-slate-600">
-                    Currently chucked / omitted. (Recommended: Keep omitted for Operations, Resource Management, & WFM to guarantee clean 1-page fit).
+                  <span className="font-semibold text-[#1D1D1F]">Proof of Work / Product Projects:</span>{' '}
+                  <span className="text-[#6E6E73]">
+                    Currently omitted. (Recommended: Keep omitted for Operations, Resource Management, & WFM to guarantee clean 1-page fit).
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={toggleProductProjects}
-                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-medium cursor-pointer shrink-0"
+                  className="px-3.5 py-1.5 bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-full font-medium cursor-pointer shrink-0 transition-all duration-200"
                 >
                   + Include Credit Pilot & LazyTrip (PM Roles)
                 </button>
@@ -672,159 +669,161 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             )
           )}
 
-          {/* Section: Education & Certifications */}
+          {/* Section: Education */}
           <section className={`resume-section education-section break-inside-avoid ${densityStyles.sectionMargin}`} style={{ pageBreakInside: 'avoid' }}>
-            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-slate-900 border-b border-slate-300 ${densityStyles.sectionHeadingMargin}`}>
-              Education & Certifications
+            <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[#1D1D1F] border-b border-[#D2D2D7] ${densityStyles.sectionHeadingMargin}`}>
+              Education
             </h2>
-            <div className={`${densityStyles.eduSpacing} ${densityStyles.eduText} text-slate-800`}>
+            <div className={`${densityStyles.eduSpacing} ${densityStyles.eduText} text-[#1D1D1F]`}>
               {resume.education.map((edu, idx) => (
                 <div key={idx} className="education-item flex justify-between items-baseline break-inside-avoid" style={{ pageBreakInside: 'avoid' }}>
                   <div>
                     <strong>{edu.degree}</strong> – <span>{edu.institution}</span>
                   </div>
-                  <div className="text-slate-600 font-mono tabular-nums text-[11px] sm:text-xs">
+                  <div className="text-[#6E6E73] font-mono tabular-nums text-[11px] sm:text-xs">
                     {edu.year}
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
 
-              {/* Certifications Display & Edit Mode */}
-              {isEditing ? (
-                <div className="pt-2 space-y-2.5 border-t border-slate-200 mt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900">
-                      Verified Professional Credentials (Toggle Top 3 for Resume):
-                    </span>
-                    <span className="text-[11px] text-indigo-700 font-semibold font-mono">
-                      {Math.min(resume.certifications.length, 3)} of 3 displayed
-                    </span>
-                  </div>
+          {/* Section: Certifications & Credentials (Cleanly separated) */}
+          {(resume.certifications.length > 0 || isEditing) && (
+            <section className={`resume-section certifications-section break-inside-avoid ${densityStyles.sectionMargin}`} style={{ pageBreakInside: 'avoid' }}>
+              <h2 className={`resume-heading text-xs sm:text-[13px] font-bold uppercase tracking-wider text-[#1D1D1F] border-b border-[#D2D2D7] ${densityStyles.sectionHeadingMargin}`}>
+                Certifications & Credentials
+              </h2>
+              <div className={`${densityStyles.eduSpacing} ${densityStyles.eduText} text-[#1D1D1F]`}>
+                {isEditing ? (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#1D1D1F]">
+                        Verified Professional Credentials (Toggle Top 3 for Resume):
+                      </span>
+                      <span className="text-[11px] text-[#0071E3] font-semibold font-mono">
+                        {Math.min(resume.certifications.length, 3)} of 3 displayed
+                      </span>
+                    </div>
 
-                  {/* Quick-toggle from Master Vault 5 verified credentials */}
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {VERIFIED_CREDENTIALS.map((cred, cIdx) => {
-                      const isSelected = resume.certifications.some(
-                        (c) => c.toLowerCase() === cred.fullBadge.toLowerCase()
-                      );
-                      return (
-                        <button
-                          key={cIdx}
-                          type="button"
-                          onClick={() => toggleCertification(cred.fullBadge)}
-                          className={`text-left p-2 rounded-lg border transition-all flex items-start justify-between gap-2 cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-50/80 border-indigo-300 text-indigo-950 font-medium'
-                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          <div>
-                            <div className="text-xs font-semibold flex items-center gap-1.5">
-                              <span className={isSelected ? 'text-indigo-600' : 'text-slate-400'}>
-                                {isSelected ? '✓' : '+'}
-                              </span>
-                              <span>{cred.fullBadge}</span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 pl-4 mt-0.5">
-                              {cred.coreCompetency}
-                            </div>
-                          </div>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
+                    {/* Quick-toggle from Master Vault 5 verified credentials */}
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {VERIFIED_CREDENTIALS.map((cred, cIdx) => {
+                        const isSelected = resume.certifications.some(
+                          (c) => c.toLowerCase() === cred.fullBadge.toLowerCase()
+                        );
+                        return (
+                          <button
+                            key={cIdx}
+                            type="button"
+                            onClick={() => toggleCertification(cred.fullBadge)}
+                            className={`text-left p-2.5 rounded-xl border transition-all duration-200 flex items-start justify-between gap-2 cursor-pointer ${
                               isSelected
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-slate-100 text-slate-500'
+                                ? 'bg-[#0071E3]/5 border-[#0071E3]/30 text-[#1D1D1F] font-medium'
+                                : 'bg-white border-[rgba(0,0,0,0.06)] text-[#6E6E73] hover:border-[#D2D2D7]'
                             }`}
                           >
-                            {isSelected ? 'Active' : 'Off'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Active List with remove option */}
-                  {resume.certifications.length > 0 && (
-                    <div className="pt-1.5">
-                      <div className="text-[11px] font-semibold text-slate-700 mb-1">
-                        Active Certifications on Resume:
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {resume.certifications.map((cert, cIdx) => (
-                          <span
-                            key={cIdx}
-                            className="inline-flex items-center gap-1.5 text-xs bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md text-slate-800"
-                          >
-                            <span>{cert}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeCertification(cIdx)}
-                              className="text-slate-400 hover:text-red-600 cursor-pointer"
-                              title="Remove certification"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Add Custom Certification */}
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={newCert}
-                      onChange={(e) => setNewCert(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addCustomCert()}
-                      placeholder="Add custom certification..."
-                      className="text-xs px-2.5 py-1 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={addCustomCert}
-                      className="px-3 py-1 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 cursor-pointer"
-                    >
-                      Add Custom
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                resume.certifications.length > 0 && (
-                  <div className="pt-2 border-t border-slate-200 mt-2 space-y-1.5">
-                    <div className="text-[10.5px] sm:text-[11px] font-bold text-slate-900 uppercase tracking-wider">
-                      Professional Certifications & Credentials
-                    </div>
-                    <div className="space-y-1">
-                      {resume.certifications.slice(0, 3).map((cert, cIdx) => {
-                        const parts = cert.split(/\s*[|–—]\s*/);
-                        const title = parts[0]?.trim() || cert;
-                        const issuer = parts.length > 1 ? parts.slice(1).join(' · ').trim() : '';
-
-                        return (
-                          <div
-                            key={cIdx}
-                            className="education-item flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 text-[11px] sm:text-[11.5px] text-slate-800 break-inside-avoid"
-                            style={{ pageBreakInside: 'avoid' }}
-                          >
-                            <div className="flex items-baseline gap-1.5 font-medium text-slate-900">
-                              <span className="text-slate-400 font-bold">•</span>
-                              <span>{title}</span>
-                            </div>
-                            {issuer && (
-                              <div className="text-slate-600 font-mono text-[10.5px] sm:text-[11px] shrink-0 text-left sm:text-right">
-                                {issuer}
+                            <div>
+                              <div className="text-xs font-semibold flex items-center gap-1.5">
+                                <span className={isSelected ? 'text-[#0071E3]' : 'text-[#86868B]'}>
+                                  {isSelected ? '✓' : '+'}
+                                </span>
+                                <span>{cred.fullBadge}</span>
                               </div>
-                            )}
-                          </div>
+                              <div className="text-[11px] text-[#86868B] pl-4 mt-0.5">
+                                {cred.coreCompetency}
+                              </div>
+                            </div>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
+                                isSelected
+                                  ? 'bg-[#0071E3] text-white'
+                                  : 'bg-[#F5F5F7] text-[#86868B]'
+                              }`}
+                            >
+                              {isSelected ? 'Active' : 'Off'}
+                            </span>
+                          </button>
                         );
                       })}
                     </div>
+
+                    {/* Active List with remove option */}
+                    {resume.certifications.length > 0 && (
+                      <div className="pt-1.5">
+                        <div className="text-[11px] font-semibold text-[#6E6E73] mb-1">
+                          Active Certifications on Resume:
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {resume.certifications.map((cert, cIdx) => (
+                            <span
+                              key={cIdx}
+                              className="inline-flex items-center gap-1.5 text-xs bg-[#F5F5F7] border border-[rgba(0,0,0,0.06)] px-2.5 py-1 rounded-lg text-[#1D1D1F]"
+                            >
+                              <span>{cert}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeCertification(cIdx)}
+                                className="text-[#86868B] hover:text-red-500 cursor-pointer transition-colors duration-200"
+                                title="Remove certification"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add Custom Certification */}
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={newCert}
+                        onChange={(e) => setNewCert(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addCustomCert()}
+                        placeholder="Add custom certification..."
+                        className="text-xs px-2.5 py-1.5 border border-[#D2D2D7] rounded-xl focus:ring-1 focus:ring-[#0071E3] focus:border-[#0071E3] flex-1 outline-none transition-all duration-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomCert}
+                        className="px-3.5 py-1.5 text-xs bg-[#0071E3] text-white rounded-full hover:bg-[#0077ED] cursor-pointer transition-all duration-200 font-medium"
+                      >
+                        Add Custom
+                      </button>
+                    </div>
                   </div>
-                )
-              )}
-            </div>
-          </section>
+                ) : (
+                  <div className="space-y-1">
+                    {resume.certifications.slice(0, 4).map((cert, cIdx) => {
+                      const parts = cert.split(/\s*[|–—]\s*/);
+                      const title = parts[0]?.trim() || cert;
+                      const issuer = parts.length > 1 ? parts.slice(1).join(' · ').trim() : '';
+
+                      return (
+                        <div
+                          key={cIdx}
+                          className="education-item flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 text-[11px] sm:text-[11.5px] text-[#1D1D1F] break-inside-avoid"
+                          style={{ pageBreakInside: 'avoid' }}
+                        >
+                          <div className="flex items-baseline gap-1.5 font-medium text-[#1D1D1F]">
+                            <span className="text-[#86868B] font-bold">•</span>
+                            <span className="font-semibold">{title}</span>
+                          </div>
+                          {issuer && (
+                            <div className="text-[#6E6E73] font-mono text-[10.5px] sm:text-[11px] shrink-0 text-left sm:text-right">
+                              {issuer}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>
