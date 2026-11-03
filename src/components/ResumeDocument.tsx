@@ -12,9 +12,13 @@ import {
   Maximize2,
   Minimize2,
   Sliders,
+  FileText,
+  UserCheck,
+  Sparkles,
 } from 'lucide-react';
 import { TailoredResumeData, WorkExperience, VERIFIED_CREDENTIALS, VAULT_PROJECTS } from '../data/defaultData';
 import { downloadResumeAsPdf, printResumeVector, generatePlainTextResume } from '../utils/pdfExport';
+import { downloadResumeAsDocx, downloadResumeAsPlainText } from '../utils/docxExport';
 
 interface ResumeDocumentProps {
   resume: TailoredResumeData;
@@ -23,6 +27,8 @@ interface ResumeDocumentProps {
   companyName?: string;
   onRegenerateWithAi?: () => void;
   isAiGenerating?: boolean;
+  onOpenRecruiterReview?: () => void;
+  isProUser?: boolean;
 }
 
 /**
@@ -53,11 +59,15 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
   companyName = '',
   onRegenerateWithAi,
   isAiGenerating,
+  onOpenRecruiterReview,
+  isProUser = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDocxDownloading, setIsDocxDownloading] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [docxSuccess, setDocxSuccess] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [newCert, setNewCert] = useState('');
 
@@ -82,6 +92,28 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
     }
+  };
+
+  const handleDownloadDocx = () => {
+    setIsDocxDownloading(true);
+    const safeTitle = (companyName && jobTitle)
+      ? (companyName + '_' + jobTitle).replace(/[^a-zA-Z0-9_-]/g, '_')
+      : 'Master';
+    const fileName = `${safeTitle}_${resume.full_name.replace(/\s+/g, '_')}_Resume.docx`;
+    downloadResumeAsDocx(resume, fileName);
+    setTimeout(() => {
+      setIsDocxDownloading(false);
+      setDocxSuccess(true);
+      setTimeout(() => setDocxSuccess(false), 2500);
+    }, 400);
+  };
+
+  const handleDownloadPlainText = () => {
+    const safeTitle = (companyName && jobTitle)
+      ? (companyName + '_' + jobTitle).replace(/[^a-zA-Z0-9_-]/g, '_')
+      : 'Master';
+    const fileName = `${safeTitle}_${resume.full_name.replace(/\s+/g, '_')}_Resume.txt`;
+    downloadResumeAsPlainText(resume, fileName);
   };
 
   const handleCopyPlainText = () => {
@@ -328,6 +360,18 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             <span>{hasProjects ? 'Projects: ON' : '+ Add Projects'}</span>
           </button>
 
+          {/* Recruiter Panel Multi-Persona Review */}
+          {onOpenRecruiterReview && (
+            <button
+              onClick={onOpenRecruiterReview}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-semibold text-xs transition-all duration-200 cursor-pointer shadow-xs"
+              title="Simulate 3-Person Hiring Panel Review (Senior Recruiter, Hiring Manager, Technical Lead)"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+              <span>Recruiter Panel Review</span>
+            </button>
+          )}
+
           {/* Copy Plaintext */}
           <button
             onClick={handleCopyPlainText}
@@ -342,6 +386,30 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
               <>
                 <Copy className="w-3.5 h-3.5 text-[#86868B]" />
                 <span>Copy Text</span>
+              </>
+            )}
+          </button>
+
+          {/* Export Clean DOCX Button */}
+          <button
+            onClick={handleDownloadDocx}
+            disabled={isDocxDownloading}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold transition-all duration-200 cursor-pointer border ${
+              docxSuccess
+                ? 'bg-[#34C759] text-white border-[#34C759]'
+                : 'bg-white hover:bg-blue-50/60 text-[#0071E3] border-blue-200 shadow-xs'
+            }`}
+            title="Download clean ATS-compliant Word document (.docx)"
+          >
+            {docxSuccess ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                <span>Saved DOCX</span>
+              </>
+            ) : (
+              <>
+                <FileText className="w-3.5 h-3.5 text-[#0071E3]" />
+                <span>{isDocxDownloading ? 'Generating...' : 'Export DOCX'}</span>
               </>
             )}
           </button>

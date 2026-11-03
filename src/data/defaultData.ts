@@ -84,6 +84,12 @@ export interface RecommendedCertification {
   difficulty?: 'Beginner' | 'Intermediate' | 'Advanced' | string;
 }
 
+export interface QualificationGap {
+  missing: string;
+  where_to_work: string;
+  severity?: 'CRITICAL' | 'MODERATE' | 'NICE_TO_HAVE' | string;
+}
+
 export interface JobEvaluationData {
   job_title: string;
   company_name: string;
@@ -92,6 +98,7 @@ export interface JobEvaluationData {
   verdict: 'STRONG_APPLY' | 'APPLY' | 'CONSIDER' | 'SKIP' | string;
   key_matching_factors: string[];
   missing_critical_skills: string[];
+  gaps?: QualificationGap[];
   tailoring_recommendations: string[];
   location_info?: string;
   executive_summary?: string;
@@ -109,6 +116,10 @@ export interface CoverLetterData {
 export interface ScreeningAnswer {
   question: string;
   suggested_answer: string;
+  category?: string;
+  keywords?: string[];
+  key_points?: string[];
+  word_count?: number;
 }
 
 export interface InterviewPrepQuestion {
@@ -119,6 +130,65 @@ export interface InterviewPrepQuestion {
   why_asked: string;
   key_talking_points: string[];
   suggested_answer: string;
+}
+
+export type ApplicationStatus =
+  | 'Applied'
+  | 'Under Review'
+  | 'Interviewing'
+  | 'Offer Received'
+  | 'Rejected'
+  | 'Archived';
+
+export interface AppliedJobRecord {
+  id: string;
+  job_title: string;
+  company_name: string;
+  location?: string;
+  platform?: string;
+  apply_url?: string;
+  applied_date: string; // YYYY-MM-DD or formatted date
+  match_score?: number;
+  status: ApplicationStatus;
+  salary?: string;
+  notes?: string;
+  interview_date?: string;
+  tailored_resume_summary?: string;
+  created_at: number;
+}
+
+export type ATSPlatform = 'Greenhouse' | 'Lever' | 'Ashby' | 'SmartRecruiters' | 'Workable' | 'Oracle Cloud HCM' | 'Direct Portal';
+
+export type SeniorityFilter = 'All' | 'Early / Junior' | 'Mid-Level' | 'Senior' | 'Lead / Staff / Director';
+export type WorkplaceFilter = 'All' | 'Remote' | 'Hybrid' | 'On-site';
+
+export interface ATSJobListing {
+  id: string;
+  originalId?: string;
+  slug?: string;
+  title: string;
+  company: string;
+  location: string;
+  department?: string;
+  platform: ATSPlatform | string;
+  applyUrl: string;
+  publishedAt?: string;
+  descriptionSnippet?: string;
+  rawDescription?: string;
+  isRemote?: boolean;
+  workplaceType?: 'Remote' | 'Hybrid' | 'On-site';
+  seniority?: 'Early / Junior' | 'Mid-Level' | 'Senior' | 'Lead / Staff / Director';
+  salarySnippet?: string;
+  skills?: string[];
+  matchScore?: number;
+  matchHighlight?: string;
+}
+
+export interface ATSCompanyEntry {
+  name: string;
+  slug: string;
+  ats: 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters' | 'workable';
+  category: string;
 }
 
 export const SUSHMIT_PROFILE_TEXT = `NAME: Sushmit Surendran
@@ -384,6 +454,7 @@ export const EMPTY_EVALUATION: JobEvaluationData = {
   executive_summary: '',
   key_matching_factors: [],
   missing_critical_skills: [],
+  gaps: [],
   tailoring_recommendations: [],
   skill_roadmap: [],
   recommended_certifications: [],
@@ -575,6 +646,18 @@ export const INITIAL_WEAVER_EVALUATION: JobEvaluationData = {
   ],
   missing_critical_skills: [
     'Direct CPA/Tax firm background (mitigated by B2B client account management and regulated fintech compliance experience).',
+  ],
+  gaps: [
+    {
+      missing: 'Direct Public Accounting / CPA Tax Firm Background',
+      where_to_work: 'Frame B2B account delivery at Torc Infotech and high-volume fintech operations at Revolut as proof of fast-paced stakeholder rigor. Review US tax season utilization variance metrics and multi-tier scheduling models.',
+      severity: 'MODERATE',
+    },
+    {
+      missing: 'Workday / UltiPro Enterprise Resource Scheduling Software',
+      where_to_work: 'Highlight advanced Excel capacity modeling (Pivot Tables, XLOOKUP), Jove SQL querying, and proven track record of mastering proprietary workforce management tools within 2 weeks.',
+      severity: 'NICE_TO_HAVE',
+    },
   ],
   tailoring_recommendations: [
     'Emphasize capacity tracking, scheduling variance, and intraday reallocations performed at Revolut.',
