@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
+import { LandingHeader } from './components/LandingHeader';
 import { WorkspaceNavigation } from './components/WorkspaceNavigation';
 import { HomeView } from './components/HomeView';
 import { AuthView } from './components/AuthView';
@@ -83,8 +84,16 @@ const getTailoredCountKey = (email?: string): string => {
   return `jobstudio_tailored_count_${clean}`;
 };
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('home');
+export default function App({ initialTab }: { initialTab?: string } = {}) {
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (initialTab) return initialTab;
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+      if (tabParam) return tabParam;
+    }
+    return 'home';
+  });
   const [opportunities, setOpportunities] = useState<JobOpportunity[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string>('');
   const [customJobText, setCustomJobText] = useState<string>('');
@@ -218,7 +227,7 @@ export default function App() {
     };
   });
 
-  // Real accounts (Lovable Cloud): restore saved data on sign-in, keep browser state in sync with the session.
+  // Real accounts (Supabase): restore saved data on sign-in, keep browser state in sync with the session.
   const handleLoginRef = React.useRef(handleLogin);
   handleLoginRef.current = handleLogin;
 
@@ -234,6 +243,13 @@ export default function App() {
       });
     }
   }, [activeTab]);
+
+  // Route Guard: unauthenticated visitors cannot access workspace tabs directly
+  useEffect(() => {
+    if (!isLoggedIn && activeTab !== 'home' && activeTab !== 'auth') {
+      setActiveTab('auth');
+    }
+  }, [isLoggedIn, activeTab]);
   useEffect(() => {
     installCloudSync();
     let lastUserId: string | null = null;
@@ -809,53 +825,70 @@ export default function App() {
 
   return (
     <div className={`min-h-screen text-foreground flex flex-col font-sans ${activeTab !== 'home' && activeTab !== 'auth' ? 'job-workspace' : ''}`}>
-      {/* Top Bar Navigation: only on the auth screen; the signed-in landing page stays clean */}
-      {isLoggedIn && activeTab === 'auth' && (
-        <Header
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onDownloadPdf={handleDownloadPdf}
-          isDownloading={isDownloadingPdf}
-          downloadSuccess={downloadSuccess}
-          score={evaluation.match_score}
-          appliedCount={appliedJobs.length}
-          isProUser={isProUser}
-          tailoredCount={tailoredCount}
+      {/* Landing Navigation: Clean header with jump links and Sign In / Workspace CTAs */}
+      {activeTab === 'home' && (
+        <LandingHeader
           isLoggedIn={isLoggedIn}
           userName={userName}
-          onOpenAuthModal={() => setActiveTab('home')}
+          onNavigateToTab={(tab) => {
+            if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
+              setActiveTab('auth');
+              window.scrollTo(0, 0);
+              return;
+            }
+            setActiveTab(tab);
+            window.scrollTo(0, 0);
+          }}
           onLogout={handleLogout}
         />
       )}
-      {isLoggedIn && activeTab === 'home' && (
-        <div className="fixed top-4 right-4 z-50 no-print">
-          <button type="button" onClick={() => setActiveTab('evaluator')} aria-label="Back to workspace" className="rounded-full border border-border bg-card/80 backdrop-blur px-4 py-2 text-sm text-foreground hover:bg-card transition-colors">
-            Back to workspace
-          </button>
-        </div>
-      )}
 
-      {isLoggedIn && activeTab !== 'home' && activeTab !== 'auth' && <WorkspaceNavigation
-        activeTab={activeTab} setActiveTab={setActiveTab} appliedCount={appliedJobs.length}
-        userName={userName} isProUser={isProUser} tailoredCount={tailoredCount}
-        onLogout={handleLogout} onDownloadPdf={handleDownloadPdf}
-        isDownloading={isDownloadingPdf} downloadSuccess={downloadSuccess}
-      />}
+      {/* Workspace Sidebar / Navigation: strictly for authenticated workspace tabs */}
+      {isLoggedIn && activeTab !== 'home' && activeTab !== 'auth' && (
+        <WorkspaceNavigation
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          appliedCount={appliedJobs.length}
+          userName={userName}
+          isProUser={isProUser}
+          tailoredCount={tailoredCount}
+          onLogout={handleLogout}
+          onDownloadPdf={handleDownloadPdf}
+          isDownloading={isDownloadingPdf}
+          downloadSuccess={downloadSuccess}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 ${activeTab !== 'home' && activeTab !== 'auth' ? 'workspace-main' : ''}`}>
         {activeTab === 'auth' && (
           <>
             <button type="button" onClick={() => { setActiveTab('home'); window.scrollTo(0, 0); }} className="cine-link">Back to Job Studio</button>
-            <AuthView onLogin={() => setActiveTab('auth')} onNavigateToTab={setActiveTab} />
+            <AuthView onLogin={() => setActiveTab('evaluator')} onNavigateToTab={setActiveTab} />
           </>
         )}
 
         {activeTab === 'home' && (
           <>
-          <CinematicHome onNavigateToTab={(tab) => { setActiveTab(tab); window.scrollTo(0, 0); }} />
+          <CinematicHome onNavigateToTab={(tab) => {
+            if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
+              setActiveTab('auth');
+              window.scrollTo(0, 0);
+              return;
+            }
+            setActiveTab(tab);
+            window.scrollTo(0, 0);
+          }} />
           <HomeView
-            onNavigateToTab={setActiveTab}
+            onNavigateToTab={(tab) => {
+              if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
+                setActiveTab('auth');
+                window.scrollTo(0, 0);
+                return;
+              }
+              setActiveTab(tab);
+              window.scrollTo(0, 0);
+            }}
             isProUser={isProUser}
             onUpgradeToPro={handleUpgradeToPro}
             tailoredCount={tailoredCount}

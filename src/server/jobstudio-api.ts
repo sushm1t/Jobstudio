@@ -1,7 +1,7 @@
 // @ts-nocheck -- ported verbatim from the original project
 // Ported from the original Express server.ts. Handlers are kept verbatim and
 // run through a tiny Express-compatible shim so they work on the edge runtime.
-// AI runs through the Lovable AI Gateway (same Gemini models as the original).
+// AI runs directly through Google Gemini API.
 // `Type` mirrors @google/genai's schema enum so ported schemas stay unchanged.
 const Type = { OBJECT: 'object', STRING: 'string', INTEGER: 'integer', NUMBER: 'number', BOOLEAN: 'boolean', ARRAY: 'array' } as const;
 
@@ -43,48 +43,7 @@ function toGeminiParts(contents: any): any[] {
 }
 
 async function callGateway(model: string, params: { contents: any; config?: any }) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-
-  if (lovableKey) {
-    const body: any = { model, stream: true, messages: [{ role: 'user', content: toUserContent(params.contents) }] };
-    const cfg = params.config || {};
-    if (cfg.responseSchema) {
-      body.response_format = { type: 'json_schema', json_schema: { name: 'result', schema: cfg.responseSchema } };
-    } else if (cfg.responseMimeType === 'application/json') {
-      body.messages[0].content = typeof body.messages[0].content === 'string'
-        ? body.messages[0].content + '\n\nRespond with JSON only.' : body.messages[0].content;
-    }
-    const r = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${lovableKey}`, 'Content-Type': 'application/json', 'X-Lovable-AIG-SDK': 'fetch' },
-      body: JSON.stringify(body),
-    });
-    if (!r.ok || !r.body) {
-      let msg = `AI request failed (${r.status})`;
-      try { const j: any = await r.json(); msg = j?.error?.message || j?.message || msg; } catch {}
-      if (r.status === 402) msg = 'AI credits are used up. Add credits in Settings → Plans & credits.';
-      if (r.status === 429) msg = 'Too many AI requests right now. Please try again shortly.';
-      throw new GatewayError(msg, r.status);
-    }
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '', text = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-        if (!line.startsWith('data:')) continue;
-        const d = line.slice(5).trim();
-        if (d === '[DONE]') continue;
-        try { const j = JSON.parse(d); text += j.choices?.[0]?.delta?.content || ''; } catch {}
-      }
-    }
-    return { text };
-  }
 
   if (geminiKey) {
     const cleanModel = model.replace(/^google\//, '');
@@ -120,7 +79,7 @@ async function callGateway(model: string, params: { contents: any; config?: any 
     return { text: textParts.join('') };
   }
 
-  throw new GatewayError('AI is not configured. Set GEMINI_API_KEY or LOVABLE_API_KEY in .env', 401);
+  throw new GatewayError('AI is not configured. Set GEMINI_API_KEY in .env', 401);
 }
 
 // Model fallback chain preserved from the original; only 429/5xx move on to the next model.
@@ -141,12 +100,11 @@ async function generateWithFallback(params: { contents: any; config?: any }) {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  const hasLovable = Boolean(process.env.LOVABLE_API_KEY);
   const hasGemini = Boolean(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY);
   res.json({
     status: 'ok',
-    hasApiKey: hasLovable || hasGemini,
-    provider: hasLovable ? 'lovable' : (hasGemini ? 'gemini' : 'none'),
+    hasApiKey: hasGemini,
+    provider: hasGemini ? 'gemini' : 'none',
     timestamp: new Date().toISOString(),
   });
 });

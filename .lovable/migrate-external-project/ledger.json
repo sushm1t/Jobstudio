@@ -1,8 +1,0 @@
-[
- {"capability":"code/UI","source":"React SPA","outcome":"migrate","status":"done","next_action":"none"},
- {"capability":"API endpoints (17)","source":"Express server.ts","outcome":"migrate","status":"done","next_action":"none"},
- {"capability":"AI","source":"Gemini","outcome":"moved to built-in AI (same Gemini models)","status":"verified","next_action":"none"},
- {"capability":"Firecrawl scraping","source":"optional FIRECRAWL_API_KEY","outcome":"preserve","status":"optional","next_action":"add key only if wanted"},
- {"capability":"auth","source":"browser-only demo login (no real accounts)","outcome":"preserve as-is","status":"done","next_action":"offer real accounts"},
- {"capability":"database/records","source":"none (browser storage only)","outcome":"n/a","status":"n/a","next_action":"none"}
-]

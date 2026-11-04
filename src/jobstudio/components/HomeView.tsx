@@ -617,7 +617,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* =========================================================================
           EMBEDDED PRICING PLANS AT THE BOTTOM (User Requirement)
          ========================================================================= */}
-      <section className="space-y-8 pt-4">
+      <section id="pricing-section" className="space-y-8 pt-4 scroll-mt-6">
         <div className="text-center space-y-3 max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-wider uppercase font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />

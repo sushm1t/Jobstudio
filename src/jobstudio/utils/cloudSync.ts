@@ -1,4 +1,4 @@
-// Mirrors the app's per-user browser storage (keys starting with "jobstudio_") to Lovable Cloud,
+// Mirrors the app's per-user browser storage (keys starting with "jobstudio_") to Supabase (user_data),
 // so a signed-in user's data comes back on any device. App logic keeps using localStorage unchanged.
 import { supabase } from '@/integrations/supabase/client';
 
