@@ -9,7 +9,7 @@ afterEach(cleanup);
 const baseProps = {
   activeTab: 'resume',
   appliedCount: 3,
-  userName: 'Sushmit S',
+  userName: 'Alex M',
   isProUser: false,
   tailoredCount: 1,
   onLogout: vi.fn(),

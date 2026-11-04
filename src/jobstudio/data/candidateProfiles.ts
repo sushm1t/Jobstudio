@@ -1,5 +1,5 @@
 // @ts-nocheck -- ported verbatim from the original project
-import { CandidateInfo, TailoredResumeData, MASTER_BASE_RESUME, SUSHMIT_PROFILE_TEXT, SUSHMIT_USER_INFO } from './defaultData';
+import { CandidateInfo, TailoredResumeData, MASTER_BASE_RESUME, DEMO_PROFILE_TEXT, DEMO_USER_INFO } from './defaultData';
 
 export interface CandidateProfileRecord {
   id: string;
@@ -30,21 +30,21 @@ export interface CandidateProfileRecord {
   updatedAt: number;
 }
 
-export const SUSHMIT_PROFILE_RECORD: CandidateProfileRecord = {
-  id: 'preset-sushmit',
+export const DEMO_PROFILE_RECORD: CandidateProfileRecord = {
+  id: 'preset-alex-morgan',
   isPreset: true,
-  name: 'Sushmit Surendran',
-  headline: 'Operations Specialist & Real-Time Analytics SME',
-  email: SUSHMIT_USER_INFO.email,
-  phone: SUSHMIT_USER_INFO.phone,
-  location: SUSHMIT_USER_INFO.location,
-  linkedin: SUSHMIT_USER_INFO.linkedin,
+  name: 'Alex Morgan',
+  headline: 'Operations Specialist & Technical Systems Analyst',
+  email: DEMO_USER_INFO.email,
+  phone: DEMO_USER_INFO.phone,
+  location: DEMO_USER_INFO.location,
+  linkedin: DEMO_USER_INFO.linkedin,
   summary: MASTER_BASE_RESUME.tailored_summary,
   skills: MASTER_BASE_RESUME.skills,
   experiences: MASTER_BASE_RESUME.experiences,
   education: MASTER_BASE_RESUME.education,
   certifications: MASTER_BASE_RESUME.certifications,
-  masterProfileText: SUSHMIT_PROFILE_TEXT,
+  masterProfileText: DEMO_PROFILE_TEXT,
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
 };
@@ -225,7 +225,7 @@ Customer-obsessed Lead Product Manager with 6+ years of experience scaling B2B S
 };
 
 export const INITIAL_PRESET_PROFILES: CandidateProfileRecord[] = [
-  SUSHMIT_PROFILE_RECORD,
+  DEMO_PROFILE_RECORD,
   SARAH_CHEN_PROFILE_RECORD,
   MARCUS_VANCE_PROFILE_RECORD,
 ];
@@ -281,54 +281,31 @@ export function getUserMasterProfile(email?: string, name?: string): CandidatePr
     const userEmail = (email || localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
     const storedName = (name || localStorage.getItem('jobstudio_user_name') || '').trim();
 
-    // 1. If not logged in and no email provided, return fresh blank guest profile (never leak demo or other user)
+    // 1. If not logged in and no email provided, return fresh blank guest profile
     if (!userEmail) {
       return createFreshUserProfile('', storedName || 'Candidate');
     }
 
-    // 2. Demo User check (explicitly signed in as Sushmit demo account)
-    const isDemoAccount =
-      userEmail === SUSHMIT_USER_INFO.email.toLowerCase() ||
-      storedName.toLowerCase().includes('sushmit');
-
-    if (isDemoAccount) {
-      const demoKey = getUserProfileKey(SUSHMIT_USER_INFO.email);
-      const demoRaw = localStorage.getItem(demoKey);
-      if (demoRaw) {
-        try {
-          return JSON.parse(demoRaw);
-        } catch {
-          return SUSHMIT_PROFILE_RECORD;
-        }
-      }
-      return SUSHMIT_PROFILE_RECORD;
-    }
-
-    // 3. User Account: strictly keyed by userEmail
+    // 2. User Account: strictly keyed by userEmail
     const specificKey = getUserProfileKey(userEmail);
     const raw = localStorage.getItem(specificKey);
 
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-
-        // Anti-contamination check:
-        // If an old buggy run stored another candidate's profile (e.g. Praveen PP, pravenpp619@gmail.com)
-        // inside a different user's account (e.g. Harish Kumar), detect and purge it immediately.
         const parsedEmail = (parsed.email || '').toLowerCase().trim();
         const parsedName = (parsed.name || '').toLowerCase().trim();
         const expectedName = storedName.toLowerCase().trim();
 
         const isCorrupted =
-          (parsedEmail && parsedEmail !== userEmail && !parsedName.includes(expectedName) && !expectedName.includes(parsedName)) ||
-          (parsedName.includes('praveen') && !expectedName.includes('praveen'));
+          (parsedEmail && parsedEmail !== userEmail && !parsedName.includes(expectedName) && !expectedName.includes(parsedName));
 
         if (!isCorrupted) {
           return parsed;
         }
 
         console.warn(
-          `[JobStudio] Detected cross-contaminated profile (${parsed.name}) in account (${storedName} / ${userEmail}). Purging and resetting to clean user profile.`
+          `[JobStudio] Detected cross-contaminated profile in account (${storedName} / ${userEmail}). Purging and resetting to clean user profile.`
         );
         localStorage.removeItem(specificKey);
       } catch (err) {
@@ -347,7 +324,7 @@ export function getUserMasterProfile(email?: string, name?: string): CandidatePr
     return fresh;
   } catch (e) {
     console.error('Failed to read user master profile from localStorage', e);
-    return SUSHMIT_PROFILE_RECORD;
+    return createFreshUserProfile(userEmail || '', storedName || 'Candidate');
   }
 }
 

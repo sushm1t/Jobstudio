@@ -549,7 +549,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
         }
         return {
           missing: raw,
-          where_to_work: 'Review core domain frameworks and highlight transferable problem-solving from Revolut & Torc Infotech experience.',
+          where_to_work: 'Review core domain frameworks and highlight transferable problem-solving and demonstrated accomplishments from your master profile.',
           severity: 'RECOMMENDED',
         };
       });
@@ -1814,7 +1814,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     issuer: 'ServiceNow',
                     target_skill: 'Enterprise ticketing workflow automation, SLA alerting, incident triage',
                     estimated_time: '3–4 weeks',
-                    why_it_helps: 'High demand across BETSOL and IT service employers looking for platform-certified incident leads.',
+                    why_it_helps: 'High demand across enterprise technology employers looking for platform-certified incident leads.',
                     difficulty: 'Intermediate',
                   },
                 ]
@@ -1825,7 +1825,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     issuer: 'The Workforce Management Institute (SWPP)',
                     target_skill: 'Capacity forecasting, intraday variance steering, Erlang modeling',
                     estimated_time: '3–4 weeks',
-                    why_it_helps: 'Proves formal mastery of global workforce management theory alongside candidate practical Revolut SME experience.',
+                    why_it_helps: 'Proves formal mastery of global workforce management theory alongside practical operational experience.',
                     difficulty: 'Intermediate',
                   },
                   {

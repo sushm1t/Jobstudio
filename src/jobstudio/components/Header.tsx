@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   isProUser = false,
   tailoredCount = 0,
   isLoggedIn = true,
-  userName = 'Sushmit Surendran',
+  userName = '',
   onOpenAuthModal,
   onLogout,
 }) => {

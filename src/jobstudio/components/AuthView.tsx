@@ -177,7 +177,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Sushmit Surendran"
+                placeholder="e.g. Alex Morgan"
                 className="w-full px-4 py-3 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-2xl text-xs sm:text-sm text-foreground outline-none transition-all placeholder:text-subtle"
                 required
               />

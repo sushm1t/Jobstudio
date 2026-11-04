@@ -92,16 +92,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }, 700);
   };
 
-  const handleHeroDemoSignIn = () => {
-    onLogin('Sushmit Surendran', 'sushmit.surendran@revolut.com');
-    setHeroAuthSuccess('Signed in as Sushmit Surendran. Redirecting to Master Profile...');
-    setTimeout(() => {
-      onNavigateToTab('profile');
-    }, 600);
-  };
-
-
-
   return (
     <div className="space-y-16 animate-fade-in text-foreground pb-24 max-w-6xl mx-auto">
 
@@ -341,16 +331,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   </button>
                 </form>
 
-                {/* Demo Shortcut */}
                 <div className="pt-2 border-t border-border text-center">
-                  <button
-                    type="button"
-                    onClick={handleHeroDemoSignIn}
-                    className="w-full py-2 px-3 bg-card hover:bg-surface text-foreground text-[11px] font-medium rounded-xl border border-border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-brand" />
-                    <span>One-Click Sign In as Sushmit Surendran (Verified Demo)</span>
-                  </button>
                   <p className="text-[10px] text-subtle mt-1.5 font-medium">
                     Free to get started · No credit card required
                   </p>

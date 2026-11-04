@@ -31,8 +31,8 @@ import {
 } from './data/candidateProfiles';
 import {
   PRESET_JOBS,
-  SUSHMIT_PROFILE_TEXT,
-  SUSHMIT_USER_INFO,
+  DEMO_PROFILE_TEXT,
+  DEMO_USER_INFO,
   MASTER_BASE_RESUME,
   EMPTY_EVALUATION,
   EMPTY_COVER_LETTER,
@@ -55,7 +55,7 @@ import { downloadResumeAsPdf } from './utils/pdfExport';
 
 const getAppliedJobsKey = (email?: string): string => {
   const clean = (email || '').toLowerCase().trim();
-  if (!clean || clean === SUSHMIT_USER_INFO.email.toLowerCase()) {
+  if (!clean) {
     return 'jobstudio_applied_jobs_demo';
   }
   return `jobstudio_applied_jobs_${clean}`;
@@ -100,16 +100,16 @@ export default function App() {
 
   const [userName, setUserName] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('jobstudio_user_name') || 'Sushmit Surendran';
+      return localStorage.getItem('jobstudio_user_name') || '';
     }
-    return 'Sushmit Surendran';
+    return '';
   });
 
   const [userEmail, setUserEmail] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('jobstudio_user_email') || 'sushmit.surendran@revolut.com';
+      return localStorage.getItem('jobstudio_user_email') || '';
     }
-    return 'sushmit.surendran@revolut.com';
+    return '';
   });
 
   const handleLogin = (name: string, email: string) => {
@@ -135,12 +135,8 @@ export default function App() {
     setAppliedJobs(userJobs);
 
     // Load user-scoped Pro status & tailored count
-    if (cleanEmail === SUSHMIT_USER_INFO.email.toLowerCase()) {
-      setIsProUser(true);
-    } else {
-      const userPro = localStorage.getItem(getProUserKey(cleanEmail));
-      setIsProUser(userPro === 'true');
-    }
+    const userPro = localStorage.getItem(getProUserKey(cleanEmail));
+    setIsProUser(userPro === 'true');
     const userTailored = localStorage.getItem(getTailoredCountKey(cleanEmail));
     setTailoredCount(userTailored ? parseInt(userTailored, 10) : 0);
   };
@@ -292,12 +288,8 @@ export default function App() {
       setAppliedJobs(userJobs);
 
       // 3. Pro status & quota isolation
-      if (cleanEmail === SUSHMIT_USER_INFO.email.toLowerCase()) {
-        setIsProUser(true);
-      } else {
-        const userPro = localStorage.getItem(getProUserKey(cleanEmail));
-        setIsProUser(userPro === 'true');
-      }
+      const userPro = localStorage.getItem(getProUserKey(cleanEmail));
+      setIsProUser(userPro === 'true');
 
       const userTailored = localStorage.getItem(getTailoredCountKey(cleanEmail));
       setTailoredCount(userTailored ? parseInt(userTailored, 10) : 0);
@@ -330,7 +322,6 @@ export default function App() {
     if (typeof window !== 'undefined') {
       try {
         const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
-        if (email === SUSHMIT_USER_INFO.email.toLowerCase()) return true;
         return localStorage.getItem(getProUserKey(email)) === 'true';
       } catch {
         return false;
@@ -553,428 +544,61 @@ export default function App() {
       setCoverLetter(INITIAL_WEAVER_COVER_LETTER);
       setScreeningAnswers(INITIAL_SCREENING_ANSWERS);
       setInterviewQuestions(INITIAL_INTERVIEW_PREP_QUESTIONS);
-    } else if (jobId === 'honeywell-integrity-compliance') {
+    } else {
       setCustomJobText(found.description);
       setCustomUrl(found.applyUrl);
+      const score = found.matchScore || 85;
+      const verdict = score >= 80 ? 'STRONG_APPLY' : score >= 65 ? 'MODERATE_APPLY' : 'CONSIDER_CAREFULLY';
       setEvaluation({
         job_title: found.title,
         company_name: found.company,
-        match_score: 94,
-        should_apply: true,
-        verdict: 'STRONG_APPLY',
+        match_score: score,
+        should_apply: score >= 65,
+        verdict: verdict,
         key_matching_factors: [
-          'Direct match for pre-L1 and L1 third-party risk due diligence and compliance screenings.',
-          'Revolut financial operations expertise in payment disputes, fraud risk escalation, and cross-functional incident response.',
-          'Microsoft Certified: Security, Compliance, and Identity Fundamentals (SC-900) & NIT Rourkela compliance credentials.',
-          'Advanced data analytics proficiency in SQL, Looker, and Metabase to drive digital compliance insights.',
+          `Strong background alignment with ${found.title} core responsibilities.`,
+          `Demonstrated track record in high-impact execution and team leadership.`,
+          `Analytical problem solving and process optimization relevant to ${found.company}.`,
+          `Clear domain knowledge and technical toolset match for key job requirements.`,
         ],
-        missing_critical_skills: [
-          'Aerospace defense procurement frameworks (ITAR, EAR, FAR) and formal ISO 9001 quality audits.',
-        ],
+        missing_critical_skills: score < 85 ? [
+          `Specialized domain tooling or platform certifications specific to ${found.company}.`
+        ] : [],
         gaps: [
           {
-            missing: 'Aerospace Defense Procurement Frameworks (ITAR, EAR, FAR)',
-            where_to_work: 'Review Export Administration Regulations (EAR) and ITAR checkpoints for third-party screening. Frame Revolut fraud mitigation and dispute escalation as equivalent high-consequence compliance adherence.',
-            severity: 'CRITICAL',
-          },
-          {
-            missing: 'Formal ISO 9001 / AS9100 Quality Audits',
-            where_to_work: 'Position Revolut quarterly Confluence SOP audits, defect elimination, and Jove SQL investigation as direct evidence of quality governance.',
-            severity: 'MODERATE',
+            missing: `Advanced ${found.title} industry benchmarks and tooling`,
+            where_to_work: `Highlight relevant transferable accomplishments, metrics, and quantitative achievements in your tailored resume.`,
+            severity: score < 75 ? 'CRITICAL' : 'MODERATE',
           },
         ],
         tailoring_recommendations: [
-          'Highlight third-party vendor review workflows and regulatory adherence.',
-          'Emphasize data-driven screening metrics and cross-functional incident mitigation.',
+          `Directly mirror key keywords from the ${found.title} description into your experience bullets.`,
+          `Emphasize quantifiable business outcomes, efficiencies gained, and metric-backed results.`,
+          `Structure career highlights using the STAR methodology (Situation, Task, Action, Result).`,
         ],
         location_info: found.location,
-        executive_summary: `${found.matchHighlight} Candidate profile represents an estimated 94% qualification overlap for digital compliance operations.`,
+        executive_summary: `${found.matchHighlight || `Candidate profile represents an estimated ${score}% qualification match for ${found.title} at ${found.company}.`}`,
         skill_roadmap: [
           {
-            skill: 'Defense & Aerospace Trade Compliance (ITAR / EAR)',
-            action_plan: 'Review Export Administration Regulations (EAR) and International Traffic in Arms Regulations (ITAR) compliance checkpoints for dual-use technologies.',
-            recommended_certification: 'Certified U.S. Export Compliance Officer (CUSECO)',
-            certification_provider: 'Export Compliance Training Institute',
+            skill: `${found.title} Core Domain & Methodologies`,
+            action_plan: `Deepen expertise in enterprise workflows, industry standards, and tooling relevant to ${found.company}.`,
+            recommended_certification: `Professional Certification in ${found.category || found.title}`,
+            certification_provider: 'Industry Accredited Institute',
             timeline: '2–3 weeks',
             importance: 'RECOMMENDED',
-            practical_project: 'Develop a third-party vendor screening checklist incorporating denied-party screening (DPS) and sanctioned-entity flags.',
-          },
-          {
-            skill: 'Regulatory Audit Trail & ISO 9001/AS9100 Governance',
-            action_plan: 'Study AS9100 Quality Management System standards for aerospace manufacturing supply chains and digital compliance logging.',
-            recommended_certification: 'ASQ Certified Quality Auditor (CQA) / Lead Auditor',
-            certification_provider: 'American Society for Quality (ASQ)',
-            timeline: '3–4 weeks',
-            importance: 'NICE_TO_HAVE',
-            practical_project: 'Create an automated audit reconciliation dashboard linking access control logs to compliance certification renewals.',
+            practical_project: `Build a portfolio project demonstrating hands-on proficiency in core requirements for ${found.title}.`,
           },
         ],
         recommended_certifications: [
           {
-            name: 'Certified Compliance & Ethics Professional (CCEP)',
-            issuer: 'Compliance Certification Board (CCB)',
-            target_skill: 'Corporate ethics, compliance risk assessments, internal investigation standards',
-            estimated_time: '3–4 weeks',
-            why_it_helps: 'Establishes gold-standard compliance credentials for Fortune 500 aerospace & defense recruiters.',
-            difficulty: 'Intermediate',
-          },
-          {
-            name: 'ASQ Quality Auditor / Risk Governance',
-            issuer: 'ASQ',
-            target_skill: 'Internal control testing, regulatory gap analysis, supply chain auditing',
-            estimated_time: '3 weeks',
-            why_it_helps: 'Directly mitigates the lack of formal aerospace plant inspection background.',
+            name: `Professional Certificate in ${found.category || 'Operations & Systems'}`,
+            issuer: 'Industry Recognized Board',
+            target_skill: 'Process optimization, domain leadership, and data analysis',
+            estimated_time: '2–3 weeks',
+            why_it_helps: `Validates professional mastery for ${found.company} hiring managers.`,
             difficulty: 'Intermediate',
           },
         ],
-      });
-    } else {
-      setCustomJobText(found.description);
-      setCustomUrl(found.applyUrl);
-      
-      const titleLow = (found.title || '').toLowerCase();
-      const catLow = (found.category || '').toLowerCase();
-      const descLow = (found.description || '').toLowerCase();
-      const combined = `${titleLow} ${catLow} ${descLow}`;
-
-      const isB2B = combined.includes('merchant') || combined.includes('b2b') || combined.includes('payment') || combined.includes('acquiring') || combined.includes('client delivery');
-      const isFinCrime = combined.includes('fincrime') || combined.includes('financial crime') || combined.includes('dispute') || combined.includes('fraud') || combined.includes('aml');
-      const isIncident = catLow.includes('incident') || titleLow.includes('incident') || combined.includes('incident');
-      const isWfm = catLow.includes('real-time') || titleLow.includes('workforce') || titleLow.includes('wfm') || combined.includes('queue balancing');
-      const isProdOps = catLow.includes('product') || titleLow.includes('product') || combined.includes('product ops');
-      const isLowMatch = (found.matchScore || 0) < 60;
-
-      // Calibrate Revolut Merchant role to 88% so preliminary score matches deep AI evaluation exactly
-      const calibratedMatchScore =
-        titleLow.includes('merchant') && (found.company?.toLowerCase().includes('revolut') || combined.includes('revolut'))
-          ? 88
-          : (found.matchScore || 85);
-
-      const verdictFinal =
-        calibratedMatchScore >= 85
-          ? 'STRONG_APPLY'
-          : calibratedMatchScore >= 70
-          ? 'APPLY'
-          : calibratedMatchScore >= 55
-          ? 'CONSIDER'
-          : 'SKIP';
-      
-      // Pre-populate evaluation preview dynamically based on role's true domain
-      setEvaluation({
-        job_title: found.title,
-        company_name: found.company,
-        match_score: calibratedMatchScore,
-        should_apply: calibratedMatchScore >= 70,
-        verdict: verdictFinal,
-        key_matching_factors: isLowMatch
-          ? [
-              'Core business analysis skills, process mapping capability, and analytical problem-solving foundation.',
-              'Experience in cross-functional stakeholder communication and documentation.',
-            ]
-          : isB2B
-          ? [
-              'Internal candidate currently at Revolut with hands-on expertise in SLA management and operational incident triage.',
-              'Proven experience managing enterprise B2B client lifecycles, SOWs, and delivery operations at Torc Infotech.',
-              'Direct experience in multi-currency billing reconciliations across INR, USD, AED, and EUR.',
-              'Strong technical background in SQL (Jove platform), Looker, Metabase, and payment dispute resolution logic.',
-            ]
-          : isFinCrime
-          ? [
-              'Revolut financial operations expertise in dispute resolutions, fraud risk mitigation, and compliance audit trails.',
-              'Certified in SC-900 compliance with deep experience in operational audit trails and governance.',
-              'Proven ability to investigate transactional anomalies using SQL and Looker dashboards.',
-            ]
-          : [
-              found.matchHighlight,
-              'Direct experience monitoring dynamic queues and balancing frontline capacity.',
-              'Advanced analytics proficiency using SQL (Jove), Looker, Metabase, and Excel.',
-            ],
-        missing_critical_skills: [
-          isLowMatch
-            ? (found.matchHighlight || 'Target role requires specialized software systems, domain certifications, or years of dedicated tooling outside verified profile.')
-            : isB2B
-            ? 'Revolut Business payment gateway integration specs, merchant acquiring operational workflows, and commercial API checkout testing.'
-            : isFinCrime
-            ? 'Card scheme dispute reason codes (Visa/Mastercard) and formal regulatory AML investigation documentation.'
-            : isIncident
-            ? 'Enterprise ITIL 4 Service Value System certification and major outage post-mortem RCA documentation.'
-            : isWfm
-            ? 'Long-range Erlang-C capacity modeling and telephonic ACD routing integration.'
-            : isProdOps
-            ? 'Deep telemetry instrumentation (Datadog/Snowflake) and sprint-level engineering defect triage.'
-            : 'Operational process modeling, cross-functional SLA governance, and automated workflow monitoring.',
-        ],
-        gaps: [
-          {
-            missing: isLowMatch
-              ? 'Specialized Domain Tooling / Dedicated Implementation Credentials'
-              : isB2B
-              ? 'Revolut Business Payment Gateway & Merchant Acquiring Workflows'
-              : isFinCrime
-              ? 'AML Transaction Monitoring & Card Scheme Dispute Arbitration'
-              : isIncident
-              ? 'Enterprise ITIL 4 Service Value System & Outage Post-Mortems'
-              : isWfm
-              ? 'Long-Range Erlang-C Workforce Capacity Modeling'
-              : isProdOps
-              ? 'Deep Telemetry Instrumentation (Datadog/Snowflake)'
-              : 'Continuous Process Optimization & SLA Governance',
-            where_to_work: isLowMatch
-              ? (found.matchHighlight || 'Evaluate whether your core skills transfer, or focus on roles directly matching your operations, WFM, and compliance background.')
-              : isB2B
-              ? 'Review internal Revolut Business API docs, gateway checkout flows, and merchant onboarding SOPs via internal knowledge bases.'
-              : isFinCrime
-              ? 'Study anti-money laundering red flag topologies, chargeback reason codes, and compliance investigation audit trails.'
-              : isIncident
-              ? 'Study ITIL 4 incident lifecycle fundamentals and emphasize Revolut incident bridge leadership and Slack workflow automation.'
-              : isWfm
-              ? 'Build spreadsheet models for Erlang-C staffing variance and emphasize Revolut live queue balancing across 1,000+ agents.'
-              : isProdOps
-              ? 'Build a sample telemetry tracking dashboard and highlight Jove SQL queue loop elimination.'
-              : 'Highlight Torc Infotech 32-person-month capacity scoping and structured process improvement models.',
-            severity: isLowMatch ? 'CRITICAL' : 'MODERATE',
-          },
-        ],
-        tailoring_recommendations: isB2B
-          ? [
-              'Highlight B2B client account management experience from Torc Infotech, specifically pointing out multi-currency billing reconciliations.',
-              'Emphasize current Revolut internal knowledge, SLA tracking metrics, and Real-Time queue monitoring operational successes.',
-              'Detail your chargebacks and card scheme dispute resolution background to demonstrate payment domain authority.',
-              'Position your SQL and analytics skills as tools for identifying B2B merchant transaction defects and automated reconciliation.',
-            ]
-          : isFinCrime
-          ? [
-              'Emphasize fraud anomaly detection, chargeback arbitration, and compliance controls.',
-              'Highlight SC-900 compliance certification and regulatory investigation experience.',
-              'Detail data-driven reporting in SQL, Looker, and Metabase.',
-            ]
-          : [
-              'Align accomplishment metrics with the specific product domain and scale.',
-              'Emphasize cross-functional incident mitigation and process automation workflows.',
-            ],
-        location_info: found.location,
-        executive_summary: isB2B
-          ? `Sushmit is an ideal internal applicant for the Merchant & B2B Operations Specialist role at Revolut. He combines current Revolut operational mastery (SLA monitoring, SQL analysis, incident triage) with previous B2B client delivery and multi-currency billing experience from Torc Infotech. Candidate profile represents an estimated ${calibratedMatchScore}% qualification overlap.`
-          : `${found.matchHighlight} Candidate profile represents an estimated ${calibratedMatchScore}% qualification overlap.`,
-        skill_roadmap: isB2B
-          ? [
-              {
-                skill: 'B2B Payment Gateway Integration & Merchant Operations',
-                action_plan: 'Master merchant onboarding workflows, API webhook testing, and multi-currency settlement reconciliations.',
-                recommended_certification: 'Certified Payments Professional (CPP)',
-                certification_provider: 'Electronic Transactions Association (ETA)',
-                timeline: '2–3 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Map an end-to-end B2B merchant acquiring workflow documenting dispute handling and settlement timing.',
-              },
-              {
-                skill: 'Enterprise Client Account Management & SLA Governance',
-                action_plan: 'Structure multi-currency variance reconciliations and establish high-value SLA reporting cadence.',
-                recommended_certification: 'Certified Client Success Manager (CCSM)',
-                certification_provider: 'SuccessHACKER',
-                timeline: '2 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Draft an enterprise client escalation playbook covering multi-currency reconciliations across USD, EUR, GBP, and INR.',
-              },
-            ]
-          : isFinCrime
-          ? [
-              {
-                skill: 'AML Regulatory Investigation & Transaction Monitoring',
-                action_plan: 'Master AML typologies, suspicious activity report (SAR) filing logic, and sanctions screening frameworks.',
-                recommended_certification: 'Certified Anti-Money Laundering Specialist (CAMS)',
-                certification_provider: 'ACAMS',
-                timeline: '3–4 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Construct an anomaly detection rule-set for flagging high-velocity peer-to-peer card transactions.',
-              },
-              {
-                skill: 'Card Payment Scheme Dispute Arbitration (Visa/Mastercard)',
-                action_plan: 'Learn chargeback dispute reason codes, pre-arbitration evidence submission, and fraud mitigation SOPs.',
-                recommended_certification: 'Card Schemes Dispute Management Certification',
-                certification_provider: 'Mastercard Academy / Visa School',
-                timeline: '2 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Build a fraud dispute decision-tree mapping evidence requirements for unauthorized transaction claims.',
-              },
-            ]
-          : isIncident
-          ? [
-              {
-                skill: 'ITIL 4 Service Management & Incident Bridge Command',
-                action_plan: 'Master ITIL 4 Foundation practices focusing on Incident Management, Problem Management (RCA), and Change Enablement.',
-                recommended_certification: 'ITIL 4 Foundation / Managing Professional',
-                certification_provider: 'AXELOS / PeopleCert',
-                timeline: '2 weeks',
-                importance: 'CRITICAL',
-                practical_project: 'Design a Severity-1 incident response playbook complete with SLA breach thresholds and automated stakeholder bridge communications.',
-              },
-              {
-                skill: 'ServiceNow ITSM & Enterprise Incident Metrics',
-                action_plan: 'Gain hands-on familiarity with ServiceNow Incident Management modules, SLA timers, and automated assignment groups.',
-                recommended_certification: 'ServiceNow Certified System Administrator (CSA)',
-                certification_provider: 'ServiceNow',
-                timeline: '3–4 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Configure an incident lifecycle schema mapping MTTR, MTTD, and escalation matrix hierarchies.',
-              },
-            ]
-          : isWfm
-          ? [
-              {
-                skill: 'Erlang-C & Omnichannel Capacity Forecasting',
-                action_plan: 'Learn multi-skill contact center staffing algorithms, shrinkage modeling, and occupancy smoothing heuristics.',
-                recommended_certification: 'Certified Workforce Planning Professional (CWPP)',
-                certification_provider: 'The Quality Assurance & Training Connection (QATC)',
-                timeline: '3–4 weeks',
-                importance: 'CRITICAL',
-                practical_project: 'Build an Erlang-C staffing calculator in Excel calculating interval staffing requirements across 300+ chat queues.',
-              },
-              {
-                skill: 'Workforce Optimization (WFO) Suites (NICE, Verint, Teleopti)',
-                action_plan: 'Explore workforce management scheduling engines, intraday flex rules, and real-time adherence tracking interfaces.',
-                recommended_certification: 'NICE WFM Certified Professional',
-                certification_provider: 'NICE Systems',
-                timeline: '2–3 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Simulate a sudden 40% intraday surge and document multi-tier re-allocation rules to preserve 90% SLA.',
-              },
-            ]
-          : isProdOps
-          ? [
-              {
-                skill: 'Product Telemetry & Observability (Datadog, Mixpanel, Snowflake)',
-                action_plan: 'Learn to track user funnel drops, technical exceptions, and telemetry metrics directly in Snowflake and Mixpanel.',
-                recommended_certification: 'Snowflake SnowPro Core / Datadog Fundamentals',
-                certification_provider: 'Snowflake / Datadog',
-                timeline: '3 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Construct an operational telemetry dashboard isolating KYC friction drop-offs across onboarding funnels.',
-              },
-              {
-                skill: 'Agile Product Operations & Jira Advanced Roadmaps',
-                action_plan: 'Master feature launch checklists, operational readiness reviews (ORR), and cross-functional feedback loops.',
-                recommended_certification: 'Certified Scrum Product Owner (CSPO) / Pragmatic Institute',
-                certification_provider: 'Scrum Alliance',
-                timeline: '2 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Draft a Product Operations Launch Readiness template covering support training, escalation routing, and feature rollback triggers.',
-              },
-            ]
-          : [
-              {
-                skill: 'Lean Six Sigma Process Optimization & DMAIC',
-                action_plan: 'Apply DMAIC framework to identify process bottlenecks, reduce operational cycle times, and eliminate defects.',
-                recommended_certification: 'Lean Six Sigma Green Belt (LSSGB)',
-                certification_provider: 'ASQ / IASSC',
-                timeline: '3–4 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Map an operational workflow with quantifiable cycle-time savings and automated variance alerts.',
-              },
-              {
-                skill: 'Operational Governance & Requirements Engineering',
-                action_plan: 'Master business analysis documentation, SLA governance metrics, and cross-functional exception handling.',
-                recommended_certification: 'Certified Business Analysis Professional (CBAP)',
-                certification_provider: 'IIBA',
-                timeline: '3–4 weeks',
-                importance: 'RECOMMENDED',
-                practical_project: 'Draft an operational SLA matrix with root cause analysis guidelines and escalation triggers.',
-              },
-            ],
-        recommended_certifications: isB2B
-          ? [
-              {
-                name: 'Certified Payments Professional (CPP)',
-                issuer: 'Electronic Transactions Association (ETA)',
-                target_skill: 'Merchant operations, acquiring workflows & payment gateway API specs',
-                estimated_time: '2–3 weeks',
-                why_it_helps: 'High-value ATS qualification for fintech merchant and B2B operational scaling.',
-                difficulty: 'Intermediate',
-              },
-              {
-                name: 'B2B Client Relationship & Account Governance',
-                issuer: 'SuccessHACKER',
-                target_skill: 'Multi-currency account management, SLA metrics & delivery integrity',
-                estimated_time: '2 weeks',
-                why_it_helps: 'Proves client lifecycle ownership and revenue retention capabilities.',
-                difficulty: 'Beginner',
-              },
-            ]
-          : isFinCrime
-          ? [
-              {
-                name: 'Certified Anti-Money Laundering Specialist (CAMS)',
-                issuer: 'ACAMS',
-                target_skill: 'Regulatory screening, AML red flags & dispute investigation',
-                estimated_time: '3–4 weeks',
-                why_it_helps: 'Industry benchmark for financial crime operations and dispute integrity.',
-                difficulty: 'Intermediate',
-              },
-              {
-                name: 'SC-900: Security, Compliance, and Identity Fundamentals',
-                issuer: 'Microsoft',
-                target_skill: 'Access control, audit trails & digital regulatory compliance',
-                estimated_time: '1–2 weeks',
-                why_it_helps: 'Direct proof of compliance controls and access governance.',
-                difficulty: 'Beginner',
-              },
-            ]
-          : isIncident
-          ? [
-              {
-                name: 'ITIL 4 Foundation in IT Service Management',
-                issuer: 'AXELOS / PeopleCert',
-                target_skill: 'Incident command, problem management, ITIL service governance',
-                estimated_time: '2 weeks',
-                why_it_helps: 'The universal benchmark for major incident command and enterprise service management roles.',
-                difficulty: 'Beginner',
-              },
-              {
-                name: 'ServiceNow Certified System Administrator (ITSM)',
-                issuer: 'ServiceNow',
-                target_skill: 'Enterprise ticketing workflow automation, SLA alerting, incident triage',
-                estimated_time: '3–4 weeks',
-                why_it_helps: 'High demand across BETSOL and IT service employers looking for platform-certified incident leads.',
-                difficulty: 'Intermediate',
-              },
-            ]
-          : isWfm
-          ? [
-              {
-                name: 'Certified Workforce Planning Professional (CWPP)',
-                issuer: 'The Workforce Management Institute (SWPP)',
-                target_skill: 'Capacity forecasting, intraday variance steering, Erlang modeling',
-                estimated_time: '3–4 weeks',
-                why_it_helps: 'Proves formal mastery of global workforce management theory alongside candidate practical Revolut SME experience.',
-                difficulty: 'Intermediate',
-              },
-              {
-                name: 'Advanced Excel Financial & Capacity Modeling',
-                issuer: 'Corporate Finance Institute (CFI)',
-                target_skill: 'Dynamic sensitivity analysis, shift optimization formulas, roster forecasting',
-                estimated_time: '2 weeks',
-                why_it_helps: 'Demonstrates deep analytical rigor for command center lead positions at companies like Wise.',
-                difficulty: 'Intermediate',
-              },
-            ]
-          : [
-              {
-                name: 'Lean Six Sigma Green Belt (LSSGB)',
-                issuer: 'ASQ / IASSC',
-                target_skill: 'Root-cause analysis, defect reduction, DMAIC process re-engineering',
-                estimated_time: '3–4 weeks',
-                why_it_helps: 'Offers strong proof of candidate process improvement and defect elimination capability.',
-                difficulty: 'Intermediate',
-              },
-              {
-                name: 'Certified Business Analysis Professional (CBAP)',
-                issuer: 'IIBA',
-                target_skill: 'Requirements analysis, operational mapping, process governance',
-                estimated_time: '3–4 weeks',
-                why_it_helps: 'Validates business analysis capability across complex enterprise environments.',
-                difficulty: 'Intermediate',
-              },
-            ],
       });
     }
   };
@@ -1433,7 +1057,7 @@ export default function App() {
       {/* Footer */}
       <footer className="no-print bg-card border-t border-border mt-auto py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          {isLoggedIn && (candidateInfo.first_name || userName) ? (
+          {isLoggedIn && activeTab !== 'home' && (candidateInfo.first_name || userName) ? (
             <>
               <div className="flex items-center gap-2">
                 <span className="pill-pixel text-xs py-0.5 px-2">MASTER PROFILE</span>

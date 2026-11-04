@@ -63,7 +63,7 @@ const COMPANY_FOCUS_PACKS = [
     top_questions: [
       {
         q: 'Walk me through an operational incident where you had to make a high-stakes decision with incomplete data.',
-        strategy: 'Highlight real-time root cause analysis, incident bridge coordination, and restoring SLA under 30 minutes.',
+        strategy: 'Highlight real-time root cause analysis, cross-functional coordination, and restoring SLA under 30 minutes.',
       },
       {
         q: 'How do you handle a sudden 50% spike in customer chat volume without dropping resolution quality?',
@@ -235,7 +235,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
 
   // Selected Company Focus Pack
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('revolut');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('google');
 
   const copyAnswer = (index: number, text: string) => {
     navigator.clipboard.writeText(text);
@@ -347,7 +347,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          candidateName: `${candidateInfo.first_name} ${candidateInfo.last_name}`.trim() || 'Sushmit Surendran',
+          candidateName: `${candidateInfo.first_name} ${candidateInfo.last_name}`.trim() || 'Candidate',
           companyName: companyName || 'Target Employer',
           jobTitle: jobTitle || 'Senior Operations Specialist',
           offeredBase,
@@ -995,7 +995,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
                 rows={5}
                 value={practiceAnswerInput}
                 onChange={(e) => setPracticeAnswerInput(e.target.value)}
-                placeholder="e.g. During my time at Revolut, we experienced a massive chat transfer loop during peak European hours. As the lead analyst on duty, I used SQL queries on live logs to isolate the issue to a routing rule error in the Jove pipeline. I coordinated an incident bridge, deployed an interim queue bypass rule, and brought SLA back from 70% to 99.4% within 20 minutes..."
+                placeholder="e.g. In my previous role as an operations analyst, we faced an unexpected queue surge during a peak product launch. I analyzed telemetry logs in real time to locate the processing bottleneck, collaborated with the engineering leads to deploy an optimized routing rule, and restored our customer response SLA to 99.5% within 30 minutes, preventing service disruptions for over 10,000 active users..."
                 className="w-full p-4 text-xs sm:text-sm bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-info/25 transition-all font-sans leading-relaxed"
               />
             </div>

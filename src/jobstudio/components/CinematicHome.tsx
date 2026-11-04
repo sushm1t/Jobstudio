@@ -18,16 +18,16 @@ gsap.registerPlugin(ScrollTrigger);
 
 const JOBS = [
   { t: 'Senior Operations Analyst', c: 'Stripe', l: 'Dublin · Hybrid', s: 92 },
-  { t: 'Real-Time Ops Lead', c: 'Revolut', l: 'London · Remote', s: 88 },
+  { t: 'Operations Systems Lead', c: 'Apex', l: 'London · Remote', s: 88 },
   { t: 'Support Analytics Manager', c: 'Linear', l: 'Remote · EU', s: 74 },
   { t: 'Workforce Planning Analyst', c: 'Notion', l: 'Amsterdam', s: 61 },
   { t: 'Trust & Safety Specialist', c: 'Figma', l: 'Remote', s: 55 },
 ];
-const MATCH = ['SQL', 'Queue Mgmt', 'Incident Response', 'Looker', 'SLA Ownership'];
+const MATCH = ['SQL', 'Queue Mgmt', 'Process Optimization', 'Looker', 'SLA Ownership'];
 const MISS = ['Python', 'dbt'];
 const POSTED = ['2h ago', '5h ago', '1d ago', '2d ago'];
 const QUESTIONS = [
-  { k: 'Behavioural', q: 'Tell me about a time you handled an outage under pressure.' },
+  { k: 'Behavioural', q: 'Tell me about a time you handled an urgent technical issue under pressure.' },
   { k: 'Technical', q: 'How would you design a real-time queue health dashboard?' },
   { k: 'Behavioural', q: 'Describe a conflict with engineering and how you resolved it.' },
   { k: 'Role-specific', q: 'Which SLA metrics would you prioritise in your first 30 days?' },
@@ -324,7 +324,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_150px] gap-4 items-start">
             <div>
               <div className="cine-label">Your resume</div>
-              {['6 yrs real-time operations', 'SQL investigations at scale', 'Led incident bridges', 'Looker & Metabase dashboards', 'Owned SLA for 1,000+ agents'].map((t, i) => (
+              {['5+ yrs operations analysis', 'SQL investigations at scale', 'Process & SLA optimization', 'BI & executive reporting', 'Cross-functional team leadership'].map((t, i) => (
                 <div key={i} className="cine-resume-line">{t}</div>
               ))}
             </div>
@@ -358,13 +358,13 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
         <div className="cine-stage grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-4">
           <div className="cine-doc paper relative overflow-hidden">
             <div className="cine-scan" aria-hidden />
-            <div className="text-[13px] font-bold tracking-wide">SUSHMIT SURENDRAN</div>
-            <div className="text-[10px] opacity-60 mb-3">Operations · Real-time analytics</div>
+            <div className="text-[13px] font-bold tracking-wide">ALEX MORGAN</div>
+            <div className="text-[10px] opacity-60 mb-3">Operations &amp; Systems Analyst</div>
             <div className="text-[10px] font-semibold tracking-widest opacity-70 mb-1.5">EXPERIENCE</div>
             {[
-              ['Monitored queues for the support team.', 'Balanced 300+ live queues across EEA/UK, holding 98.4% SLA for 1,000+ agents.'],
-              ['Wrote some SQL reports.', 'Built SQL investigations that removed repeat transfer loops, cutting handle time 18%.'],
-              ['Helped during outages.', 'Led incident bridges during platform outages, restoring service with zero missed SLAs.'],
+              ['Monitored daily system workflows.', 'Optimized multi-region queue workflows, maintaining 99.2% SLA adherence across 450+ team members.'],
+              ['Built database reports.', 'Engineered automated SQL tracking pipelines, reducing manual query latency and cycle times by 32%.'],
+              ['Managed critical issue triage.', 'Standardized cross-functional issue triage workflows, reducing mean time to resolution by 40%.'],
             ].map(([o, n], i) => (
               <div key={i} className="relative min-h-[34px] text-[11px] leading-snug mb-1.5 pl-3">
                 <span className="absolute left-0 top-1.5 w-1 h-1 rounded-full bg-current opacity-60" />
@@ -373,7 +373,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
               </div>
             ))}
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {['SLA', 'SQL', 'Incident', 'Queue'].map((k) => <span key={k} className="cine-kw">{k}</span>)}
+              {['SLA', 'SQL', 'Automation', 'Workflow'].map((k) => <span key={k} className="cine-kw">{k}</span>)}
             </div>
           </div>
           <div className="space-y-3">
@@ -445,7 +445,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
                 <div className="space-y-2 min-h-[150px]">
                   {ci === 0 && (<>
                     <div className="cine-kcard cine-move-b"><FileText className="w-3.5 h-3.5 text-brand" /> Stripe · Ops Analyst</div>
-                    <div className="cine-kcard cine-move-a"><FileText className="w-3.5 h-3.5 text-brand" /> Revolut · Ops Lead</div>
+                    <div className="cine-kcard cine-move-a"><FileText className="w-3.5 h-3.5 text-brand" /> Apex · Ops Lead</div>
                     <div className="cine-kcard"><FileText className="w-3.5 h-3.5 text-subtle" /> Linear · Support Mgr</div>
                   </>)}
                   {ci === 1 && <div className="cine-kcard"><FileText className="w-3.5 h-3.5 text-subtle" /> Notion · WFM Analyst</div>}

@@ -33,7 +33,6 @@ import {
   saveUserMasterProfile,
   profileRecordToResume,
   profileRecordToCandidateInfo,
-  SUSHMIT_PROFILE_RECORD,
 } from '../data/candidateProfiles';
 import { CandidateInfo, TailoredResumeData } from '../data/defaultData';
 
@@ -939,7 +938,7 @@ TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, R
                   value={selectedProfile.name}
                   onChange={(e) => setSelectedProfile({ ...selectedProfile, name: e.target.value, updatedAt: Date.now() })}
                   className="w-full px-3 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
-                  placeholder="e.g. Sushmit Surendran"
+                  placeholder="e.g. Alex Morgan"
                 />
               </div>
 

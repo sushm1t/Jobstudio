@@ -1080,7 +1080,7 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
                   required
                   value={formCompany}
                   onChange={(e) => setFormCompany(e.target.value)}
-                  placeholder="e.g. Revolut, Honeywell, Google"
+                  placeholder="e.g. Google, Stripe, Microsoft"
                   className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
                 />
               </div>

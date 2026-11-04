@@ -18,7 +18,7 @@ const baseJob = (): AppliedJobRecord =>
   });
 
 const resumeSample = (summary: string): TailoredResumeData => ({
-  full_name: 'Sushmit Surendran',
+  full_name: 'Alex Morgan',
   email: 's@example.com',
   phone: '',
   location: '',

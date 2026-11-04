@@ -412,22 +412,17 @@ app.post('/api/discover-jobs', async (req, res) => {
   try {
     const {
       location = 'India (Remote / Hybrid)',
-      roles = [
-        'Real-Time Analyst / Workforce Management',
-        'Product Operations Specialist',
-        'Incident Management / Service Operations Lead',
-        'Business Operations Analyst',
-        'Operations Analyst',
-      ],
+      roles = [],
+      query = '',
+      candidateProfile = '',
     } = req.body;
 
-    const prompt = `Search the live web using Google Search for authentic, currently open job postings in ${location} matching candidate Sushmit Surendran's background and target roles:
-Roles to search: ${Array.isArray(roles) ? roles.join(', ') : roles}.
+    const targetRoles = Array.isArray(roles) && roles.length > 0
+      ? roles.join(', ')
+      : (query || 'Software Engineering, Product Management, Operations, Data Analytics, or Design');
 
-Candidate Profile Summary:
-- 6 years operations experience in Fintech at Revolut (Real-Time Analyst SME managing 1,000+ frontline agents and 300+ dynamic queues globally; Incident Bridge Manager; SQL root-cause investigator via Jove platform; payment disputes & chargebacks).
-- Torc Infotech: B2B international account coordination, multi-currency billing reconciliation (USD, EUR, GBP, INR), capacity planning (32 person-months).
-- Technical Stack: SQL, Looker, Metabase, Advanced Excel, Jira, Confluence, Slack Workflows, Zapier, AI Automation.
+    const prompt = `Search the live web using Google Search for authentic, currently open job postings in ${location} matching target roles: ${targetRoles}.
+${candidateProfile ? `\nCandidate Profile Context:\n${candidateProfile.slice(0, 3000)}\n` : ''}
 
 Find 6 authentic, currently active job postings from real hiring portals (SmartRecruiters, Greenhouse, Lever, Ashby, Workday, LinkedIn, or company career pages).
 Only include real, open vacancies with actual links to apply.
@@ -435,12 +430,12 @@ Only include real, open vacancies with actual links to apply.
 For each vacancy, provide:
 1. "title": Official job title.
 2. "company": Company hiring.
-3. "location": Workplace location (e.g. "Bengaluru, India (Hybrid)" or "Remote, India").
+3. "location": Workplace location (e.g. "Bengaluru, India (Hybrid)" or "Remote, Global").
 4. "platform": ATS or portal (e.g. "SmartRecruiters", "Greenhouse", "Lever", "Ashby", "LinkedIn", "Workday", "Direct Portal").
 5. "applyUrl": Direct link to job listing or application portal.
-6. "category": One of "Real-Time Operations & WFM", "Incident & Service Ops", "Business Operations & Analytics", "Product Operations", "Resource & Capacity Planning".
-7. "matchScore": Eligibility match score (0-100) based on candidate's qualification overlap.
-8. "matchHighlight": 1-2 concise sentences explaining why candidate is eligible for this specific posting.
+6. "category": Job category or domain.
+7. "matchScore": Eligibility match score (0-100) based on qualification overlap.
+8. "matchHighlight": 1-2 concise sentences explaining why this posting matches the target search.
 9. "description": 2-3 paragraph summary detailing the role responsibilities, team function, and requirements.
 
 Return ONLY a valid JSON array of job objects with no other commentary or markdown formatting.`;
@@ -538,7 +533,7 @@ For EACH question (provide 5 to 6 questions total):
 4. "isFromPortal": boolean (true if discovered from real candidate reports on Glassdoor/AmbitionBox/etc., false if derived from role competencies).
 5. "why_asked": 1-sentence explanation of what competencies, leadership principles, or technical skills the interviewer is evaluating.
 6. "key_talking_points": Array of 2-3 concise bullet points the candidate should remember.
-7. "suggested_answer": A high-impact 3-5 sentence STAR-method answer directly utilizing candidate Sushmit Surendran's actual verified background (Revolut Real-Time Analyst SME: 1,000+ frontline agents, 300+ queues, Jove SQL chat transfer loop elimination, incident bridge manager; Torc Infotech: 32 person-month capacity planning, multi-currency reconciliations; Tools: SQL, Looker, Metabase, Jira, Confluence, Zapier).
+7. "suggested_answer": A high-impact 3-5 sentence STAR-method answer directly utilizing the candidate's actual verified background and accomplishments from their master profile (or relevant domain best practices if no profile is provided).
 
 Return ONLY a valid JSON array of question objects with no markdown code fences or commentary.`;
 
@@ -636,19 +631,19 @@ The candidate is filling out an application form on a major ATS portal (Greenhou
 Job Context / Requirements:
 ${effectiveJd || 'Operational excellence, stakeholder management, analytics, and process improvement.'}
 
-Candidate Verified Master Profile (Sushmit Surendran):
-${effectiveProfile || 'Real-Time Analyst SME at Revolut (1,000+ frontline agents, 300+ queues, incident bridge manager, Jove SQL chat transfer loop elimination); Account Coordinator at Torc Infotech (32 person-month capacity planning, multi-currency reconciliations); SQL, Looker, Metabase, Jira, Confluence, Zapier.'}
+Candidate Master Profile:
+${effectiveProfile || 'Professional background emphasizing relevant domain competencies, key project achievements, and technical expertise.'}
 
 The application form asks this exact question:
 "${question.trim()}"
 
 Instructions:
 1. Generate an authentic, tailored, ATS-optimized answer designed to score maximally with ATS keyword screeners and hiring managers.
-2. Ground all answers in candidate Sushmit Surendran's real, verified accomplishments:
-   - For operational failure / incident questions: Highlight managing high-severity incident bridges, root cause triage, and eliminating chat transfer loops via Jove SQL pipeline fixes or real-time staffing reallocations across 150+ queues.
-   - For "Why work here / Why this company": Connect Sushmit's operational rigor and data-driven scaling with ${companyName}'s product, scale, and challenges.
-   - For automation / efficiency: Highlight Looker/SQL dashboards, scheduling models, or automating capacity workflows.
-   - For conflict / stakeholder: Highlight data-backed alignment with international shift leads and product teams.
+2. Ground answers strictly in the candidate's actual qualifications from the provided profile (or relevant domain best practices if no profile is provided):
+   - For challenging situation / problem-solving questions: Highlight structured root-cause diagnosis, cross-functional collaboration, and measurable recovery or improvement.
+   - For "Why work here / Why this company": Connect candidate qualifications directly with ${companyName}'s product, scale, and challenges.
+   - For automation / efficiency: Highlight workflow optimization, tool utilization, and metrics-driven productivity gains.
+   - For conflict / stakeholder: Highlight clear communication, objective data, and collaborative alignment across teams.
    - For salary / availability: State professional, flexible market rate alignment and standard/immediate availability.
 3. ${lengthGuide}
 4. Tone: Confident, professional, metric-oriented, articulate, and completely natural (avoid robotic clichés).
@@ -683,45 +678,45 @@ Return ONLY a valid JSON object matching this schema (no markdown formatting or 
 
     // High quality deterministic fallback if API is unreachable
     if (!parsedResult || !parsedResult.suggested_answer) {
-      if (qLower.includes('fail') || qLower.includes('incident') || qLower.includes('mitigat') || qLower.includes('crisis')) {
+      if (qLower.includes('fail') || qLower.includes('incident') || qLower.includes('mitigat') || qLower.includes('crisis') || qLower.includes('challeng')) {
         parsedResult = {
-          suggested_answer: `At Revolut, while supervising real-time operations across 1,000+ frontline agents and 300+ queues, a critical routing glitch in our Jove chat pipeline caused a recursive transfer loop during peak European trading hours. Service Level dropped below 60% within 15 minutes, with queue wait times spiking dangerously.\n\nI immediately assumed incident bridge commander responsibility, coordinating across frontline shift leads and backend engineering. Using ad-hoc SQL queries on our live queue database, I isolated the root-cause routing rule misconfiguration and enacted an emergency manual bypass protocol, safely redistributing 400+ stalled conversations across reserve Tier-2 queues. Within 45 minutes, queue backlog normalized, preventing an estimated £80k in potential SLA breach penalties. Following resolution, I partnered with engineering to implement a permanent validation gate in our scheduling and routing pipeline, completely eliminating recursive loops from our infrastructure.`,
+          suggested_answer: `In a previous role, our team faced a critical service disruption during peak operational hours that impacted customer workflows and threatened key SLA milestones.\n\nI immediately stepped in to coordinate triage between frontline teams and engineering. By analyzing system metrics and identifying the root-cause bottleneck, I implemented an emergency mitigation protocol that restored stability within 45 minutes, preventing broader customer impact.\n\nFollowing resolution, I led a cross-functional post-mortem to institute automated monitoring and safeguards, permanently eliminating the failure mode from our recurring workflow.`,
           key_points: [
-            'Immediate incident command under high-pressure customer impact',
-            'SQL root-cause isolation and emergency traffic bypass',
-            'Permanent preventative governance implemented with engineering'
+            'Immediate cross-functional coordination and rapid root-cause diagnosis',
+            'Data-backed mitigation restoring stability under high-stakes deadlines',
+            'Permanent preventative safeguards implemented to ensure long-term resilience'
           ],
-          keywords: ['Incident Bridge Commander', 'SLA Recovery', 'SQL Query Isolation', 'Queue Optimization', 'Root Cause Analysis'],
+          keywords: ['Root Cause Analysis', 'Rapid Triage', 'SLA Adherence', 'Process Improvement', 'Cross-Functional Collaboration'],
           category: 'Operational',
-          word_count: 172
+          word_count: 110
         };
       } else if (qLower.includes('why') && (qLower.includes('work') || qLower.includes('company') || qLower.includes('join') || qLower.includes('here') || qLower.includes('us'))) {
         parsedResult = {
-          suggested_answer: `${companyName}'s rapid growth and mission-driven approach to high-scale operations strongly resonates with my background. Over 6 years specializing in real-time operations and capacity coordination—most recently managing queue adherence and staffing across 1,000+ frontline specialists at Revolut—I have found that the biggest differentiator in operational excellence is the ability to bridge frontline realities with analytical decision-making.\n\n${companyName}'s commitment to engineering high-standard customer and operational workflows creates an environment where my expertise in SQL-driven queue analysis, SLA protection, and cross-functional incident response can make an immediate, tangible impact. I want to contribute to an organization that values both operational velocity and rigorous quality control as it scales.`,
+          suggested_answer: `${companyName}'s rapid innovation and mission-driven approach strongly resonates with my background and career goals. Throughout my career, I have found that the biggest driver of sustained success is combining technical execution with empathetic, cross-functional collaboration.\n\n${companyName}'s commitment to high standards creates the ideal environment where my domain experience, analytical mindset, and focus on scalable quality can deliver immediate, tangible value. I want to contribute to a forward-thinking organization that values velocity, operational rigor, and continuous learning as it scales.`,
           key_points: [
-            `Direct alignment between candidate skills and ${companyName}'s scale`,
-            'Proven track record of high-velocity operational excellence',
-            'Long-term dedication to data-backed workflow improvements'
+            `Direct alignment between candidate capabilities and ${companyName}'s mission`,
+            'Proven track record of high-quality execution and collaboration',
+            'Long-term dedication to scalable, high-impact outcomes'
           ],
-          keywords: ['Operational Excellence', 'Data-Driven Scaling', 'Cross-Functional Alignment', 'SLA Governance', 'Process Optimization'],
+          keywords: ['Mission Alignment', 'Scalable Execution', 'Domain Excellence', 'Continuous Improvement', 'Cross-Functional Teamwork'],
           category: 'Why Company',
-          word_count: 154
+          word_count: 105
         };
       } else if (qLower.includes('automat') || qLower.includes('efficien') || qLower.includes('process') || qLower.includes('improv')) {
         parsedResult = {
-          suggested_answer: `At Torc Infotech and Revolut, manual tracking of team capacity and variance reporting was consuming over 6 hours of leadership time every week while leaving blind spots in intraday staffing. At Revolut, I designed and deployed an automated queue utilization reporting pipeline linking Metabase and Looker with our scheduling sheets.\n\nBy writing scheduled SQL transformations to aggregate agent adherence and queue handle-times every 30 minutes, I replaced manual tracking spreadsheets with real-time exception dashboards. This automated system gave shift managers proactive 1-hour early warnings on impending SLA breaches, allowing dynamic agent reallocations before backlogs built up. The initiative saved approximately 25 managerial hours per month across our operations department and drove a 14% improvement in consistent daily SLA attainment.`,
+          suggested_answer: `In my previous position, repetitive manual workflows were consuming significant team hours each week, creating operational bottlenecks and delayed reporting.\n\nI designed and deployed an automated data aggregation pipeline and interactive dashboard that synchronized updates directly from our core tools. By automating recurring reports, we eliminated manual data entry, provided stakeholders with real-time exception visibility, and improved cycle time by over 30%.\n\nThis initiative saved dozens of managerial hours each month and allowed our team to refocus energy on strategic, high-leverage initiatives.`,
           key_points: [
-            'Replaced 6+ hours/week of manual spreadsheet reporting with automated SQL pipelines',
-            'Created 30-minute early warning trigger for shift managers',
-            'Achieved 14% sustained improvement in daily SLA compliance'
+            'Replaced time-consuming manual workflows with automated reporting pipelines',
+            'Provided real-time operational visibility for key stakeholders',
+            'Achieved 30%+ efficiency improvement in recurring cycle times'
           ],
-          keywords: ['Workflow Automation', 'SQL Transformations', 'Looker Dashboards', 'Intraday WFM', 'Capacity Scoping'],
+          keywords: ['Workflow Automation', 'Dashboard Analytics', 'Cycle Time Optimization', 'Operational Efficiency', 'Process Scalability'],
           category: 'Operational',
-          word_count: 161
+          word_count: 98
         };
       } else if (qLower.includes('salary') || qLower.includes('comp') || qLower.includes('notice') || qLower.includes('availab')) {
         parsedResult = {
-          suggested_answer: `My salary expectations are aligned with competitive market rates for a ${jobTitle} role at ${companyName}, considering my 6 years of specialized operations, capacity planning, and incident management experience. I am open to discussing a total compensation package that reflects the role's scope and standard benchmarks.\n\nRegarding availability, my notice period is standard, and I can transition smoothly upon mutual agreement to ensure seamless onboarding.`,
+          suggested_answer: `My salary expectations are aligned with competitive market rates for a ${jobTitle} role at ${companyName}, taking into account my proven experience and the scope of responsibility. I am open to discussing a total compensation package that reflects the role's expectations and industry benchmarks.\n\nRegarding availability, my notice period is standard, and I can transition smoothly upon mutual agreement to ensure seamless onboarding.`,
           key_points: [
             'Flexible and market-aligned compensation stance',
             'Emphasis on role scope and total compensation package',
@@ -729,19 +724,19 @@ Return ONLY a valid JSON object matching this schema (no markdown formatting or 
           ],
           keywords: ['Competitive Compensation', 'Market Benchmarks', 'Notice Period', 'Seamless Onboarding'],
           category: 'General',
-          word_count: 78
+          word_count: 75
         };
       } else {
         parsedResult = {
-          suggested_answer: `Throughout my 6 years in operational coordination and real-time operations at Revolut and Torc Infotech, my approach has always centered on objective data, clear cross-functional communication, and rapid execution. Whether resolving multi-region capacity shortages across 1,000+ frontline agents or aligning project timelines with global engagement leaders, I prioritize transparency and measurable business outcomes.\n\nFor ${companyName}, I bring proven experience in incident mitigation, SQL data analysis, and scalable workflow governance, ensuring that operational standards remain consistently high as the organization expands.`,
+          suggested_answer: `Throughout my career, my approach has centered on objective data, clear cross-functional communication, and rapid execution. Whether resolving complex operational challenges or aligning project deliverables across international teams, I prioritize transparency and measurable business outcomes.\n\nFor ${companyName}, I bring proven experience in workflow optimization, stakeholder coordination, and high-standard execution, ensuring that team goals are consistently met with high quality.`,
           key_points: [
-            '6 years of high-scale operational experience',
+            'Proven track record of high-impact execution and team leadership',
             'Data-first methodology combined with empathetic stakeholder management',
-            'Immediate readiness to support high-growth operational goals'
+            'Immediate readiness to support organization goals from Day 1'
           ],
-          keywords: ['Operational Coordination', 'Incident Mitigation', 'SQL Analysis', 'Workflow Governance', 'Scalable Processes'],
+          keywords: ['Cross-Functional Execution', 'Data-Driven Problem Solving', 'Stakeholder Management', 'Process Excellence', 'Quality Standards'],
           category: 'Behavioral',
-          word_count: 114
+          word_count: 78
         };
       }
     }
@@ -833,81 +828,6 @@ export const CURATED_ATS_COMPANIES: ATSCompanyEntry[] = [
   { name: 'Uber', slug: 'uber', ats: 'greenhouse', category: 'Mobility & Operations' },
   { name: 'Pinterest', slug: 'pinterest', ats: 'greenhouse', category: 'Visual Discovery' },
   { name: 'Duolingo', slug: 'duolingo', ats: 'greenhouse', category: 'EdTech & Learning' },
-];
-
-export const REVOLUT_VERIFIED_OPERATIONS_ROLES = [
-  {
-    id: 'rev-rta-sme-01',
-    originalId: 'rev-01',
-    title: 'Real-Time Analyst / Operations SME',
-    company: 'Revolut',
-    location: 'Remote (India / Global)',
-    department: 'Real-Time Operations & Workforce Management',
-    platform: 'Direct Portal',
-    applyUrl: 'https://www.revolut.com/careers/position/real-time-analyst',
-    publishedAt: new Date().toISOString(),
-    descriptionSnippet: 'Oversee live queue balancing across 1,000+ frontline agents and 300+ operational queues. Preempt SLA breaches, monitor real-time adherence (RTA), and deliver operational bridge updates to senior leadership.',
-    rawDescription: `Company: Revolut\nRole: Real-Time Analyst / Operations SME\nDepartment: Real-Time Operations\nLocation: Remote (India / Global)\nPlatform: Revolut Official Portal\n\nAbout the Role:\nWe are looking for a Real-Time Analyst / SME to monitor and optimize frontline operations across multiple international time zones. You will track incoming volumes, handle times, occupancy rates, and agent states in real time to guarantee service level agreement (SLA) adherence.\n\nKey Responsibilities:\n• Monitor live queues and dynamically redirect frontline resources during volume surges.\n• Coordinate with shift leads and team leads to manage shrinkage, shift compliance, and schedule adherence.\n• Serve as incident communication bridge between frontline staff and executive stakeholders during operational disruptions.\n• Analyze real-time performance metrics in Jove SQL and Looker to drive continuous process improvements.`,
-    isRemote: true,
-    workplaceType: 'Remote' as const,
-    seniority: 'Mid-Level' as const,
-    matchScore: 96,
-    matchHighlight: 'Direct 100% alignment with candidate’s Revolut Real-Time Analyst / SME tenure, queue balancing, and Jove SQL analytics.',
-  },
-  {
-    id: 'rev-inc-lead-02',
-    originalId: 'rev-02',
-    title: 'Incident & Service Delivery Operations Lead',
-    company: 'Revolut',
-    location: 'Remote / Bengaluru, India',
-    department: 'Incident & Problem Management',
-    platform: 'Direct Portal',
-    applyUrl: 'https://www.revolut.com/careers/position/incident-operations-lead',
-    publishedAt: new Date().toISOString(),
-    descriptionSnippet: 'Drive Severity-1 and Severity-2 fintech incident triage, bridge management, and Root Cause Analysis (RCA). Coordinate cross-functionally between engineering, product, and frontline support.',
-    rawDescription: `Company: Revolut\nRole: Incident & Service Delivery Operations Lead\nDepartment: Incident Management\nLocation: Remote / Bengaluru\nPlatform: Revolut Official Portal\n\nAbout the Role:\nLead cross-functional incident mitigation for critical fintech operations. You will manage war rooms, document post-mortem root causes, and build automation workflows in Slack and Jira to minimize MTTR.\n\nKey Responsibilities:\n• Coordinate emergency response bridges during high-impact payment and transactional outages.\n• Eliminate duplicate escalations and recurring defect loops using structured SOPs and JSM.\n• Partner with compliance, engineering, and frontline leads to guarantee SLA compliance.`,
-    isRemote: true,
-    workplaceType: 'Hybrid' as const,
-    seniority: 'Lead / Staff / Director' as const,
-    matchScore: 94,
-    matchHighlight: 'Direct match for Revolut cross-functional escalation bridge management and dispute triage.',
-  },
-  {
-    id: 'rev-fincrime-03',
-    originalId: 'rev-03',
-    title: 'Financial Crime & Dispute Operations Analyst',
-    company: 'Revolut',
-    location: 'Remote / Hybrid (India)',
-    department: 'Financial Crime & Compliance Operations',
-    platform: 'Direct Portal',
-    applyUrl: 'https://www.revolut.com/careers/position/financial-crime-disputes-analyst',
-    publishedAt: new Date().toISOString(),
-    descriptionSnippet: 'Investigate complex card payment disputes across Visa/Mastercard schemes, mitigate fraud exposure, and enforce regulatory compliance controls.',
-    rawDescription: `Company: Revolut\nRole: Financial Crime & Dispute Operations Analyst\nDepartment: FinCrime Ops\nLocation: Remote / Hybrid\nPlatform: Revolut Official Portal\n\nAbout the Role:\nHandle escalated payment disputes, chargebacks, and compliance screenings. Leverage SQL and transactional telemetry to detect anomalies and protect customers from emerging fraud vectors.`,
-    isRemote: true,
-    workplaceType: 'Hybrid' as const,
-    seniority: 'Mid-Level' as const,
-    matchScore: 92,
-    matchHighlight: 'Matches SC-900 compliance certification and Revolut dispute resolution expertise.',
-  },
-  {
-    id: 'rev-b2b-04',
-    originalId: 'rev-04',
-    title: 'Merchant & B2B Operations Specialist',
-    company: 'Revolut',
-    location: 'Remote / Hybrid',
-    department: 'Revolut Business Operations',
-    platform: 'Direct Portal',
-    applyUrl: 'https://www.revolut.com/careers/position/merchant-b2b-operations',
-    publishedAt: new Date().toISOString(),
-    descriptionSnippet: 'Support enterprise merchants onboarding to Revolut Business. Handle multi-currency billing reconciliations (USD, EUR, GBP, INR) and account lifecycle management.',
-    rawDescription: `Company: Revolut\nRole: Merchant & B2B Operations Specialist\nDepartment: Business Operations\nLocation: Remote / Hybrid\nPlatform: Revolut Official Portal\n\nAbout the Role:\nEmpower B2B enterprise clients using Revolut Business payment gateways and accounts. Manage multi-currency reconciliations and ensure SLA commitments for high-value business clients.`,
-    isRemote: true,
-    workplaceType: 'Hybrid' as const,
-    seniority: 'Mid-Level' as const,
-    matchScore: 88,
-    matchHighlight: 'Direct match for Torc Infotech B2B account management and multi-currency billing reconciliation.',
-  },
 ];
 
 export function extractSeniorityLevel(title: string, desc: string = ''): 'Early / Junior' | 'Mid-Level' | 'Senior' | 'Lead / Staff / Director' {
@@ -1080,28 +1000,12 @@ function calculateCandidateMatch(title: string, department: string = '', descrip
     };
   }
 
-  // 2. High-Priority Direct Title Alignment (Sushmit Surendran's Core Profile)
-  const isDirectTitleMatch =
-    lowerTitle.includes('real-time') ||
-    lowerTitle.includes('real time') ||
-    lowerTitle.includes('rta') ||
-    lowerTitle.includes('workforce') ||
-    lowerTitle.includes('wfm') ||
-    lowerTitle.includes('queue') ||
-    lowerTitle.includes('incident') ||
-    lowerTitle.includes('dispute') ||
-    lowerTitle.includes('financial crime') ||
-    lowerTitle.includes('operations analyst') ||
-    lowerTitle.includes('operations specialist') ||
-    lowerTitle.includes('fraud');
-
-  // Core Keywords
+  // Core professional keywords across tech, business, and operations
   const coreKeywords = [
-    'operations', 'incident', 'real-time', 'rta', 'wfm', 'workforce',
-    'queue', 'sla', 'service delivery', 'capacity', 'customer success',
-    'account management', 'process improvement', 'analyst', 'fraud',
-    'disputes', 'compliance', 'b2b', 'fintech', 'implementation', 'product ops',
-    'sql', 'looker', 'metabase', 'jira', 'confluence'
+    'experience', 'management', 'analysis', 'communication', 'leadership',
+    'strategy', 'collaboration', 'development', 'workflow', 'reporting',
+    'stakeholder', 'optimization', 'project', 'metrics', 'governance',
+    'sql', 'agile', 'data', 'cloud', 'analytics'
   ];
 
   let matches = 0;
@@ -1109,32 +1013,24 @@ function calculateCandidateMatch(title: string, department: string = '', descrip
     if (combined.includes(kw)) matches++;
   });
 
-  let score = 55;
-  if (isDirectTitleMatch) {
-    score = 85 + Math.min(matches * 2, 9); // 85 - 94%
-  } else if (lowerTitle.includes('analyst') || lowerTitle.includes('operations') || lowerTitle.includes('coordinator')) {
-    score = 68 + Math.min(matches * 3, 16); // 68 - 84%
+  let score = 70;
+  if (matches >= 8) {
+    score = 85 + Math.min(matches, 9); // 85 - 94%
+  } else if (matches >= 4) {
+    score = 72 + matches * 2; // 80 - 86%
   } else {
-    score = 45 + Math.min(matches * 3, 20); // 45 - 65%
+    score = 60 + matches * 3; // 60 - 72%
   }
 
-  if (score > 96) score = 96;
+  if (score > 95) score = 95;
 
-  let highlight = 'Direct match for operations oversight, SLA tracking, and cross-functional incident mitigation.';
-  if (combined.includes('incident')) {
-    highlight = 'Direct alignment with Revolut major incident bridge response, SLA adherence, and escalation triage.';
-  } else if (combined.includes('workforce') || combined.includes('wfm') || combined.includes('queue') || combined.includes('real-time')) {
-    highlight = 'Proven match for dynamic queue balancing across 1,000+ frontline agents and real-time adherence.';
-  } else if (combined.includes('dispute') || combined.includes('fraud')) {
-    highlight = 'Proven Revolut financial operations expertise in dispute resolutions, fraud risk mitigation, and compliance audit trails.';
-  } else if (combined.includes('compliance') && combined.includes('audit')) {
-    highlight = 'Certified in SC-900 compliance with deep experience in operational audit trails and governance.';
-  } else if (combined.includes('b2b') || combined.includes('account management')) {
-    highlight = 'Strong background managing 8+ international enterprise accounts and multi-currency capacity planning.';
-  } else if (combined.includes('product ops') || combined.includes('product operations')) {
-    highlight = 'Track record optimizing feedback loops, root cause investigation, and Jove SQL analytics.';
-  } else if (score < 60) {
-    highlight = 'Moderate overlap: generic operations skills apply, but specialized domain experience may be required.';
+  let highlight = 'Strong alignment with core professional qualifications and role responsibilities.';
+  if (matches >= 8) {
+    highlight = 'High alignment across key domain competencies, technical tooling, and execution requirements.';
+  } else if (matches >= 4) {
+    highlight = 'Solid overlap with foundational qualifications, analytical problem solving, and stakeholder coordination.';
+  } else {
+    highlight = 'Moderate overlap: core transferable skills apply, with room for role-specific tailoring.';
   }
 
   return { score, highlight };
@@ -1500,9 +1396,6 @@ app.post('/api/ats/crawl', async (req, res) => {
         { name: 'Cloudflare', url: 'https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs', ats: 'Greenhouse' },
       ];
 
-      // Add Revolut verified roles to pool
-      rawJobs.push(...REVOLUT_VERIFIED_OPERATIONS_ROLES);
-
       const [fhResult, remotiveResult, ...fetchedResults] = await Promise.allSettled([
         cataloguePromise,
         remotivePromise,
@@ -1642,11 +1535,9 @@ app.post('/api/ats/crawl', async (req, res) => {
           companyDisplayName = matchedCurated.name;
         }
 
-        // Special handling for Revolut verified operations database
         if (slug.toLowerCase() === 'revolut') {
-          rawJobs = [...REVOLUT_VERIFIED_OPERATIONS_ROLES];
           const fhHits = await fetchLiveAtsCatalogueJobs('revolut', 50);
-          rawJobs.push(...fhHits);
+          rawJobs = [...fhHits];
           activeAts = 'Direct ATS Network';
         } else {
           // Probe Greenhouse
@@ -2263,9 +2154,7 @@ Reject (isValidJob: false) if:
 Accept (isValidJob: true) if:
 - It is an authentic, specific job vacancy with job title, company/organization, and responsibilities/requirements.
 
-If accepted, compute match score (0-100) and eligibility highlight against candidate Sushmit Surendran:
-- 6 years operations experience: Revolut (Real-Time Analyst SME: 1,000+ frontline agents, 300+ queues, Jove SQL investigation, incident bridge lead; Support Specialist: payment disputes/chargebacks FCR 95%), Torc Infotech (B2B account management, multi-currency reconciliations).
-- Tools: SQL, Looker, Metabase, Advanced Excel, Jira, Confluence, Slack Workflows, Zapier.
+If accepted, compute match score (0-100) and eligibility highlight based on authentic qualification overlap with the candidate profile and role requirements.
 
 WEB PAGE CONTENT:
 ${pageText.slice(0, 10000)}
@@ -2553,19 +2442,13 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
 6. Strict timeline date formatting: The date_range field for every experience must ONLY contain pure date strings (e.g. "Oct 2023 – Present", "Oct 2022 – Sep 2023", "Sep 2020 – Sep 2022"). Never append operational descriptors (like "Global Operations" or "Regulated Fintech") or location tags to date_range or timeline text.
 7. Leave experience location empty ("") or clean city/country without operational descriptors.
 8. Do not include location preference notes like "Open to Kochi & Hybrid" or "Hyderabad" in summaries or headers.
-9. Product Projects (Credit Pilot / LazyTrip): ONLY include projects if the job description is explicitly for a Product Management (PM), Technical Product Manager (TPM), or AI Product Engineer role where building consumer/software products and features is directly requested. For operations, resource management, workforce management, capacity planning, analyst, financial, dispute, or customer success roles, CHUCK / OMIT IT COMPLETELY by returning an empty array: projects: []. Only add it if it is strictly relevant and adds undeniable value; otherwise chuck it.
+9. Projects: Include relevant portfolio projects from the candidate's master profile only if they add clear, tangible value for the target role. Omit irrelevant projects to maintain conciseness.
 10. Craft an ATS-friendly, 3-paragraph compelling Cover Letter addressed specifically to the company and role.
-11. Provide tailored answers to 3 standard ATS screening questions:
+11. Provide tailored answers to 3 standard ATS screening questions based on the candidate's actual background and target position:
    - "Why are you interested in this role at our company?"
-   - "Describe your relevant experience in workforce/resource management, operational capacity, and cross-functional coordination."
+   - "Describe your relevant experience and key technical or domain achievements that align with this position."
    - "What is your location status and availability?"
-12. Select and prioritize the top 3 certifications strictly from Sushmit's verified credentials based on direct JD alignment:
-   - "Analyzing and Visualizing Data in Looker | Google Cloud Community India" (prioritize for analytics, BI, reporting, capacity planning)
-   - "Building AI Agents | Zapier" (prioritize for AI workflows, automation, agent design)
-   - "Google AI Essentials Specialization | Google" (prioritize for GenAI, prompt engineering, process automation)
-   - "Microsoft Certified: Security, Compliance, and Identity Fundamentals | Microsoft" (prioritize for IAM, governance, compliance, cloud security)
-   - "Finance Foundations: Risk Management | LinkedIn" (prioritize for fintech, financial operations, risk and dispute mitigations)
-   DO NOT hallucinate or invent any other certification.
+12. Select and prioritize up to 3 relevant certifications strictly from the candidate's verified certifications documented in their master profile. If the candidate has no certifications listed in their profile, return an empty array: certifications: []. DO NOT hallucinate or invent certifications not present in the candidate's profile.
 `;
 
     const response = await generateWithFallback({
@@ -2829,27 +2712,27 @@ Return ONLY a valid JSON object matching this schema:
             role: 'Hiring Manager / Department Lead',
             score: 88,
             business_impact_score: 'Superior (91%)',
-            feedback: 'Every bullet point is backed by hard metrics (e.g. 99.4% SLA adherence, 32 person-month capacity modeling). Demonstrates rare autonomy under high-stress incident environments.',
-            leadership_assessment: 'Strong experience coordinating cross-functional incident bridges and training junior analysts.',
+            feedback: 'Every bullet point is backed by concrete outcomes and deliverables. Demonstrates high autonomy and ownership under demanding conditions.',
+            leadership_assessment: 'Strong experience coordinating cross-functional initiatives and mentoring team members.',
             major_concern: 'Probe during the behavioral loop on direct budget authorization vs. analytical planning.',
           },
           technical_lead: {
             role: 'Technical / Domain Lead',
             score: 87,
             execution_confidence: 'High',
-            feedback: 'Demonstrates verified command of SQL, data extraction, BI dashboards (Looker/Metabase), and incident governance runbooks.',
+            feedback: 'Demonstrates verified command of core domain tools, data analysis, and structured problem-solving workflows.',
             tooling_depth: 'Advanced database querying, root-cause triage, and workflow automation.',
             gap_to_fill: 'Could highlight API integrations or Python scripting if the role requires custom bot development.',
           },
         },
         top_strengths: [
-          'High density of quantified business metrics (SLA%, cost reduction, throughput)',
-          'Clear experience managing high-severity incident bridges and executive stakeholders',
+          'High density of quantified business metrics and outcomes',
+          'Clear experience leading cross-functional projects and communicating with stakeholders',
           'Clean ATS-compatible formatting that eliminates parsing dropouts',
         ],
         top_fixes: [
           `Tailor the top 2 bullets in the most recent role to directly highlight ${jobTitle} keywords`,
-          'Add a specific mention of tooling governance or audit compliance (e.g., SC-900 / SOC2)',
+          'Add specific metrics or measurable outcomes to mid-level project bullets',
           'Ensure contact details include city/country and active LinkedIn profile link',
         ],
       });
@@ -2866,14 +2749,14 @@ Return ONLY a valid JSON object matching this schema:
 app.post('/api/negotiate-offer', async (req, res) => {
   try {
     const {
-      candidateName = 'Sushmit Surendran',
+      candidateName = 'Candidate',
       companyName = 'Target Employer',
-      jobTitle = 'Senior Operations Specialist',
+      jobTitle = 'Senior Specialist',
       offeredBase = '$95,000',
       targetBase = '$115,000',
       benefitsSummary = 'Standard health, 15 days PTO, 401(k) match',
       competingOffer = '',
-      leveragePoints = 'Market benchmark, SC-900 compliance certification, proven record of reducing incident downtime by 35%',
+      leveragePoints = 'Market benchmark, relevant domain expertise, track record of delivering measurable ROI',
     } = req.body;
 
     const prompt = `You are a world-class executive compensation coach.
@@ -2925,12 +2808,12 @@ Return ONLY a valid JSON object matching this schema:
       console.warn('AI negotiation fallback:', aiErr);
       return res.json({
         success: true,
-        counter_offer_email: `Subject: ${candidateName} - Offer Discussion & Next Steps (${jobTitle})\n\nDear Hiring Team,\n\nThank you so much for extending the offer for the ${jobTitle} position at ${companyName}. I am genuinely excited about the opportunity to join the team and contribute to your operational scaling initiatives.\n\nAfter reviewing the full details of the offer and taking into account current market benchmarks for this scope of responsibility—along with my specialized background in real-time incident governance, SQL data pipeline automation, and proven capacity planning—I would like to discuss the base salary component. Based on the value and immediate impact I will deliver from Day 1, I am seeking a base salary of ${targetBase}.\n\nI am deeply enthusiastic about joining ${companyName} and am confident we can find a package that works for both sides. If base flexibility is constrained by internal bands, I would be open to discussing bridging the difference via a one-time sign-on bonus or an accelerated 6-month performance review.\n\nThank you again for your time and advocacy throughout this process. I look forward to connecting!\n\nWarm regards,\n${candidateName}`,
-        phone_script: `When the recruiter calls or when you dial in:\n\n1. State genuine excitement first:\n"Thank you so much for walking me through the offer. I loved meeting the team and am genuinely thrilled about the mission at ${companyName}."\n\n2. Introduce the counter respectfully with rationale:\n"I took time to review the complete package against market benchmarks and the specific scope of leading real-time operational governance and analytics. Given my proven track record in eliminating SLA bottlenecks and managing high-severity incident bridges, I was targeting ${targetBase} base salary."\n\n3. PAUSE (Do not speak first. Let the recruiter process and respond).\n\n4. If they indicate constraint:\n"I completely understand internal band structures. If base is strictly capped at ${offeredBase}, could we explore a one-time sign-on bonus of $10,000–$15,000, or an equity grant adjustment to bridge the difference?"`,
+        counter_offer_email: `Subject: ${candidateName} - Offer Discussion & Next Steps (${jobTitle})\n\nDear Hiring Team,\n\nThank you so much for extending the offer for the ${jobTitle} position at ${companyName}. I am genuinely excited about the opportunity to join the team and contribute to your initiatives.\n\nAfter reviewing the full details of the offer and taking into account current market benchmarks for this scope of responsibility—along with my proven track record of delivering measurable outcomes—I would like to discuss the base salary component. Based on the value and immediate impact I will deliver from Day 1, I am seeking a base salary of ${targetBase}.\n\nI am deeply enthusiastic about joining ${companyName} and am confident we can find a package that works for both sides. If base flexibility is constrained by internal bands, I would be open to discussing bridging the difference via a one-time sign-on bonus or an accelerated 6-month performance review.\n\nThank you again for your time and advocacy throughout this process. I look forward to connecting!\n\nWarm regards,\n${candidateName}`,
+        phone_script: `When the recruiter calls or when you dial in:\n\n1. State genuine excitement first:\n"Thank you so much for walking me through the offer. I loved meeting the team and am genuinely thrilled about the mission at ${companyName}."\n\n2. Introduce the counter respectfully with rationale:\n"I took time to review the complete package against market benchmarks and the specific scope of this role. Given my proven track record in driving measurable impact and delivering key objectives, I was targeting ${targetBase} base salary."\n\n3. PAUSE (Do not speak first. Let the recruiter process and respond).\n\n4. If they indicate constraint:\n"I completely understand internal band structures. If base is strictly capped at ${offeredBase}, could we explore a one-time sign-on bonus or an equity adjustment to bridge the difference?"`,
         talking_points: [
-          `Market Benchmark: Compensation for ${jobTitle} roles with advanced technical analytics sits firmly in the ${targetBase} range.`,
-          'Zero Ramp-Up Time: Immediate readiness to manage high-severity incident bridges and complex queue governance from Day 1.',
-          'Cost Avoidance: Prior experience building SQL automation and WFM capacity models directly eliminates reliance on expensive third-party consulting tools.',
+          `Market Benchmark: Compensation for ${jobTitle} roles with comparable scope and impact sits in the ${targetBase} range.`,
+          'Immediate Impact: Proven track record delivering key business outcomes and high-quality results from Day 1.',
+          'Value Creation: Direct ability to optimize workflows and scale initiatives effectively.',
         ],
         objection_handlers: [
           {
@@ -3038,7 +2921,7 @@ Return ONLY a valid JSON object matching this schema:
         weaknesses: [
           'Ensure the final takeaway articulates the long-term system improvement to prove senior maturity',
         ],
-        gold_standard_answer: `Situation: During a critical high-volume period, our frontline support queues experienced an unexpected 40% surge in chat transfers that threatened our 99% SLA commitment.\n\nTask: As the lead on duty, I needed to identify the systemic cause of the backlog and restore normal queue throughput within a 30-minute operational window without compromising resolution quality.\n\nAction: I convened an immediate incident bridge, ran real-time SQL queries against our event logs to pinpoint routing anomalies, and identified a logic loop in our frontline routing rules. I immediately deployed an interim queue bypass rule, redistributed 12 specialist agents to clear the bottleneck, and communicated clear status updates to international shift leadership every 10 minutes.\n\nResult: We cleared the backlog within 22 minutes, restored SLA adherence from 72% to 99.4%, and subsequently documented the permanent fix in our operational playbook, eliminating similar routing failures permanently.`,
+        gold_standard_answer: `Situation: During a critical project milestone, our team experienced an unexpected technical bottleneck that risked our target delivery deadline.\n\nTask: As the lead contributor, I needed to identify the root cause and restore operational throughput within a tight timeframe without compromising quality.\n\nAction: I conducted an immediate cross-functional triage, analyzed system metrics to pinpoint the anomaly, and coordinated with engineering to deploy an interim mitigation while implementing a permanent fix.\n\nResult: We resolved the blocker within 30 minutes, maintained full SLA adherence, and documented preventative safeguards in our team runbook, eliminating similar failures permanently.`,
       });
     }
   } catch (err: any) {
@@ -3062,7 +2945,7 @@ app.post('/api/roadmap-readiness', async (req, res) => {
 Evaluate the candidate's master profile against the career roadmap for: "${roadmapTitle}".
 
 Candidate Master Profile:
-${(masterProfileText || 'Sushmit Surendran: Operations Analyst SME, SQL, WFM scheduling, SLA management, incident triage, Looker, Metabase, capacity planning.').slice(0, 6000)}
+${(masterProfileText || 'Candidate master profile with core domain competencies, relevant project accomplishments, and verified technical skills.').slice(0, 6000)}
 
 Determine:
 1. "readiness_score": (0-100) realistic percentage indicating candidate's current qualification level for entry into/advancement in this role.
@@ -3105,14 +2988,14 @@ Return ONLY a valid JSON object matching this schema:
       console.warn('AI roadmap readiness fallback:', aiErr);
       return res.json({
         success: true,
-        readiness_score: 84,
+        readiness_score: 82,
         readiness_level: 'READY',
-        summary: `You possess a strong 84% foundation for ${roadmapTitle}, with exceptional demonstrated capabilities in data-driven operations, process governance, and incident mitigation.`,
+        summary: `You possess a solid foundation for ${roadmapTitle}, with demonstrated capabilities in core domain competencies and continuous skill growth.`,
         matched_competencies: [
-          'High-stress incident management and cross-functional triage',
-          'SQL data extraction, KPI dashboards, and analytics reporting',
-          'Capacity planning and multi-channel resource scheduling',
-          'Process optimization and SLA adherence governance',
+          'Cross-functional execution and project delivery',
+          'Data-driven analysis and workflow optimization',
+          'Stakeholder collaboration and requirement scoping',
+          'Standard operating procedures and quality governance',
         ],
         priority_gaps: [
           {
