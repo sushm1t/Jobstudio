@@ -1,8 +1,20 @@
 // @ts-nocheck -- ported verbatim from the original project
-// Ported from the original Express server.ts. Handlers are kept verbatim and
-// run through a tiny Express-compatible shim so they work on the edge runtime.
-// AI runs directly through Google Gemini API.
-// `Type` mirrors @google/genai's schema enum so ported schemas stay unchanged.
+// Ported from the original Express server.ts. Handlers run through an Express-compatible
+// shim on the local/edge runtime.
+// Primary AI Engine: Local Ollama (e.g. Gemma 4 / Gemma 3 / Qwen) running entirely on-device with zero API costs.
+import * as zlib from 'node:zlib';
+import { createRequire } from 'node:module';
+
+const nodeRequire = createRequire(import.meta.url);
+let PDFParseClass: any = null;
+try {
+  const pdfParseMod = nodeRequire('pdf-parse');
+  PDFParseClass = pdfParseMod?.PDFParse || pdfParseMod?.default?.PDFParse || pdfParseMod;
+} catch (e) {
+  console.warn('Note: pdf-parse loaded with fallback:', e);
+}
+
+// `Type` mirrors JSON Schema types for structured output
 const Type = { OBJECT: 'object', STRING: 'string', INTEGER: 'integer', NUMBER: 'number', BOOLEAN: 'boolean', ARRAY: 'array' } as const;
 
 type Handler = (req: any, res: any) => any;
@@ -28,6 +40,140 @@ function toUserContent(contents: any): any {
 
 class GatewayError extends Error { status: number; constructor(m: string, s: number) { super(m); this.status = s; } }
 
+function decodeAscii85(str: string): Buffer {
+  str = str.replace(/\s+/g, '');
+  if (str.endsWith('~>')) str = str.slice(0, -2);
+  if (str.startsWith('<~')) str = str.slice(2);
+  const bytes: number[] = [];
+  let count = 0;
+  let val = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c >= 33 && c <= 117) {
+      val = val * 85 + (c - 33);
+      count++;
+      if (count === 5) {
+        bytes.push((val >>> 24) & 255, (val >>> 16) & 255, (val >>> 8) & 255, val & 255);
+        val = 0;
+        count = 0;
+      }
+    } else if (c === 122) {
+      bytes.push(0, 0, 0, 0);
+    }
+  }
+  if (count > 0) {
+    for (let j = count; j < 5; j++) val = val * 85 + 84;
+    for (let j = 0; j < count - 1; j++) bytes.push((val >>> (24 - 8 * j)) & 255);
+  }
+  return Buffer.from(bytes);
+}
+
+async function extractTextFromPdfBase64(cleanBase64: string): Promise<string> {
+  try {
+    const buf = Buffer.from(cleanBase64, 'base64');
+
+    // 1. Primary: Use pdf-parse (handles TrueType fonts, CMaps, and all text stream layouts)
+    if (PDFParseClass) {
+      try {
+        const parser = new PDFParseClass(new Uint8Array(buf));
+        if (typeof parser.load === 'function') {
+          await parser.load();
+        }
+        if (typeof parser.getText === 'function') {
+          const res = await parser.getText();
+          const parsedStr = typeof res === 'string' ? res : res?.text;
+          if (parsedStr && parsedStr.trim().length > 30) {
+            return parsedStr.trim();
+          }
+        }
+      } catch (err: any) {
+        console.warn('PDFParse notice, trying stream parser:', err?.message || err);
+      }
+    }
+
+    // 2. Fallback: Decompress stream chunks & scan Tj/TJ operators
+    const textChunks: string[] = [];
+    let offset = 0;
+
+    while (true) {
+      const streamStart = buf.indexOf(Buffer.from('stream'), offset);
+      if (streamStart === -1) break;
+
+      const dictStart = buf.lastIndexOf(Buffer.from('<<'), streamStart);
+      let isAscii85 = false;
+      if (dictStart !== -1 && dictStart < streamStart) {
+        const dict = buf.slice(dictStart, streamStart).toString('binary');
+        if (dict.includes('ASCII85Decode')) isAscii85 = true;
+      }
+
+      const streamEnd = buf.indexOf(Buffer.from('endstream'), streamStart);
+      if (streamEnd === -1) break;
+
+      let dataStart = streamStart + 6;
+      if (buf[dataStart] === 0x0d) dataStart++;
+      if (buf[dataStart] === 0x0a) dataStart++;
+      let dataEnd = streamEnd;
+      if (buf[dataEnd - 1] === 0x0a) dataEnd--;
+      if (buf[dataEnd - 1] === 0x0d) dataEnd--;
+
+      let streamBytes = buf.slice(dataStart, dataEnd);
+      if (isAscii85) {
+        try {
+          streamBytes = decodeAscii85(streamBytes.toString('latin1'));
+        } catch {}
+      }
+
+      let streamText = '';
+      try {
+        streamText = zlib.inflateSync(streamBytes).toString('latin1');
+      } catch {
+        try {
+          streamText = zlib.inflateRawSync(streamBytes).toString('latin1');
+        } catch {
+          streamText = streamBytes.toString('latin1');
+        }
+      }
+
+      const tjRegex = /\(([^)]*)\)\s*Tj/g;
+      let match;
+      while ((match = tjRegex.exec(streamText)) !== null) {
+        textChunks.push(match[1]);
+      }
+      const arrayTjRegex = /\[(.*?)\]\s*TJ/g;
+      let arrMatch;
+      while ((arrMatch = arrayTjRegex.exec(streamText)) !== null) {
+        const innerTjRegex = /\(([^)]*)\)/g;
+        let innerMatch;
+        while ((innerMatch = innerTjRegex.exec(arrMatch[1])) !== null) {
+          textChunks.push(innerMatch[1]);
+        }
+      }
+
+      offset = streamEnd + 9;
+    }
+
+    return textChunks
+      .join(' ')
+      .replace(/\\177/g, ' • ')
+      .replace(/\\([()\\])/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch (e) {
+    console.warn('PDF text extraction note:', e);
+    return '';
+  }
+}
+
+function cleanMarkdownCodeBlocks(str: string): string {
+  let cleaned = (str || '').trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\s*/, '').replace(/\s*```$/, '').trim();
+  }
+  return cleaned;
+}
+
 function toGeminiParts(contents: any): any[] {
   if (typeof contents === 'string') return [{ text: contents }];
   const parts = Array.isArray(contents) ? contents : [contents];
@@ -40,6 +186,83 @@ function toGeminiParts(contents: any): any[] {
     if (p?.text) return { text: p.text };
     return { text: JSON.stringify(p) };
   });
+}
+
+// Local Ollama AI Engine - Zero API Costs
+async function callOllama(params: { contents: any; config?: any }, modelOverride?: string) {
+  const baseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+  const model = modelOverride || process.env.OLLAMA_MODEL || 'gemma4:latest';
+
+  let prompt = '';
+  if (typeof params.contents === 'string') {
+    prompt = params.contents;
+  } else if (Array.isArray(params.contents)) {
+    const textPieces: string[] = [];
+    for (const part of params.contents) {
+      if (typeof part === 'string') {
+        textPieces.push(part);
+      } else if (part?.text) {
+        textPieces.push(part.text);
+      } else if (part?.inlineData?.mimeType === 'application/pdf' && part?.inlineData?.data) {
+        const extracted = await extractTextFromPdfBase64(part.inlineData.data);
+        if (extracted && extracted.trim()) {
+          textPieces.push(`### EXTRACTED RESUME TEXT CONTENT:\n${extracted}\n`);
+        } else {
+          textPieces.push(`[Attached PDF Document]`);
+        }
+      }
+    }
+    prompt = textPieces.join('\n\n');
+  } else if (params.contents?.text) {
+    prompt = params.contents.text;
+  } else {
+    prompt = JSON.stringify(params.contents);
+  }
+
+  const cfg = params.config || {};
+  const body: any = {
+    model,
+    prompt,
+    stream: false,
+    options: {
+      temperature: 0.1,
+      num_ctx: 16384,
+      num_predict: 4096,
+    },
+  };
+
+  if (cfg.responseSchema) {
+    body.format = cfg.responseSchema;
+  } else if (cfg.responseMimeType === 'application/json' || prompt.includes('JSON')) {
+    body.format = 'json';
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err: any) {
+    throw new GatewayError(
+      `Failed to connect to local Ollama at ${baseUrl}. Ensure Ollama is running ('ollama serve') with model '${model}'. (${err?.message || err})`,
+      503
+    );
+  }
+
+  if (!res.ok) {
+    let msg = `Ollama generation failed (${res.status} ${res.statusText})`;
+    try {
+      const errData = await res.json();
+      msg = errData?.error || msg;
+    } catch {}
+    throw new GatewayError(msg, res.status);
+  }
+
+  const data: any = await res.json();
+  const rawText = cleanMarkdownCodeBlocks(data?.response || '');
+  return { text: rawText };
 }
 
 async function callGateway(model: string, params: { contents: any; config?: any }) {
@@ -76,14 +299,23 @@ async function callGateway(model: string, params: { contents: any; config?: any 
 
     const data: any = await r.json();
     const textParts = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').filter(Boolean) || [];
-    return { text: textParts.join('') };
+    return { text: cleanMarkdownCodeBlocks(textParts.join('')) };
   }
 
-  throw new GatewayError('AI is not configured. Set GEMINI_API_KEY in .env', 401);
+  throw new GatewayError('AI is not configured. Start Ollama with Gemma 4 or set GEMINI_API_KEY.', 401);
 }
 
-// Model fallback chain preserved from the original; only 429/5xx move on to the next model.
+// Primary AI dispatcher: Uses local Ollama (Gemma 4) to avoid external LLM API costs.
 async function generateWithFallback(params: { contents: any; config?: any }) {
+  const provider = (process.env.AI_PROVIDER || 'ollama').toLowerCase();
+  const disableExternal = process.env.DISABLE_EXTERNAL_APIS !== 'false'; // defaults to true: avoid paid APIs
+
+  // 1. Primary Engine: Local Ollama (Gemma 4)
+  if (provider === 'ollama' || disableExternal) {
+    return await callOllama(params);
+  }
+
+  // 2. Cloud Fallback (only if explicitly enabled by setting DISABLE_EXTERNAL_APIS=false and GEMINI_API_KEY)
   const models = ['google/gemini-3.8-flash', 'google/gemini-3.6-flash'];
   let lastError: any = null;
   for (const model of models) {
@@ -99,12 +331,31 @@ async function generateWithFallback(params: { contents: any; config?: any }) {
 }
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  const hasGemini = Boolean(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY);
+app.get('/api/health', async (req, res) => {
+  const provider = (process.env.AI_PROVIDER || 'ollama').toLowerCase();
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+  const ollamaModel = process.env.OLLAMA_MODEL || 'gemma4:latest';
+
+  let ollamaConnected = false;
+  if (provider === 'ollama') {
+    try {
+      const ping = await fetch(`${ollamaBaseUrl}/api/tags`, { method: 'GET', signal: AbortSignal.timeout(1500) });
+      ollamaConnected = ping.ok;
+    } catch {
+      ollamaConnected = false;
+    }
+  }
+
+  const hasCloudKey = Boolean(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY);
+
   res.json({
     status: 'ok',
-    hasApiKey: hasGemini,
-    provider: hasGemini ? 'gemini' : 'none',
+    provider,
+    model: provider === 'ollama' ? ollamaModel : 'gemini',
+    isLocal: provider === 'ollama',
+    ollamaConnected,
+    hasApiKey: provider === 'ollama' ? ollamaConnected : hasCloudKey,
+    avoidExternalApis: true,
     timestamp: new Date().toISOString(),
   });
 });
@@ -134,10 +385,13 @@ Evaluation criteria:
 3. Set should_apply to true only if match_score >= ${minScore}.
 4. Provide a verdict: "STRONG_APPLY" (>=85), "APPLY" (70-84), "CONSIDER" (55-69), or "SKIP" (<55).
 5. Identify 3-5 specific matching factors (direct experiences/skills candidate has that match JD needs).
-6. List any missing critical skills or gaps. Provide structured "gaps" (1-3 items) explicitly detailing:
-   - "missing": what specific skill, tool, qualification, or domain background is missing from the candidate's profile for this JD.
-   - "where_to_work": actionable advice on where and how the candidate should work on, practice, study, or bridge this gap.
-   - "severity": "CRITICAL", "MODERATE", or "NICE_TO_HAVE".
+6. Identify 1-3 genuine missing critical skills or qualification gaps based specifically on this JD.
+   - "missing_critical_skills": list of real, concise skill names missing (e.g., ["Marketing Automation & MarTech Stack", "Enterprise Cross-Functional Governance"]).
+   - "gaps": array of structured objects:
+     * "missing": genuine name of the missing skill or domain requirement.
+     * "where_to_work": actionable advice on where and how the candidate should study, practice, or bridge this gap.
+     * "severity": "CRITICAL", "MODERATE", or "NICE_TO_HAVE".
+   CRITICAL REQUIREMENT: Output authentic, clear English text for all skills, gaps, and factors. NEVER output placeholder variable names, template tokens, or keys like "missing_1_title_gap_domain_focus".
 7. Provide 3-5 concrete tailoring recommendations to emphasize during application.
 8. Extract any location, office, or remote details mentioned.
 9. Construct a concrete, actionable "skill_roadmap" (2-4 steps) for bridging missing skills, domain gaps, or areas where candidate has less match:
@@ -242,11 +496,24 @@ Evaluation criteria:
     });
 
     const parsed = JSON.parse(response.text || '{}');
+    parsed.isEvaluated = true;
+
+    // Sanitize any potential placeholder tokens produced by local LLM
+    const isPlaceholder = (s: any) =>
+      typeof s === 'string' && (/^missing_\d/i.test(s) || /_gap_/i.test(s) || /title_gap/i.test(s));
+
+    if (Array.isArray(parsed.missing_critical_skills)) {
+      parsed.missing_critical_skills = parsed.missing_critical_skills.filter((s: string) => !isPlaceholder(s));
+    }
+    if (Array.isArray(parsed.gaps)) {
+      parsed.gaps = parsed.gaps.filter((g: any) => g && !isPlaceholder(g.missing));
+    }
+
     res.json(parsed);
   } catch (error: any) {
     console.error('Error evaluating job:', error);
     res.status(500).json({
-      error: error?.message || 'Failed to evaluate job with Gemini',
+      error: error?.message || 'Failed to evaluate job with AI engine',
     });
   }
 });
@@ -1865,14 +2132,14 @@ app.post('/api/ats/import', async (req, res) => {
       fullDescription = `Company: ${job.company}\nRole: ${job.title}\nDepartment: ${job.department || 'Operations'}\nLocation: ${job.location}\nPlatform: ${job.platform}\n\nRole Overview:\n${job.descriptionSnippet || 'Official verified listing on corporate ATS.'}\n\nApply URL: ${job.applyUrl}`;
     }
 
-    const matchAnalysis = calculateCandidateMatch(job.title, job.department, fullDescription);
     const opportunity = {
       id: `ats-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       company: job.company,
       title: job.title,
       location: job.location || 'Remote / Hybrid',
-      matchScore: job.matchScore !== undefined ? job.matchScore : matchAnalysis.score,
-      matchHighlight: job.matchHighlight || matchAnalysis.highlight,
+      matchScore: 0,
+      matchHighlight: 'Awaiting AI evaluation. Click Tailor Application to analyze match & gaps.',
+      isEvaluated: false,
       platform: job.platform || 'Greenhouse',
       applyUrl: job.applyUrl,
       verifiedLive: true,
@@ -2227,11 +2494,12 @@ ${pageText.slice(0, 10000)}
       platform: platformDerived,
       applyUrl: url || '#',
       category: parsed.category || 'Incident & Service Ops',
-      matchScore: parsed.matchScore || matchAnalysis.score,
-      matchHighlight: parsed.matchHighlight || matchAnalysis.highlight,
+      matchScore: 0,
+      matchHighlight: 'Awaiting AI evaluation. Click Tailor Application to analyze match & gaps.',
       description: parsed.cleanDescription || pageText.slice(0, 3000),
       isLive: true,
       isVerified: true,
+      isEvaluated: false,
       verifiedAt: new Date().toISOString(),
     };
 
@@ -2256,46 +2524,55 @@ app.post('/api/parse-resume', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Either raw resume text or a PDF resume upload is required.' });
     }
 
-    const prompt = `
-You are an expert executive resume parser and ATS extraction engine.
-Carefully read the candidate resume (provided as an attached PDF document and/or raw text) and extract complete, high-fidelity candidate information.
-
-${rawText ? `### RAW RESUME TEXT CONTENT:\n${rawText.slice(0, 30000)}\n` : ''}
-${fileName ? `### SOURCE FILENAME: ${fileName}\n` : ''}
-
-Instructions:
-1. Extract or determine full_name, first_name, last_name, headline / target role (e.g. "Senior Full-Stack Engineer" or "Operations Specialist"), email, phone, location (city/state/country), and linkedin URL.
-2. Extract or formulate a clean, high-impact 3-4 sentence professional summary.
-3. Extract each work experience entry:
-   - title: exact job title
-   - company: employer / organization name
-   - date_range: timeline (e.g. "Oct 2022 – Present", "Jan 2020 – Sep 2022")
-   - location: city/state or Remote (leave empty if not mentioned)
-   - bullets: array of specific achievement bullets (keep concrete metrics and action verbs)
-4. Extract all core technical and domain skills into an array of strings (e.g. ["TypeScript", "React", "PostgreSQL", "AWS"]).
-5. Extract education entries (degree, institution, year).
-6. Extract certifications into an array of strings.
-7. Generate a comprehensive markdown master_profile_text that thoroughly summarizes the candidate's authentic career history and proof-of-work.
-`;
-
-    let contents: any;
+    let extractedResumeText = (rawText || '').trim();
     if (pdfBase64) {
       const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim();
-      contents = [
-        {
-          inlineData: {
-            mimeType: 'application/pdf',
-            data: cleanBase64,
-          },
-        },
-        prompt,
-      ];
-    } else {
-      contents = prompt;
+      const pdfText = await extractTextFromPdfBase64(cleanBase64);
+      if (pdfText && pdfText.trim()) {
+        extractedResumeText = `${pdfText.trim()}${extractedResumeText ? `\n\n${extractedResumeText}` : ''}`;
+      }
     }
 
+    if (!extractedResumeText || extractedResumeText.length < 30) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unable to extract text from the provided resume PDF. Please ensure the PDF is not password protected or an empty scan.',
+      });
+    }
+
+    const prompt = `You are a strict, privacy-first ATS resume parser and extraction engine.
+Carefully read the candidate's authentic resume text below and extract their exact, authentic information into JSON.
+DO NOT invent, fabricate, synthesize, or assume any career information. Use ONLY what is explicitly stated in the resume text.
+
+### AUTHENTIC RESUME TEXT:
+${extractedResumeText}
+${fileName ? `### SOURCE FILENAME: ${fileName}\n` : ''}
+
+CRITICAL STRICT ANTI-HALLUCINATION & PRIVACY RULES:
+1. Extract ONLY information explicitly present in the provided resume text.
+2. If any field (email, phone, location, linkedin, headline, summary, education, certifications) is missing or not mentioned in the resume text, set it to an empty string "" or an empty array [].
+3. NEVER generate placeholder brackets, template text, or dummy data such as "[Job Title]", "[Company Name]", "[Candidate Email]", "[Candidate Phone]", "[feature] using [technology]", "[metric]%", etc.
+4. NEVER assume or default to "Software Engineer" or any other profession unless the resume text explicitly states it.
+5. Every single work experience, title, company, date, bullet point, and educational institution MUST originate directly from the candidate's provided text.
+
+Instructions:
+1. Extract full_name, headline (their exact target role / professional headline from the top of the resume), email, phone, location (city/state/country), and linkedin URL.
+2. Extract or formulate a clean professional summary based strictly on their actual work history.
+3. Extract each work experience entry:
+   - title: exact job title as written
+   - company: exact employer / organization name
+   - date_range: timeline
+   - location: location or Remote (leave empty "" if not mentioned)
+   - bullets: array of specific achievement bullets
+4. Extract all core technical, domain, and operational skills into an array of strings.
+5. Extract education entries (degree, institution, year).
+6. Extract certifications into an array of strings.
+7. Generate a clean markdown master_profile_text summarizing this candidate's authentic career without any brackets or placeholders.
+
+Format response as raw JSON matching the candidate's actual profile.`;
+
     const response = await generateWithFallback({
-      contents,
+      contents: prompt,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -2349,7 +2626,6 @@ Instructions:
             },
             master_profile_text: { type: Type.STRING },
           },
-          required: ['full_name', 'email', 'experiences', 'skills'],
         },
       },
     });
@@ -2359,7 +2635,89 @@ Instructions:
       cleanText = cleanText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
     }
     const parsed = JSON.parse(cleanText);
-    res.json({ success: true, profile: parsed });
+
+    // Server-side strict PII and anti-placeholder sanitization:
+    // Guarantees no hallucinated bracket placeholders ever get returned or saved
+    const cleanStr = (s?: any) => {
+      if (!s || typeof s !== 'string') return '';
+      const trimmed = s.trim();
+      if (
+        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+        trimmed.includes('[Job Title]') ||
+        trimmed.includes('[Company Name]') ||
+        trimmed.includes('[Candidate') ||
+        trimmed.includes('[Extracted') ||
+        trimmed.includes('[Degree Name]') ||
+        trimmed.includes('[University Name]') ||
+        trimmed.includes('Software Engineer with 4+ years of experience specializing in full-stack development') ||
+        trimmed.includes('Software Engineer with X years of experience')
+      ) {
+        return '';
+      }
+      return trimmed;
+    };
+
+    const cleanBullets = (bullets: any[]) => {
+      if (!Array.isArray(bullets)) return [];
+      return bullets
+        .map((b) => (typeof b === 'string' ? cleanStr(b) : ''))
+        .filter((b) => b && !b.includes('[feature]') && !b.includes('[technology]') && !b.includes('[metric]%') && !b.includes('[number]'));
+    };
+
+    const cleanExperiences = Array.isArray(parsed.experiences)
+      ? parsed.experiences
+          .filter((exp: any) => exp && typeof exp === 'object')
+          .map((exp: any) => ({
+            title: cleanStr(exp.title),
+            company: cleanStr(exp.company),
+            date_range: cleanStr(exp.date_range),
+            location: cleanStr(exp.location),
+            bullets: cleanBullets(exp.bullets),
+          }))
+          .filter((exp: any) => exp.title && exp.company) // Drop invalid/dummy entries
+      : [];
+
+    const cleanEducation = Array.isArray(parsed.education)
+      ? parsed.education
+          .filter((edu: any) => edu && typeof edu === 'object')
+          .map((edu: any) => ({
+            degree: cleanStr(edu.degree),
+            institution: cleanStr(edu.institution),
+            year: cleanStr(edu.year),
+          }))
+          .filter((edu: any) => edu.degree && edu.institution)
+      : [];
+
+    const cleanCertifications = Array.isArray(parsed.certifications)
+      ? parsed.certifications
+          .map((c: any) => cleanStr(typeof c === 'string' ? c : c?.name))
+          .filter(Boolean)
+      : [];
+
+    const cleanSkills = Array.isArray(parsed.skills)
+      ? parsed.skills
+          .map((s: any) => cleanStr(typeof s === 'string' ? s : s?.name))
+          .filter((s: string) => s && !s.includes('[') && !s.includes(']'))
+      : [];
+
+    const sanitizedProfile = {
+      full_name: cleanStr(parsed.full_name),
+      first_name: cleanStr(parsed.first_name),
+      last_name: cleanStr(parsed.last_name),
+      headline: cleanStr(parsed.headline),
+      email: cleanStr(parsed.email),
+      phone: cleanStr(parsed.phone),
+      location: cleanStr(parsed.location),
+      linkedin: cleanStr(parsed.linkedin),
+      summary: cleanStr(parsed.summary),
+      experiences: cleanExperiences,
+      skills: cleanSkills,
+      education: cleanEducation,
+      certifications: cleanCertifications,
+      master_profile_text: cleanStr(parsed.master_profile_text) || '',
+    };
+
+    res.json({ success: true, profile: sanitizedProfile });
   } catch (err: any) {
     console.error('Error in /api/parse-resume:', err);
     res.status(500).json({ success: false, error: err?.message || 'Failed to parse resume with AI.' });
@@ -2407,6 +2765,8 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
    - "Describe your relevant experience and key technical or domain achievements that align with this position."
    - "What is your location status and availability?"
 12. Select and prioritize up to 3 relevant certifications strictly from the candidate's verified certifications documented in their master profile. If the candidate has no certifications listed in their profile, return an empty array: certifications: []. DO NOT hallucinate or invent certifications not present in the candidate's profile.
+13. Retain the candidate's authentic education (degrees, institutions, and dates) from their Master Profile.
+14. CRITICAL ANTI-PLACEHOLDER RULE: Never output generic brackets or placeholder text like "[Job Title]", "[Company Name]", "[feature]", "[metric]%", "[Extracted Email Address]", or "Software Engineer with X years of experience". Tailor ONLY the candidate's actual authentic career and credentials documented in their Master Profile.
 `;
 
     const response = await generateWithFallback({
@@ -2465,6 +2825,19 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
               items: { type: Type.STRING },
               description: 'Top 3-5 certifications selected strictly from the candidate verified credentials matching the JD.',
             },
+            education: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  degree: { type: Type.STRING },
+                  institution: { type: Type.STRING },
+                  year: { type: Type.STRING },
+                },
+                required: ['degree', 'institution'],
+              },
+              description: 'Authentic education history preserved strictly from candidate profile.',
+            },
             cover_letter: {
               type: Type.OBJECT,
               properties: {
@@ -2496,11 +2869,67 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
     });
 
     const parsed = JSON.parse(response.text || '{}');
+
+    // Server-side anti-hallucination & anti-placeholder sanitizer for tailored output
+    const cleanStr = (s?: any) => {
+      if (!s || typeof s !== 'string') return '';
+      const trimmed = s.trim();
+      if (
+        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+        trimmed.includes('[Job Title]') ||
+        trimmed.includes('[Company Name]') ||
+        trimmed.includes('[Candidate') ||
+        trimmed.includes('[Extracted') ||
+        trimmed.includes('[Degree Name]') ||
+        trimmed.includes('[University Name]') ||
+        trimmed.includes('Software Engineer with X years of experience')
+      ) {
+        return '';
+      }
+      return trimmed;
+    };
+
+    const cleanBullets = (bullets: any[]) => {
+      if (!Array.isArray(bullets)) return [];
+      return bullets
+        .map((b) => (typeof b === 'string' ? cleanStr(b) : ''))
+        .filter((b) => b && !b.includes('[feature]') && !b.includes('[technology]') && !b.includes('[metric]%') && !b.includes('[number]'));
+    };
+
+    if (Array.isArray(parsed.experiences)) {
+      parsed.experiences = parsed.experiences
+        .filter((exp: any) => exp && typeof exp === 'object')
+        .map((exp: any) => ({
+          ...exp,
+          title: cleanStr(exp.title),
+          company: cleanStr(exp.company),
+          date_range: cleanStr(exp.date_range),
+          location: cleanStr(exp.location),
+          bullets: cleanBullets(exp.bullets),
+        }))
+        .filter((exp: any) => exp.title && exp.company);
+    }
+
+    if (Array.isArray(parsed.education)) {
+      parsed.education = parsed.education
+        .filter((edu: any) => edu && typeof edu === 'object')
+        .map((edu: any) => ({
+          degree: cleanStr(edu.degree),
+          institution: cleanStr(edu.institution),
+          year: cleanStr(edu.year),
+        }))
+        .filter((edu: any) => edu.degree && edu.institution);
+    }
+
+    if (parsed.tailored_summary) {
+      parsed.tailored_summary = cleanStr(parsed.tailored_summary);
+    }
+
     res.json(parsed);
   } catch (error: any) {
     console.error('Error tailoring materials:', error);
     res.status(500).json({
-      error: error?.message || 'Failed to tailor application materials with Gemini',
+      error: error?.message || 'Failed to tailor application materials with AI engine',
     });
   }
 });

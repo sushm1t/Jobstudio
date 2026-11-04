@@ -10,12 +10,12 @@ import { LandingHeader } from './components/LandingHeader';
 import { WorkspaceNavigation } from './components/WorkspaceNavigation';
 import { HomeView } from './components/HomeView';
 import { AuthView } from './components/AuthView';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { installCloudSync, startCloudSession, endCloudSession } from './utils/cloudSync';
 import { CinematicHome } from './components/CinematicHome';
 import { CareerRoadmapsView } from './components/CareerRoadmapsView';
 import { JobEvaluatorView } from './components/JobEvaluatorView';
-import { ResumeDocument } from './components/ResumeDocument';
+import { ResumeDocument, TailoredRoleItem } from './components/ResumeDocument';
 import { CoverLetterView } from './components/CoverLetterView';
 import { ScreeningAnswersView } from './components/ScreeningAnswersView';
 import { CandidateProfileModal } from './components/CandidateProfileModal';
@@ -37,9 +37,7 @@ import {
   MASTER_BASE_RESUME,
   EMPTY_EVALUATION,
   EMPTY_COVER_LETTER,
-  INITIAL_WEAVER_EVALUATION,
-  INITIAL_WEAVER_RESUME,
-  INITIAL_WEAVER_COVER_LETTER,
+  EMPTY_RESUME,
   INITIAL_SCREENING_ANSWERS,
   INITIAL_INTERVIEW_PREP_QUESTIONS,
   JobEvaluationData,
@@ -121,6 +119,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     return '';
   });
 
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+
+  const handleNavigateToTab = (tab: string, mode?: 'signin' | 'signup') => {
+    if (mode) {
+      setAuthMode(mode);
+    }
+    if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
+      setAuthMode(mode || 'signup');
+      setActiveTab('auth');
+      window.scrollTo(0, 0);
+      return;
+    }
+    setActiveTab(tab);
+    window.scrollTo(0, 0);
+  };
+
   const handleLogin = (name: string, email: string) => {
     const cleanEmail = email.toLowerCase().trim();
     const cleanName = name.trim();
@@ -147,7 +161,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     const userPro = localStorage.getItem(getProUserKey(cleanEmail));
     setIsProUser(userPro === 'true');
     const userTailored = localStorage.getItem(getTailoredCountKey(cleanEmail));
-    setTailoredCount(userTailored ? parseInt(userTailored, 10) : 0);
+    let parsedCount = userTailored ? parseInt(userTailored, 10) : 0;
+
+    // Load user-scoped tailored roles for each job
+    try {
+      const savedRoles = localStorage.getItem(`jobstudio_tailored_roles_${cleanEmail}`);
+      if (savedRoles) {
+        const rolesObj = JSON.parse(savedRoles);
+        setTailoredRoles(rolesObj);
+        parsedCount = Math.max(parsedCount, Object.keys(rolesObj).length);
+      } else {
+        setTailoredRoles({});
+      }
+    } catch {
+      setTailoredRoles({});
+    }
+    setTailoredCount(parsedCount);
   };
 
   const handleLogout = () => {
@@ -162,6 +191,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     setUserName('');
     setUserEmail('');
     setAppliedJobs([]);
+    setTailoredRoles({});
     setTailoredCount(0);
     setIsProUser(false);
     setCandidateInfo({
@@ -173,7 +203,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       linkedin: '',
     });
     setMasterProfileText('');
-    setResume(INITIAL_WEAVER_RESUME);
+    setResume(EMPTY_RESUME);
     setActiveTab('home');
   };
 
@@ -188,7 +218,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         if (p) return profileRecordToResume(p);
       }
     }
-    return INITIAL_WEAVER_RESUME;
+    return EMPTY_RESUME;
   });
   const [coverLetter, setCoverLetter] = useState<CoverLetterData>(EMPTY_COVER_LETTER);
   const [screeningAnswers, setScreeningAnswers] = useState<ScreeningAnswer[]>([]);
@@ -227,6 +257,35 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     };
   });
 
+  // Track tailored resumes saved for each role so the user can easily view and switch between tailored roles
+  const [tailoredRoles, setTailoredRoles] = useState<Record<string, TailoredRoleItem>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
+        const saved = localStorage.getItem(`jobstudio_tailored_roles_${email}`);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse tailored roles from storage', e);
+      }
+    }
+    return {};
+  });
+
+  const handleSelectTailoredRole = (role: TailoredRoleItem) => {
+    setSelectedJobId(role.id);
+    if (role.evaluation) {
+      setEvaluation(role.evaluation);
+    }
+    setResume(role.resume);
+  };
+
+  const handleSelectMasterBaseline = () => {
+    setSelectedJobId('');
+    setEvaluation(EMPTY_EVALUATION);
+    const p = getUserMasterProfile(userEmail, userName);
+    setResume(profileRecordToResume(p));
+  };
+
   // Real accounts (Supabase): restore saved data on sign-in, keep browser state in sync with the session.
   const handleLoginRef = React.useRef(handleLogin);
   handleLoginRef.current = handleLogin;
@@ -252,6 +311,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   }, [isLoggedIn, activeTab]);
   useEffect(() => {
     installCloudSync();
+    if (!isSupabaseConfigured()) {
+      // Local/offline authentication mode: do not attach remote Supabase session listener that wipes local state
+      return;
+    }
     let lastUserId: string | null = null;
     const apply = async (session: any) => {
       const user = session?.user;
@@ -308,7 +371,15 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       setIsProUser(userPro === 'true');
 
       const userTailored = localStorage.getItem(getTailoredCountKey(cleanEmail));
-      setTailoredCount(userTailored ? parseInt(userTailored, 10) : 0);
+      let parsedCount = userTailored ? parseInt(userTailored, 10) : 0;
+      try {
+        const savedRoles = localStorage.getItem(`jobstudio_tailored_roles_${cleanEmail}`);
+        if (savedRoles) {
+          const rolesObj = JSON.parse(savedRoles);
+          parsedCount = Math.max(parsedCount, Object.keys(rolesObj).length);
+        }
+      } catch {}
+      setTailoredCount(parsedCount);
     } else if (!isLoggedIn) {
       setAppliedJobs([]);
       setTailoredCount(0);
@@ -338,7 +409,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     if (typeof window !== 'undefined') {
       try {
         const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
-        return localStorage.getItem(getProUserKey(email)) === 'true';
+        return localStorage.getItem(getProUserKey(email)) === 'true' || localStorage.getItem('jobstudio_is_pro_user') === 'true';
       } catch {
         return false;
       }
@@ -351,7 +422,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       try {
         const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
         const val = localStorage.getItem(getTailoredCountKey(email));
-        return val ? parseInt(val, 10) : 0;
+        let count = val ? parseInt(val, 10) : 0;
+        const savedRoles = localStorage.getItem(`jobstudio_tailored_roles_${email}`);
+        if (savedRoles) {
+          const parsed = JSON.parse(savedRoles);
+          count = Math.max(count, Object.keys(parsed).length);
+        }
+        return count;
       } catch {
         return 0;
       }
@@ -391,18 +468,26 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
   const handleUpgradeToPro = () => {
     setIsProUser(true);
-    if (typeof window !== 'undefined' && userEmail) {
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(getProUserKey(userEmail), 'true');
+        const cleanEmail = (userEmail || '').toLowerCase().trim();
+        if (cleanEmail) {
+          localStorage.setItem(getProUserKey(cleanEmail), 'true');
+        }
+        localStorage.setItem('jobstudio_is_pro_user', 'true');
       } catch {}
     }
   };
 
   const handleDowngradeToFree = () => {
     setIsProUser(false);
-    if (typeof window !== 'undefined' && userEmail) {
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(getProUserKey(userEmail), 'false');
+        const cleanEmail = (userEmail || '').toLowerCase().trim();
+        if (cleanEmail) {
+          localStorage.setItem(getProUserKey(cleanEmail), 'false');
+        }
+        localStorage.setItem('jobstudio_is_pro_user', 'false');
       } catch {}
     }
   };
@@ -552,70 +637,33 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     const found = jobOverride ?? opportunities.find((j) => j.id === jobId);
     if (!found) return;
 
-    if (jobId === 'weaver-senior-associate') {
-      setCustomJobText(found.description);
-      setCustomUrl(found.applyUrl);
-      setEvaluation(INITIAL_WEAVER_EVALUATION);
-      setResume(INITIAL_WEAVER_RESUME);
-      setCoverLetter(INITIAL_WEAVER_COVER_LETTER);
-      setScreeningAnswers(INITIAL_SCREENING_ANSWERS);
-      setInterviewQuestions(INITIAL_INTERVIEW_PREP_QUESTIONS);
+    setCustomJobText(found.description);
+    setCustomUrl(found.applyUrl);
+
+    const existingTailored = tailoredRoles[jobId];
+    if (existingTailored && existingTailored.evaluation && existingTailored.evaluation.match_score > 0) {
+      setEvaluation({ ...existingTailored.evaluation, isEvaluated: true });
+      if (existingTailored.resume) {
+        setResume(existingTailored.resume);
+      }
     } else {
-      setCustomJobText(found.description);
-      setCustomUrl(found.applyUrl);
-      const score = found.matchScore || 85;
-      const verdict = score >= 80 ? 'STRONG_APPLY' : score >= 65 ? 'MODERATE_APPLY' : 'CONSIDER_CAREFULLY';
+      // Un-evaluated role: do not show fake mock match score or dummy gaps.
+      // Keep in an un-evaluated state until the user clicks 'Tailor Application'.
       setEvaluation({
+        ...EMPTY_EVALUATION,
         job_title: found.title,
         company_name: found.company,
-        match_score: score,
-        should_apply: score >= 65,
-        verdict: verdict,
-        key_matching_factors: [
-          `Strong background alignment with ${found.title} core responsibilities.`,
-          `Demonstrated track record in high-impact execution and team leadership.`,
-          `Analytical problem solving and process optimization relevant to ${found.company}.`,
-          `Clear domain knowledge and technical toolset match for key job requirements.`,
-        ],
-        missing_critical_skills: score < 85 ? [
-          `Specialized domain tooling or platform certifications specific to ${found.company}.`
-        ] : [],
-        gaps: [
-          {
-            missing: `Advanced ${found.title} industry benchmarks and tooling`,
-            where_to_work: `Highlight relevant transferable accomplishments, metrics, and quantitative achievements in your tailored resume.`,
-            severity: score < 75 ? 'CRITICAL' : 'MODERATE',
-          },
-        ],
-        tailoring_recommendations: [
-          `Directly mirror key keywords from the ${found.title} description into your experience bullets.`,
-          `Emphasize quantifiable business outcomes, efficiencies gained, and metric-backed results.`,
-          `Structure career highlights using the STAR methodology (Situation, Task, Action, Result).`,
-        ],
         location_info: found.location,
-        executive_summary: `${found.matchHighlight || `Candidate profile represents an estimated ${score}% qualification match for ${found.title} at ${found.company}.`}`,
-        skill_roadmap: [
-          {
-            skill: `${found.title} Core Domain & Methodologies`,
-            action_plan: `Deepen expertise in enterprise workflows, industry standards, and tooling relevant to ${found.company}.`,
-            recommended_certification: `Professional Certification in ${found.category || found.title}`,
-            certification_provider: 'Industry Accredited Institute',
-            timeline: '2–3 weeks',
-            importance: 'RECOMMENDED',
-            practical_project: `Build a portfolio project demonstrating hands-on proficiency in core requirements for ${found.title}.`,
-          },
-        ],
-        recommended_certifications: [
-          {
-            name: `Professional Certificate in ${found.category || 'Operations & Systems'}`,
-            issuer: 'Industry Recognized Board',
-            target_skill: 'Process optimization, domain leadership, and data analysis',
-            estimated_time: '2–3 weeks',
-            why_it_helps: `Validates professional mastery for ${found.company} hiring managers.`,
-            difficulty: 'Intermediate',
-          },
-        ],
+        match_score: 0,
+        verdict: 'PENDING',
+        isEvaluated: false,
       });
+      // Ground the resume directly in this user's current authentic master profile
+      const userMaster = getUserMasterProfile(userEmail, userName);
+      setResume(profileRecordToResume(userMaster));
+      setCoverLetter(EMPTY_COVER_LETTER);
+      setScreeningAnswers([]);
+      setInterviewQuestions([]);
     }
   };
 
@@ -647,32 +695,50 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     setInterviewQuestions([]);
   };
 
-  // Call Gemini backend to evaluate & tailor
-  const handleRunEvaluation = async (overrideJobText?: string) => {
+  // Call local AI backend to evaluate & tailor
+  const handleRunEvaluation = async (overrideJobText?: string, autoNavigateToResume: boolean = true) => {
     let jobDescription = typeof overrideJobText === 'string' && overrideJobText.trim()
       ? overrideJobText.trim()
       : customJobText;
-    if (!jobDescription) {
+
+    if (!jobDescription && selectedJobId) {
+      const foundOpp = opportunities.find((j) => j.id === selectedJobId);
+      if (foundOpp?.description) {
+        jobDescription = foundOpp.description;
+      }
+    }
+
+    if (!jobDescription && selectedJobId) {
       const preset = PRESET_JOBS.find((j) => j.id === selectedJobId);
       jobDescription = preset?.description || '';
     }
 
     if (!jobDescription) {
-      alert('Please select a preset job or paste a job description.');
+      alert('Please select a job opportunity or paste a job description.');
       return;
     }
 
-    // Enforce 2 free tailored resumes limit for Free tier
-    if (!isProUser && tailoredCount >= 2) {
-      if (
-        confirm(
-          'You have reached your monthly limit of 2 free tailored resumes.\n\nUpgrade to Pro for $9.99/mo to unlock unlimited AI resume tailoring, full interview prep intelligence, and clean PDF exports.\n\nWould you like to view plans?'
-        )
-      ) {
-        setActiveTab('pricing');
-      }
+    // Strict Free Tier Enforcement: Free users can only generate up to 2 tailored resumes
+    const effectiveTailoredCount = Math.max(tailoredCount, Object.keys(tailoredRoles).length);
+    if (!isProUser && effectiveTailoredCount >= 2) {
+      alert('You have reached the Free plan limit of 2 tailored resumes (0 of 2 left). Upgrade to Pro to generate unlimited tailored resumes.');
+      setActiveTab('pricing');
       return;
     }
+
+    // Load authentic master profile data to ensure AI is always grounded in verified candidate history
+    const currentProfile = getUserMasterProfile(userEmail, userName);
+    const hasCorruptedPlaceholders = (text?: string) =>
+      !text ||
+      text.includes('[Job Title]') ||
+      text.includes('[Candidate Email]') ||
+      text.includes('[Company Name]') ||
+      text.includes('Software Engineer with 4+ years of experience specializing in full-stack development');
+    const effectiveProfileText =
+      !hasCorruptedPlaceholders(masterProfileText) && masterProfileText && masterProfileText.trim().length > 50
+        ? masterProfileText.trim()
+        : currentProfile?.masterProfileText ||
+          `### CANDIDATE: ${currentProfile.name}\n${currentProfile.summary}\n\n### EXPERIENCES:\n${JSON.stringify(currentProfile.experiences)}\n\n### SKILLS:\n${currentProfile.skills.join(', ')}`;
 
     setIsEvaluating(true);
     try {
@@ -682,7 +748,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobText: jobDescription,
-          masterProfile: masterProfileText,
+          masterProfile: effectiveProfileText,
           minScore: 70,
         }),
       });
@@ -692,6 +758,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       }
 
       const evalData: JobEvaluationData = await evalRes.json();
+      evalData.isEvaluated = true;
       setEvaluation(evalData);
 
       // Immediately synchronize the evaluated score & summary back to the saved opportunity card
@@ -702,6 +769,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               ? {
                   ...opp,
                   matchScore: evalData.match_score,
+                  isEvaluated: true,
                   matchHighlight:
                     evalData.executive_summary?.slice(0, 160) ||
                     (evalData.key_matching_factors?.[0] ? `Assessment: ${evalData.key_matching_factors[0]}` : opp.matchHighlight),
@@ -712,14 +780,18 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       }
 
       // 2. Generate Tailored Resume and Materials
+      const effectiveCandidateInfo = (candidateInfo.email || candidateInfo.first_name)
+        ? candidateInfo
+        : profileRecordToCandidateInfo(currentProfile);
+
       const tailorRes = await fetch('/api/tailor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobText: jobDescription,
-          masterProfile: masterProfileText,
+          masterProfile: effectiveProfileText,
           recommendations: evalData.tailoring_recommendations,
-          candidateInfo: candidateInfo,
+          candidateInfo: effectiveCandidateInfo,
         }),
       });
 
@@ -729,22 +801,61 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
       const tailorData = await tailorRes.json();
 
-      // Update resume state
-      setResume({
-        full_name: `${candidateInfo.first_name} ${candidateInfo.last_name}`,
-        email: candidateInfo.email,
-        phone: candidateInfo.phone,
-        location: '',
-        linkedin: candidateInfo.linkedin,
-        tailored_summary: tailorData.tailored_summary,
-        skills: tailorData.skills,
-        experiences: tailorData.experiences,
+      const isBracketPlaceholder = (val?: string) => !val || val.includes('[') || val.includes(']');
+      const cleanCandidateEmail = isBracketPlaceholder(effectiveCandidateInfo.email) ? (currentProfile.email || userEmail) : effectiveCandidateInfo.email;
+      const cleanCandidatePhone = isBracketPlaceholder(effectiveCandidateInfo.phone) ? (currentProfile.phone || '') : effectiveCandidateInfo.phone;
+      const cleanCandidateLocation = isBracketPlaceholder(effectiveCandidateInfo.location) ? (currentProfile.location || '') : effectiveCandidateInfo.location;
+      const cleanCandidateLinkedin = isBracketPlaceholder(effectiveCandidateInfo.linkedin) ? (currentProfile.linkedin || '') : effectiveCandidateInfo.linkedin;
+
+      const rawCandidateName = (effectiveCandidateInfo.first_name || effectiveCandidateInfo.last_name)
+        ? `${effectiveCandidateInfo.first_name} ${effectiveCandidateInfo.last_name}`.trim()
+        : (currentProfile.name || userName || 'Candidate');
+      const candidateFullName = isBracketPlaceholder(rawCandidateName) ? (currentProfile.name || userName || 'Candidate') : rawCandidateName;
+
+      // Update resume state with tailored content directly mapped to the target role
+      const tailoredResumeData: TailoredResumeData = {
+        full_name: candidateFullName,
+        email: cleanCandidateEmail,
+        phone: cleanCandidatePhone,
+        location: cleanCandidateLocation,
+        linkedin: cleanCandidateLinkedin,
+        tailored_summary: tailorData.tailored_summary || currentProfile.summary,
+        skills: Array.isArray(tailorData.skills) && tailorData.skills.length > 0 ? tailorData.skills : currentProfile.skills,
+        experiences: Array.isArray(tailorData.experiences) && tailorData.experiences.length > 0 ? tailorData.experiences : currentProfile.experiences,
         projects: Array.isArray(tailorData.projects) ? tailorData.projects : [],
-        education: INITIAL_WEAVER_RESUME.education,
+        education: (Array.isArray(tailorData.education) && tailorData.education.length > 0)
+          ? tailorData.education
+          : (currentProfile.education && currentProfile.education.length > 0)
+            ? currentProfile.education
+            : [],
         certifications:
-          tailorData.certifications && tailorData.certifications.length > 0
+          Array.isArray(tailorData.certifications) && tailorData.certifications.length > 0
             ? tailorData.certifications
-            : INITIAL_WEAVER_RESUME.certifications,
+            : (currentProfile.certifications && currentProfile.certifications.length > 0 ? currentProfile.certifications : []),
+      };
+
+      setResume(tailoredResumeData);
+
+      // Save tailored resume into the per-role tailored roles collection
+      const roleId = selectedJobId || `role-${evalData.company_name.replace(/[^a-zA-Z0-9]/g, '_')}-${evalData.job_title.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const roleRecord: TailoredRoleItem = {
+        id: roleId,
+        jobTitle: evalData.job_title,
+        companyName: evalData.company_name,
+        resume: tailoredResumeData,
+        evaluation: evalData,
+        timestamp: Date.now(),
+      };
+
+      setTailoredRoles((prev) => {
+        const next = { ...prev, [roleId]: roleRecord };
+        if (typeof window !== 'undefined') {
+          try {
+            const email = (userEmail || '').toLowerCase().trim();
+            localStorage.setItem(`jobstudio_tailored_roles_${email}`, JSON.stringify(next));
+          } catch {}
+        }
+        return next;
       });
 
       // Update cover letter
@@ -760,24 +871,25 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       // Concurrently fetch interview questions & portal intelligence for the evaluated role
       handleFetchInterviewPrep(evalData.company_name, evalData.job_title, jobDescription);
 
-      // Increment tailored resume count for free users
-      if (!isProUser) {
-        setTailoredCount((prev) => {
-          const next = prev + 1;
-          if (typeof window !== 'undefined' && userEmail) {
-            try {
-              localStorage.setItem(getTailoredCountKey(userEmail), next.toString());
-            } catch {}
-          }
-          return next;
-        });
-      }
+      // Increment and persist tailored resume count for the current user
+      setTailoredCount((prev) => {
+        const next = Math.max(prev + 1, Object.keys(tailoredRoles).length + 1);
+        if (typeof window !== 'undefined') {
+          try {
+            const cleanEmail = (userEmail || '').toLowerCase().trim();
+            localStorage.setItem(getTailoredCountKey(cleanEmail), String(next));
+          } catch {}
+        }
+        return next;
+      });
 
-      // Stay on the Job Evaluator after tailoring — the user opens the tailored resume
-      // themselves via "View Resume".
+      // Open the Tailored Resume section where the tailored resume for this role is ready
+      if (autoNavigateToResume) {
+        setActiveTab('resume');
+      }
     } catch (err: any) {
       console.error('Error running evaluation:', err);
-      alert('Failed to evaluate with Gemini API. Please check server logs or API key.');
+      alert('Failed to evaluate with AI engine. Please ensure Ollama is running with Gemma 4 or check server logs.');
     } finally {
       setIsEvaluating(false);
     }
@@ -830,15 +942,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <LandingHeader
           isLoggedIn={isLoggedIn}
           userName={userName}
-          onNavigateToTab={(tab) => {
-            if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
-              setActiveTab('auth');
-              window.scrollTo(0, 0);
-              return;
-            }
-            setActiveTab(tab);
-            window.scrollTo(0, 0);
-          }}
+          onNavigateToTab={handleNavigateToTab}
           onLogout={handleLogout}
         />
       )}
@@ -864,38 +968,29 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         {activeTab === 'auth' && (
           <>
             <button type="button" onClick={() => { setActiveTab('home'); window.scrollTo(0, 0); }} className="cine-link">Back to Job Studio</button>
-            <AuthView onLogin={() => setActiveTab('evaluator')} onNavigateToTab={setActiveTab} />
+            <AuthView
+              initialMode={authMode}
+              onLogin={(name, email) => {
+                handleLogin(name, email);
+                setActiveTab('profile');
+              }}
+              onNavigateToTab={setActiveTab}
+            />
           </>
         )}
 
         {activeTab === 'home' && (
           <>
-          <CinematicHome onNavigateToTab={(tab) => {
-            if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
-              setActiveTab('auth');
-              window.scrollTo(0, 0);
-              return;
-            }
-            setActiveTab(tab);
-            window.scrollTo(0, 0);
-          }} />
+          <CinematicHome onNavigateToTab={handleNavigateToTab} />
           <HomeView
-            onNavigateToTab={(tab) => {
-              if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
-                setActiveTab('auth');
-                window.scrollTo(0, 0);
-                return;
-              }
-              setActiveTab(tab);
-              window.scrollTo(0, 0);
-            }}
+            onNavigateToTab={handleNavigateToTab}
             isProUser={isProUser}
             onUpgradeToPro={handleUpgradeToPro}
             tailoredCount={tailoredCount}
             isLoggedIn={isLoggedIn}
             userName={userName}
             userEmail={userEmail}
-            onLogin={() => setActiveTab('auth')}
+            onLogin={() => handleNavigateToTab('auth', 'signin')}
             onLogout={handleLogout}
           />
           </>
@@ -967,6 +1062,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               }
             }}
             isProUser={isProUser}
+            tailoredRoles={Object.values(tailoredRoles)}
+            selectedRoleId={selectedJobId}
+            onSelectTailoredRole={handleSelectTailoredRole}
+            onSelectMasterBaseline={handleSelectMasterBaseline}
           />
         )}
 

@@ -75,6 +75,19 @@ function createSupabaseClient() {
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
 
+export function isSupabaseConfigured(): boolean {
+  const url = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'] || '';
+  const key = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'] || '';
+  return Boolean(
+    url &&
+    !url.includes('placeholder-project') &&
+    !url.includes('your-project-id') &&
+    key &&
+    !key.includes('placeholder-key') &&
+    !key.includes('your-supabase-publishable-key')
+  );
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>, {

@@ -22,7 +22,7 @@ npm run build  # Compile client & SSR bundles
 
 - **Framework**: TanStack Start / React 19 / TypeScript
 - **Styling**: Tailwind CSS / Lucide React
-- **Backend / API**: Nitro / Express handlers / Google Gemini API (`gemini-3.8-flash`)
-- **Database & Auth**: Supabase
+- **Backend / API**: Nitro / Express handlers / Local Ollama (`gemma4:latest`) — 100% on-device & zero API costs
+- **Database & Auth**: Supabase (with client-first localStorage offline fallback)
 - **Animation**: GSAP ScrollTrigger & Lenis
 

@@ -443,7 +443,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 1. Upload PDF &amp; Build Master Profile
               </h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Upload your existing resume PDF once or paste career notes. Gemini AI parses your contact info, employment timeline, and quantitative achievements into your private Master Profile.
+                Upload your existing resume PDF once or paste career notes. Local Gemma AI parses your contact info, employment timeline, and quantitative achievements into your private Master Profile.
               </p>
             </div>
             <div className="pt-3 border-t border-border flex items-center gap-1.5 text-[11px] font-medium text-success">

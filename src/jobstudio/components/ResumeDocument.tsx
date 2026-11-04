@@ -17,9 +17,18 @@ import {
   UserCheck,
   Sparkles,
 } from 'lucide-react';
-import { TailoredResumeData, WorkExperience, VERIFIED_CREDENTIALS, VAULT_PROJECTS } from '../data/defaultData';
+import { TailoredResumeData, WorkExperience, VERIFIED_CREDENTIALS, VAULT_PROJECTS, JobEvaluationData } from '../data/defaultData';
 import { downloadResumeAsPdf, printResumeVector, generatePlainTextResume } from '../utils/pdfExport';
 import { downloadResumeAsDocx, downloadResumeAsPlainText } from '../utils/docxExport';
+
+export interface TailoredRoleItem {
+  id: string;
+  jobTitle: string;
+  companyName: string;
+  resume: TailoredResumeData;
+  evaluation?: JobEvaluationData;
+  timestamp?: number;
+}
 
 interface ResumeDocumentProps {
   resume: TailoredResumeData;
@@ -30,6 +39,10 @@ interface ResumeDocumentProps {
   isAiGenerating?: boolean;
   onOpenRecruiterReview?: () => void;
   isProUser?: boolean;
+  tailoredRoles?: TailoredRoleItem[];
+  selectedRoleId?: string;
+  onSelectTailoredRole?: (role: TailoredRoleItem) => void;
+  onSelectMasterBaseline?: () => void;
 }
 
 /**
@@ -62,6 +75,10 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
   isAiGenerating,
   onOpenRecruiterReview,
   isProUser = false,
+  tailoredRoles = [],
+  selectedRoleId = '',
+  onSelectTailoredRole,
+  onSelectMasterBaseline,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -449,6 +466,47 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             )}
           </button>
         </div>
+
+        {/* Tailored Roles Switcher (Switch between tailored resumes for each role) */}
+        {tailoredRoles && tailoredRoles.length > 0 && (
+          <div className="w-full pt-3.5 border-t border-border flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0 mr-1 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-brand" />
+              <span>Tailored Roles ({tailoredRoles.length}):</span>
+            </span>
+            {tailoredRoles.map((tr) => {
+              const isSelected = tr.id === selectedRoleId || (tr.jobTitle === jobTitle && tr.companyName === companyName);
+              return (
+                <button
+                  key={tr.id}
+                  type="button"
+                  onClick={() => onSelectTailoredRole?.(tr)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all text-xs font-semibold shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-surface text-foreground hover:bg-surface-2 border border-border'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+                  <span>{tr.companyName} · {tr.jobTitle}</span>
+                </button>
+              );
+            })}
+            {onSelectMasterBaseline && (
+              <button
+                type="button"
+                onClick={onSelectMasterBaseline}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shrink-0 cursor-pointer ${
+                  !jobTitle
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
+                }`}
+              >
+                <span>Master Baseline</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Printable / Renderable ATS Document Container */}

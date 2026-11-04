@@ -67,7 +67,7 @@ function SceneCopy({ idx, eyebrow, title, steps, cta, onCta }) {
   );
 }
 
-export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> = ({ onNavigateToTab }) => {
+export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: 'signin' | 'signup') => void }> = ({ onNavigateToTab }) => {
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -234,7 +234,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
             Job Studio searches live job boards, scores every role against your real experience, rewrites your resume for each one and gets you ready for the interview.
           </p>
           <div className="cine-hero-ctas mt-9 flex flex-wrap items-center justify-center gap-3">
-            <button onClick={() => onNavigateToTab('auth')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
+            <button onClick={() => onNavigateToTab('auth', 'signup')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
           </div>
         </div>
 
@@ -462,7 +462,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
       <section className="cine-final cine-reveal">
         <h2 className="cine-display">Stop sending generic resumes.<br /><span className="cine-grad">Start getting interview-ready.</span></h2>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <button onClick={() => onNavigateToTab('auth')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
+          <button onClick={() => onNavigateToTab('auth', 'signup')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
         </div>
       </section>
     </div>

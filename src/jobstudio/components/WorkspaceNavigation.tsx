@@ -48,8 +48,20 @@ export function WorkspaceNavigation(props: Props) {
         </div>)}
       </nav>
       <div className="workspace-sidebar-bottom">
-        <div className="workspace-plan"><span>{props.isProUser ? 'Pro plan' : 'Free plan'}</span><span className="text-muted-foreground">{props.isProUser ? 'Unlimited tailoring' : `${2 - Math.min(props.tailoredCount, 2)} of 2 resumes left`}</span></div>
-        <Button variant="outline" className="w-full" onClick={() => props.setActiveTab('pricing')}>{props.isProUser ? 'Manage plan' : 'View plans'}<Sparkles /></Button>
+        <div className="workspace-plan">
+          <span>{props.isProUser ? 'Pro plan' : 'Free plan'}</span>
+          <span className={!props.isProUser && props.tailoredCount >= 2 ? 'text-amber-400 font-medium' : 'text-muted-foreground'}>
+            {props.isProUser ? 'Unlimited tailoring' : `${Math.max(0, 2 - props.tailoredCount)} of 2 resumes left`}
+          </span>
+        </div>
+        <Button
+          variant={!props.isProUser && props.tailoredCount >= 2 ? 'default' : 'outline'}
+          className="w-full"
+          onClick={() => props.setActiveTab('pricing')}
+        >
+          {props.isProUser ? 'Manage plan' : props.tailoredCount >= 2 ? 'Upgrade to Pro' : 'View plans'}
+          <Sparkles />
+        </Button>
         <div className="flex justify-between pt-4"><Button variant="ghost" size="sm" onClick={() => props.setActiveTab('home')} title="Open the public landing page"><ArrowLeft />View website</Button><Button variant="ghost" size="icon" title="Sign out" aria-label="Sign out" onClick={props.onLogout}><LogOut /></Button></div>
       </div>
     </aside>

@@ -105,6 +105,7 @@ export interface JobEvaluationData {
   executive_summary?: string;
   skill_roadmap?: SkillRoadmapStep[];
   recommended_certifications?: RecommendedCertification[];
+  isEvaluated?: boolean;
 }
 
 export interface CoverLetterData {
@@ -289,6 +290,7 @@ export interface JobOpportunity {
   matchHighlight: string;
   description: string;
   isLive?: boolean;
+  isEvaluated?: boolean;
 }
 
 export const PRESET_JOBS: JobOpportunity[] = [
@@ -380,6 +382,7 @@ export const EMPTY_EVALUATION: JobEvaluationData = {
   tailoring_recommendations: [],
   skill_roadmap: [],
   recommended_certifications: [],
+  isEvaluated: false,
 };
 
 // Initial empty cover letter
@@ -388,6 +391,21 @@ export const EMPTY_COVER_LETTER: CoverLetterData = {
   subject: '',
   body_paragraphs: [],
   signoff: '',
+};
+
+// Initial clean blank resume for privacy-first, single-user profile isolation
+export const EMPTY_RESUME: TailoredResumeData = {
+  full_name: '',
+  email: '',
+  phone: '',
+  location: '',
+  linkedin: '',
+  tailored_summary: '',
+  skills: [],
+  experiences: [],
+  projects: [],
+  education: [],
+  certifications: [],
 };
 
 // Master Untailored Resume Baseline (Loaded when no specific job is targeted)

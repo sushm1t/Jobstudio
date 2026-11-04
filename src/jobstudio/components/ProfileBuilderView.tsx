@@ -332,12 +332,15 @@ ${certText}
     reader.onload = (e) => {
       const result = e.target?.result as string;
       if (result) {
-        setUploadedPdf({
+        const item = {
           file,
           name: file.name,
           sizeFormatted: formatFileSize(file.size),
           base64: result,
-        });
+        };
+        setUploadedPdf(item);
+        // Automatically start AI parsing as soon as the file is selected!
+        void executeParseResume(item);
       }
     };
     reader.onerror = () => {
@@ -381,17 +384,15 @@ ${certText}
   };
 
   // AI Resume Parsing Handler (supports PDF upload or raw text)
-  const handleParseResumeWithAi = async () => {
-    if (importMode === 'pdf') {
-      if (!uploadedPdf) {
-        setParseError('Please upload or drag-and-drop a PDF resume before analyzing.');
-        return;
-      }
-    } else {
-      if (!rawResumeInput.trim()) {
-        setParseError('Please paste your resume text before running AI extraction.');
-        return;
-      }
+  const executeParseResume = async (pdfItem?: { base64: string; name: string }) => {
+    const pdfToUse = pdfItem || uploadedPdf;
+    if (importMode === 'pdf' && !pdfToUse) {
+      setParseError('Please upload or drag-and-drop a PDF resume before analyzing.');
+      return;
+    }
+    if (importMode === 'text' && !rawResumeInput.trim()) {
+      setParseError('Please paste your resume text before running AI extraction.');
+      return;
     }
 
     setIsParsingWithAi(true);
@@ -399,9 +400,9 @@ ${certText}
 
     try {
       const payload: any = {};
-      if (importMode === 'pdf' && uploadedPdf) {
-        payload.pdfBase64 = uploadedPdf.base64;
-        payload.fileName = uploadedPdf.name;
+      if (pdfToUse) {
+        payload.pdfBase64 = pdfToUse.base64;
+        payload.fileName = pdfToUse.name;
         if (rawResumeInput.trim()) {
           payload.rawText = rawResumeInput.trim();
         }
@@ -422,7 +423,7 @@ ${certText}
 
       const p = data.profile;
       const parsedRecord: CandidateProfileRecord = {
-        id: `profile-${userEmail}-${Date.now()}`,
+        id: `profile-${userEmail || 'candidate'}-${Date.now()}`,
         isPreset: false,
         name: p.full_name || userName || selectedProfile.name || 'Candidate',
         headline: p.headline || selectedProfile.headline || 'Professional Headline',
@@ -430,7 +431,7 @@ ${certText}
         phone: p.phone || selectedProfile.phone || '',
         location: p.location || selectedProfile.location || 'Remote',
         linkedin: p.linkedin || selectedProfile.linkedin || '',
-        summary: p.summary || '',
+        summary: p.summary || p.master_profile_text || '',
         skills: Array.isArray(p.skills) && p.skills.length > 0 ? p.skills : [],
         experiences: Array.isArray(p.experiences) && p.experiences.length > 0 ? p.experiences : [],
         education: Array.isArray(p.education) && p.education.length > 0 ? p.education : [],
@@ -446,7 +447,7 @@ ${certText}
 
       setActiveStudioTab('builder');
       setSaveSuccessMessage(
-        `🎉 Successfully parsed ${uploadedPdf?.name ? `PDF "${uploadedPdf.name}"` : 'resume'} for "${parsedRecord.name}"! Loaded contact details, ${parsedRecord.experiences.length} positions, and ${parsedRecord.skills.length} skills into your Master Profile.`
+        `🎉 Successfully parsed ${pdfToUse?.name ? `PDF "${pdfToUse.name}"` : 'resume'} for "${parsedRecord.name}"! Loaded contact details, ${parsedRecord.experiences.length} positions, and ${parsedRecord.skills.length} skills into your Master Profile.`
       );
       setTimeout(() => setSaveSuccessMessage(null), 7000);
     } catch (err: any) {
@@ -456,6 +457,8 @@ ${certText}
       setIsParsingWithAi(false);
     }
   };
+
+  const handleParseResumeWithAi = () => executeParseResume();
 
   // Save changes to current master profile and update entire application
   const handleSaveAndActivate = () => {
@@ -673,7 +676,7 @@ ${certText}
                 <span>Upload Resume &amp; Create Master Profile</span>
               </h3>
               <p className="text-xs text-subtle">
-                Upload your resume PDF or paste raw text. Gemini AI automatically parses contact details, work history, metric-driven bullets, and skills into your master profile.
+                Upload your resume PDF or paste raw text. Local Gemma AI automatically parses contact details, work history, metric-driven bullets, and skills into your master profile.
               </p>
             </div>
 
@@ -839,40 +842,10 @@ ${certText}
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        setRawResumeInput(`Alex Rivera
-Senior Software Engineer | San Francisco, CA | alex.rivera@gmail.com | (555) 234-5678 | linkedin.com/in/alex-rivera
-
-SUMMARY:
-Full-stack software engineer with 5 years of experience building scalable microservices and responsive web platforms. Proficient in React, TypeScript, Node.js, and AWS.
-
-EXPERIENCE:
-Staff Software Engineer | CloudFlow Inc. | 2021 - Present | Remote
-- Led migration of monolith to 12 serverless microservices on AWS Lambda and DynamoDB, cutting infrastructure spend by 35%.
-- Built customer-facing dashboard in Next.js and TailwindCSS with sub-second page loads.
-- Mentored 6 engineers and instituted CI/CD testing with GitHub Actions.
-
-Software Engineer | DevPulse | 2019 - 2021 | San Francisco, CA
-- Developed RESTful APIs in Node.js handling 2M requests daily.
-- Optimized PostgreSQL queries to reduce p99 response times from 450ms to 95ms.
-
-EDUCATION:
-B.S. in Computer Science | San Jose State University | 2015 - 2019
-
-SKILLS:
-TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, Redis, AWS (Lambda, S3, DynamoDB), Docker, Jest`)
-                      }
-                      className="text-brand hover:underline"
-                    >
-                      Paste Sample Software Engineer CV
-                    </button>
-                    <span>·</span>
-                    <button
-                      type="button"
                       onClick={() => setRawResumeInput('')}
-                      className="text-subtle hover:text-foreground"
+                      className="text-muted-foreground hover:text-foreground"
                     >
-                      Clear
+                      Clear Text
                     </button>
                   </div>
                 </div>
@@ -1277,7 +1250,7 @@ TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, R
                 <span>Master Ground-Truth Vault (Markdown)</span>
               </h3>
               <p className="text-xs text-subtle">
-                This is the raw, unhallucinated factual source of truth sent to Gemini AI for job evaluations, ATS score grading, and cover letters.
+                This is the raw, unhallucinated factual source of truth sent to local Gemma AI for job evaluations, ATS score grading, and cover letters.
               </p>
             </div>
 

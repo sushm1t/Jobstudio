@@ -4,7 +4,7 @@ import { ArrowRight, LogIn, LogOut, LayoutDashboard } from 'lucide-react';
 interface LandingHeaderProps {
   isLoggedIn: boolean;
   userName?: string;
-  onNavigateToTab: (tab: string) => void;
+  onNavigateToTab: (tab: string, authMode?: 'signin' | 'signup') => void;
   onLogout?: () => void;
 }
 
@@ -86,7 +86,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
             <>
               <button
                 type="button"
-                onClick={() => onNavigateToTab('auth')}
+                onClick={() => onNavigateToTab('auth', 'signin')}
                 className="px-3.5 py-1.5 text-xs font-semibold text-foreground hover:bg-surface rounded-full transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <LogIn className="w-3.5 h-3.5" />
@@ -95,7 +95,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
 
               <button
                 type="button"
-                onClick={() => onNavigateToTab('auth')}
+                onClick={() => onNavigateToTab('auth', 'signup')}
                 className="px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-full shadow-xs transition-all cursor-pointer flex items-center gap-1.5 group"
               >
                 <span>Get Started Free</span>

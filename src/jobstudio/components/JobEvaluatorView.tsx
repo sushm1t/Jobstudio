@@ -6,6 +6,7 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
+  Info,
   Lightbulb,
   ArrowRight,
   Building2,
@@ -29,6 +30,12 @@ import {
   FileText,
   Link2,
   UserCheck,
+  Download,
+  Copy,
+  Check,
+  Mail,
+  Phone,
+  Linkedin,
 } from 'lucide-react';
 import {
   JobEvaluationData,
@@ -38,11 +45,13 @@ import {
   ATSCompanyEntry,
   SeniorityFilter,
   WorkplaceFilter,
+  TailoredResumeData,
 } from '../data/defaultData';
 import { buildProfileTerms, scoreJobAgainstProfile, PROFILE_MATCH_THRESHOLD } from '../utils/profileMatch';
 
 interface JobEvaluatorViewProps {
   evaluation: JobEvaluationData;
+  tailoredResume?: TailoredResumeData;
   opportunities?: JobOpportunity[];
   onAddOpportunities?: (newJobs: JobOpportunity[]) => void;
   onSelectPreset: (jobId: string, jobOverride?: any) => void;
@@ -67,6 +76,7 @@ interface JobEvaluatorViewProps {
 
 export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   evaluation,
+  tailoredResume,
   opportunities = [],
   onAddOpportunities,
   masterProfileText = '',
@@ -91,6 +101,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   const [activeInputMode, setActiveInputMode] = useState<'preset' | 'custom'>('preset');
   const [isScraping, setIsScraping] = useState<boolean>(false);
   const [scrapeNotification, setScrapeNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [copiedResume, setCopiedResume] = useState<boolean>(false);
 
   // Live opportunity verification & filtering
   const [selectedPlatform, setSelectedPlatform] = useState<string>('All');
@@ -398,7 +409,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
       setImportedAtsIds((prev) => new Map(prev).set(job.id, data.opportunity.id));
       onSelectPreset(data.opportunity.id, data.opportunity);
       if (andSelect) {
-        onProceedToResume();
+        onEvaluate(data.opportunity.description || job.description);
       } else {
         // Jump to the newly added role in "Saved & Evaluated Roles" so its actions are visible.
         const targetId = data.opportunity.id;
@@ -512,50 +523,62 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   };
 
   const getGapsList = (evalData: JobEvaluationData): Array<{ missing: string; where_to_work: string; severity?: string }> => {
+    const isPlaceholder = (s?: string) => {
+      if (!s) return true;
+      const lower = s.trim().toLowerCase();
+      return lower.startsWith('missing_') || lower.includes('_gap_') || lower.includes('title_gap') || lower.includes('missing_1') || lower.includes('placeholder');
+    };
+
     // 1. Explicit structured gaps if available
     if (evalData.gaps && evalData.gaps.length > 0) {
-      return evalData.gaps;
+      const validGaps = evalData.gaps.filter((g) => g && !isPlaceholder(g.missing));
+      if (validGaps.length > 0) {
+        return validGaps;
+      }
     }
 
     // 2. Parse from missing_critical_skills
     if (evalData.missing_critical_skills && evalData.missing_critical_skills.length > 0) {
-      return evalData.missing_critical_skills.map((raw) => {
-        if (raw.includes('— Where to work on:')) {
-          const [missingPart, workPart] = raw.split('— Where to work on:');
-          return {
-            missing: missingPart.replace(/^Missing:\s*/i, '').trim(),
-            where_to_work: workPart.trim(),
-            severity: 'CRITICAL',
-          };
-        }
-        if (raw.includes('(mitigated by')) {
-          const parts = raw.split('(mitigated by');
-          return {
-            missing: parts[0].trim(),
-            where_to_work: `Mitigate by: ${parts[1].replace(/\)$/, '').trim()}`,
-            severity: 'MODERATE',
-          };
-        }
-        const matchedRoadmap = evalData.skill_roadmap?.find((r) =>
-          r.skill.toLowerCase().includes(raw.toLowerCase().slice(0, 15)) ||
-          raw.toLowerCase().includes(r.skill.toLowerCase().slice(0, 15))
-        );
-        if (matchedRoadmap) {
+      const validSkills = evalData.missing_critical_skills.filter((raw) => !isPlaceholder(raw));
+      if (validSkills.length > 0) {
+        return validSkills.map((raw) => {
+          if (raw.includes('— Where to work on:')) {
+            const [missingPart, workPart] = raw.split('— Where to work on:');
+            return {
+              missing: missingPart.replace(/^Missing:\s*/i, '').trim(),
+              where_to_work: workPart.trim(),
+              severity: 'CRITICAL',
+            };
+          }
+          if (raw.includes('(mitigated by')) {
+            const parts = raw.split('(mitigated by');
+            return {
+              missing: parts[0].trim(),
+              where_to_work: `Mitigate by: ${parts[1].replace(/\)$/, '').trim()}`,
+              severity: 'MODERATE',
+            };
+          }
+          const matchedRoadmap = evalData.skill_roadmap?.find((r) =>
+            r.skill.toLowerCase().includes(raw.toLowerCase().slice(0, 15)) ||
+            raw.toLowerCase().includes(r.skill.toLowerCase().slice(0, 15))
+          );
+          if (matchedRoadmap) {
+            return {
+              missing: raw,
+              where_to_work: matchedRoadmap.action_plan,
+              severity: matchedRoadmap.importance || 'RECOMMENDED',
+            };
+          }
           return {
             missing: raw,
-            where_to_work: matchedRoadmap.action_plan,
-            severity: matchedRoadmap.importance || 'RECOMMENDED',
+            where_to_work: 'Review core domain frameworks and highlight transferable problem-solving and demonstrated accomplishments from your master profile.',
+            severity: 'RECOMMENDED',
           };
-        }
-        return {
-          missing: raw,
-          where_to_work: 'Review core domain frameworks and highlight transferable problem-solving and demonstrated accomplishments from your master profile.',
-          severity: 'RECOMMENDED',
-        };
-      });
+        });
+      }
     }
 
-    // 3. Fallback to skill_roadmap if missing_critical_skills is empty
+    // 3. Fallback to skill_roadmap if gaps and missing_critical_skills had placeholders or were empty
     if (evalData.skill_roadmap && evalData.skill_roadmap.length > 0) {
       return evalData.skill_roadmap.slice(0, 3).map((s) => ({
         missing: s.skill,
@@ -571,7 +594,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
     <div className="workspace-evaluator space-y-6 max-w-5xl mx-auto">
       <div className="workspace-page-header">
         <div><h1>Job Evaluator</h1><p>Discover opportunities and evaluate how well they match your experience.</p></div>
-        <span className="workspace-header-status"><span className="workspace-status-dot" />{isProUser ? 'Pro plan · Unlimited tailoring' : `${2 - Math.min(tailoredCount, 2)} of 2 tailored resumes available`}</span>
+        <span className="workspace-header-status"><span className="workspace-status-dot" />{isProUser ? 'Pro plan · Unlimited tailoring' : tailoredCount >= 2 ? 'Free limit reached · 0 of 2 resumes left' : `${Math.max(0, 2 - tailoredCount)} of 2 tailored resumes available`}</span>
       </div>
 
       {/* Target Opportunities Card */}
@@ -598,15 +621,17 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                 Live roles matched against your profile with automated ATS tailoring.
               </p>
               {!isProUser && (
-                <span className="text-xs text-brand font-medium inline-flex items-center gap-1 bg-brand/10 px-2 py-0.5 rounded-md">
-                  <span>{2 - Math.min(tailoredCount, 2)} of 2 free tailored resumes left</span>
+                <span className={`text-xs font-medium inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md ${
+                  tailoredCount >= 2 ? 'bg-danger/10 text-danger border border-danger/25' : 'bg-brand/10 text-brand'
+                }`}>
+                  <span>{tailoredCount >= 2 ? '0 of 2 free resumes left (Limit reached)' : `${Math.max(0, 2 - tailoredCount)} of 2 free tailored resumes left`}</span>
                   {onNavigateToPricing && (
                     <button
                       type="button"
                       onClick={onNavigateToPricing}
-                      className="font-bold underline hover:text-brand cursor-pointer ml-1"
+                      className="font-bold underline hover:opacity-80 cursor-pointer ml-1"
                     >
-                      Upgrade ($9.99/mo)
+                      {tailoredCount >= 2 ? 'Upgrade to Pro →' : 'Upgrade ($9.99/mo)'}
                     </button>
                   )}
                 </span>
@@ -1075,11 +1100,17 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
                                   <button
                                     type="button"
-                                    onClick={() => handleImportAtsJob(job, true)}
+                                    onClick={() => {
+                                      if (!isProUser && tailoredCount >= 2) {
+                                        if (onNavigateToPricing) onNavigateToPricing();
+                                        return;
+                                      }
+                                      handleImportAtsJob(job, true);
+                                    }}
                                     className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-sm"
                                   >
                                     <Sparkles className="w-3 h-3" />
-                                    <span>Tailor Resume</span>
+                                    <span>{!isProUser && tailoredCount >= 2 ? 'Upgrade to Tailor' : 'Tailor Resume'}</span>
                                   </button>
                                 </div>
                               </div>
@@ -1211,9 +1242,15 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <span className={`text-sm font-bold tabular-nums ${getScoreColor(job.matchScore)}`}>
-                                {job.matchScore}%
-                              </span>
+                              {job.isEvaluated && (job.matchScore || 0) > 0 ? (
+                                <span className={`text-sm font-bold tabular-nums ${getScoreColor(job.matchScore)}`}>
+                                  {job.matchScore}%
+                                </span>
+                              ) : (
+                                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                                  Awaiting Evaluation
+                                </span>
+                              )}
                               {onRemoveOpportunity && (
                                 <button
                                   type="button"
@@ -1242,16 +1279,23 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                           </div>
 
                           {/* Why You're Eligible / Assessment */}
-                          <div className={`p-3 rounded-xl text-[12px] leading-snug ${
-                            (job.matchScore || 0) < 60
-                              ? 'bg-warning/10 text-warning border border-warning/25/60'
-                              : 'bg-surface text-muted-foreground'
-                          }`}>
-                            <span className="font-semibold text-foreground">
-                              {(job.matchScore || 0) < 60 ? 'Eligibility Notice: ' : 'Why you match: '}
-                            </span>
-                            <span>{job.matchHighlight}</span>
-                          </div>
+                          {job.isEvaluated && (job.matchScore || 0) > 0 ? (
+                            <div className={`p-3 rounded-xl text-[12px] leading-snug ${
+                              (job.matchScore || 0) < 60
+                                ? 'bg-warning/10 text-warning border border-warning/25/60'
+                                : 'bg-surface text-muted-foreground'
+                            }`}>
+                              <span className="font-semibold text-foreground">
+                                {(job.matchScore || 0) < 60 ? 'Eligibility Notice: ' : 'Why you match: '}
+                              </span>
+                              <span>{job.matchHighlight}</span>
+                            </div>
+                          ) : (
+                            <div className="p-3 rounded-xl text-[12px] leading-snug bg-surface/80 border border-border/60 text-muted-foreground flex items-center justify-between gap-2">
+                              <span>Click <strong className="text-foreground">Tailor Application</strong> below to evaluate.</span>
+                              <span className="text-[11px] font-semibold text-brand shrink-0">Ready to Tailor →</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Action Bar */}
@@ -1477,25 +1521,36 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onEvaluate(customJobText)}
-                  disabled={isLoading || !customJobText.trim()}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-elevated shrink-0"
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Tailoring… {tailorProgress}%</span>
-                      <span className="text-[11px] opacity-70">{tailorEta}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Tailor Resume for this Job</span>
-                    </>
-                  )}
-                </button>
+                {!isProUser && tailoredCount >= 2 ? (
+                  <button
+                    type="button"
+                    onClick={onNavigateToPricing}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-elevated shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-warning" />
+                    <span>Upgrade to Pro to Tailor (0 of 2 left)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onEvaluate(customJobText)}
+                    disabled={isLoading || !customJobText.trim()}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-elevated shrink-0"
+                  >
+                    {isLoading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Tailoring… {tailorProgress}%</span>
+                        <span className="text-[11px] opacity-70">{tailorEta}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Tailor Resume for this Job</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1503,7 +1558,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
       </div>
 
-      {evaluation.job_title && evaluation.match_score > 0 ? (
+      {evaluation.job_title && evaluation.match_score > 0 && evaluation.isEvaluated ? (
         <>
           {/* Evaluation Card */}
           <div id="evaluation-summary" className="apple-card p-6 sm:p-8 space-y-5">
@@ -1547,24 +1602,35 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
               {/* Action CTAs */}
               <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
-                <button
-                  onClick={() => onEvaluate()}
-                  disabled={isLoading}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span className="tabular-nums">Tailoring… {tailorProgress}%</span>
-                      <span className="text-[11px] opacity-70">{tailorEta}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Tailor Application</span>
-                    </>
-                  )}
-                </button>
+                {!isProUser && tailoredCount >= 2 ? (
+                  <button
+                    onClick={onNavigateToPricing}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                    title="Upgrade to Pro for unlimited tailoring"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-warning" />
+                    <span>Upgrade to Pro (Limit reached)</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onEvaluate()}
+                    disabled={isLoading}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isLoading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span className="tabular-nums">Tailoring… {tailorProgress}%</span>
+                        <span className="text-[11px] opacity-70">{tailorEta}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Tailor Application</span>
+                      </>
+                    )}
+                  </button>
+                )}
 
                 {onOpenRecruiterReview && (
                   <button
@@ -2047,6 +2113,89 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             );
           })()}
         </>
+      ) : evaluation.job_title ? (
+        /* Selected Opportunity - Awaiting Evaluation Card */
+        <div id="evaluation-summary" className="apple-card p-6 sm:p-8 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0">
+                <Sparkles className="w-6 h-6 text-brand" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="apple-badge text-[11px] bg-brand/10 text-brand font-semibold">
+                    AWAITING AI ATS EVALUATION
+                  </span>
+                  <span className="text-[12px] text-subtle font-medium">Ready to Tailor</span>
+                </div>
+                <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
+                  {evaluation.job_title}
+                </h2>
+                <div className="text-[13px] text-subtle flex items-center gap-2 font-medium">
+                  <span className="text-foreground font-semibold">{evaluation.company_name}</span>
+                  {evaluation.location_info && (
+                    <>
+                      <span className="text-subtle">·</span>
+                      <span>{evaluation.location_info}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Action CTA */}
+            <div className="flex items-center gap-3 shrink-0">
+              {!isProUser && tailoredCount >= 2 ? (
+                <button
+                  type="button"
+                  onClick={onNavigateToPricing}
+                  className="inline-flex items-center gap-2 px-6 py-3 text-[14px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-md"
+                >
+                  <Sparkles className="w-4 h-4 text-warning" />
+                  <span>Upgrade to Pro to Tailor (0 of 2 left)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => onEvaluate()}
+                  disabled={isLoading}
+                  className="inline-flex items-center gap-2 px-6 py-3 text-[14px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-50 shadow-md"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Evaluating &amp; Tailoring… {tailorProgress}%</span>
+                      <span className="text-[11px] opacity-70">{tailorEta}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Tailor Application &amp; Run ATS Evaluation</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!isProUser && tailoredCount >= 2 ? (
+            <div className="p-4 rounded-xl bg-warning/10 border border-warning/25 text-[13px] text-warning flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-foreground">Free Tier Limit Reached (2 of 2 used)</p>
+                <p className="leading-relaxed text-muted-foreground">
+                  You have tailored 2 out of 2 free resumes. To tailor this resume for <strong className="text-foreground">{evaluation.job_title}</strong> and unlock unlimited resumes, please upgrade to Pro.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-surface border border-border text-[13px] text-muted-foreground flex items-start gap-3">
+              <Info className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                Click <strong className="text-foreground">"Tailor Application &amp; Run ATS Evaluation"</strong> to run the local Gemma 4 AI engine. It will analyze your verified master profile against this target job description, calculate your authentic ATS match score, reveal missing qualifications &amp; actionable skill gaps, and build your tailored resume simultaneously.
+              </p>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="workspace-evaluation-empty">
           <div className="workspace-empty-symbol">
