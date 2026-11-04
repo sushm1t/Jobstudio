@@ -13,7 +13,6 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { lovable } from '@/integrations/lovable/index';
 
 interface AuthViewProps {
   onLogin: (name: string, email: string) => void;
@@ -86,13 +85,26 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
   const handleGoogle = async () => {
     setError(null);
-    const result = await lovable.auth.signInWithOAuth('google', { redirect_uri: window.location.origin });
-    if (result.error) {
-      setError(result.error.message || 'Google sign-in failed.');
-      return;
+    try {
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (oauthError) {
+        if (oauthError.message.includes('missing OAuth secret') || oauthError.message.includes('Unsupported provider')) {
+          setError(
+            'Google Sign-In is not enabled yet in your Supabase project (missing OAuth Client ID & Secret). Please sign in with your email and password, or enable Google in your Supabase dashboard (Authentication → Providers → Google).'
+          );
+        } else {
+          setError(oauthError.message || 'Google sign-in failed.');
+        }
+        return;
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed.');
     }
-    if (result.redirected) return;
-    onNavigateToTab('profile');
   };
 
   return (
