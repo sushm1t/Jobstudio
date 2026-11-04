@@ -1,6 +1,0 @@
-{
-  "name": "Job Hunter Agent & ATS Resume Studio",
-  "description": "Autonomous job crawler evaluator, tailored ATS resume generator, cover letter builder, and instant PDF exporter.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

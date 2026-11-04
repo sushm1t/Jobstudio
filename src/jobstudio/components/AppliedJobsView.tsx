@@ -1,0 +1,1239 @@
+// @ts-nocheck -- ported verbatim from the original project
+import React, { useState, useMemo } from 'react';
+import {
+  Briefcase,
+  Search,
+  Plus,
+  ExternalLink,
+  Calendar,
+  MapPin,
+  Trash2,
+  Edit3,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Download,
+  AlertCircle,
+  X,
+  Building2,
+  Filter,
+  FileText,
+  HelpCircle,
+  ChevronDown,
+  LayoutGrid,
+  List,
+  History,
+  ArrowRight,
+  GripVertical,
+  Layers,
+} from 'lucide-react';
+import { AppliedJobRecord, ApplicationStatus, TailoredResumeData } from '../data/defaultData';
+import { downloadResumeAsPdf } from '../utils/pdfExport';
+
+interface AppliedJobsViewProps {
+  appliedJobs: AppliedJobRecord[];
+  onAddJob: (job: Omit<AppliedJobRecord, 'id' | 'created_at'>) => void;
+  onUpdateJob: (id: string, updates: Partial<AppliedJobRecord>) => void;
+  onDeleteJob: (id: string) => void;
+  onClearAllJobs?: () => void;
+  onSelectForTailoring?: (job: AppliedJobRecord) => void;
+  onViewScreening?: (job: AppliedJobRecord) => void;
+  currentResume?: TailoredResumeData;
+  onSaveResumeVersion?: (jobId: string, resume: TailoredResumeData) => void;
+}
+
+const STATUS_CONFIG: Record<
+  ApplicationStatus,
+  { label: string; bg: string; text: string; dot: string }
+> = {
+  Applied: {
+    label: 'Applied',
+    bg: 'bg-brand/10',
+    text: 'text-brand',
+    dot: 'bg-primary',
+  },
+  'Under Review': {
+    label: 'Under Review',
+    bg: 'bg-warning/10',
+    text: 'text-warning',
+    dot: 'bg-warning',
+  },
+  Interviewing: {
+    label: 'Interviewing',
+    bg: 'bg-info/10',
+    text: 'text-info',
+    dot: 'bg-info',
+  },
+  'Offer Received': {
+    label: 'Offer Received',
+    bg: 'bg-success/10',
+    text: 'text-success',
+    dot: 'bg-success',
+  },
+  Rejected: {
+    label: 'Rejected',
+    bg: 'bg-subtle/10',
+    text: 'text-subtle',
+    dot: 'bg-subtle',
+  },
+  Archived: {
+    label: 'Archived',
+    bg: 'bg-subtle/10',
+    text: 'text-[#787880]',
+    dot: 'bg-subtle',
+  },
+};
+
+const ALL_STATUSES: ApplicationStatus[] = [
+  'Applied',
+  'Under Review',
+  'Interviewing',
+  'Offer Received',
+  'Rejected',
+  'Archived',
+];
+
+const formatStamp = (at: number): string =>
+  new Date(at).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const EVENT_META: Record<string, { icon: React.ElementType; tone: string }> = {
+  created: { icon: Briefcase, tone: 'text-brand' },
+  status_changed: { icon: ArrowRight, tone: 'text-info' },
+  details_updated: { icon: Edit3, tone: 'text-muted-foreground' },
+  resume_version_saved: { icon: FileText, tone: 'text-success' },
+};
+
+export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
+  appliedJobs,
+  onAddJob,
+  onUpdateJob,
+  onDeleteJob,
+  onClearAllJobs,
+  onSelectForTailoring,
+  onViewScreening,
+  currentResume,
+  onSaveResumeVersion,
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | ApplicationStatus>('All');
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<AppliedJobRecord | null>(null);
+  const [detailJobId, setDetailJobId] = useState<string | null>(null);
+  const [dragJobId, setDragJobId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<ApplicationStatus | null>(null);
+
+  const detailJob = useMemo(
+    () => appliedJobs.find((j) => j.id === detailJobId) || null,
+    [appliedJobs, detailJobId]
+  );
+
+  // Form State for Adding / Editing
+  const [formCompany, setFormCompany] = useState('');
+  const [formTitle, setFormTitle] = useState('');
+  const [formLocation, setFormLocation] = useState('Remote / Hybrid');
+  const [formPlatform, setFormPlatform] = useState('Direct Portal');
+  const [formUrl, setFormUrl] = useState('');
+  const [formDate, setFormDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [formMatchScore, setFormMatchScore] = useState<number | undefined>(90);
+  const [formStatus, setFormStatus] = useState<ApplicationStatus>('Applied');
+  const [formSalary, setFormSalary] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+
+  const openAddModal = () => {
+    setEditingJob(null);
+    setFormCompany('');
+    setFormTitle('');
+    setFormLocation('Remote / Hybrid');
+    setFormPlatform('Direct Portal');
+    setFormUrl('');
+    setFormDate(new Date().toISOString().split('T')[0]);
+    setFormMatchScore(90);
+    setFormStatus('Applied');
+    setFormSalary('');
+    setFormNotes('');
+    setIsAddModalOpen(true);
+  };
+
+  const openEditModal = (job: AppliedJobRecord) => {
+    setEditingJob(job);
+    setFormCompany(job.company_name);
+    setFormTitle(job.job_title);
+    setFormLocation(job.location || '');
+    setFormPlatform(job.platform || 'Direct Portal');
+    setFormUrl(job.apply_url || '');
+    setFormDate(job.applied_date || new Date().toISOString().split('T')[0]);
+    setFormMatchScore(job.match_score);
+    setFormStatus(job.status);
+    setFormSalary(job.salary || '');
+    setFormNotes(job.notes || '');
+    setIsAddModalOpen(true);
+  };
+
+  const handleSaveForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formCompany.trim() || !formTitle.trim()) return;
+
+    if (editingJob) {
+      onUpdateJob(editingJob.id, {
+        company_name: formCompany.trim(),
+        job_title: formTitle.trim(),
+        location: formLocation.trim() || undefined,
+        platform: formPlatform.trim() || undefined,
+        apply_url: formUrl.trim() || undefined,
+        applied_date: formDate,
+        match_score: formMatchScore,
+        status: formStatus,
+        salary: formSalary.trim() || undefined,
+        notes: formNotes.trim() || undefined,
+      });
+    } else {
+      onAddJob({
+        company_name: formCompany.trim(),
+        job_title: formTitle.trim(),
+        location: formLocation.trim() || undefined,
+        platform: formPlatform.trim() || undefined,
+        apply_url: formUrl.trim() || undefined,
+        applied_date: formDate,
+        match_score: formMatchScore,
+        status: formStatus,
+        salary: formSalary.trim() || undefined,
+        notes: formNotes.trim() || undefined,
+      });
+    }
+
+    setIsAddModalOpen(false);
+    setEditingJob(null);
+  };
+
+  // Filtered Jobs
+  const filteredJobs = useMemo(() => {
+    return appliedJobs
+      .filter((job) => {
+        if (statusFilter !== 'All' && job.status !== statusFilter) return false;
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          job.company_name.toLowerCase().includes(q) ||
+          job.job_title.toLowerCase().includes(q) ||
+          (job.location && job.location.toLowerCase().includes(q)) ||
+          (job.platform && job.platform.toLowerCase().includes(q)) ||
+          (job.notes && job.notes.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  }, [appliedJobs, statusFilter, searchQuery]);
+
+  // Board columns honour the same filters; a status filter narrows to that column only
+  const boardColumns = useMemo(() => {
+    const statuses = statusFilter === 'All' ? ALL_STATUSES : [statusFilter];
+    return statuses.map((st) => ({
+      status: st,
+      jobs: filteredJobs.filter((j) => j.status === st),
+    }));
+  }, [filteredJobs, statusFilter]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    const total = appliedJobs.length;
+    const applied = appliedJobs.filter((j) => j.status === 'Applied').length;
+    const reviewing = appliedJobs.filter((j) => j.status === 'Under Review').length;
+    const interviewing = appliedJobs.filter((j) => j.status === 'Interviewing').length;
+    const offered = appliedJobs.filter((j) => j.status === 'Offer Received').length;
+    const scores = appliedJobs.map((j) => j.match_score).filter((s): s is number => typeof s === 'number');
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+
+    return { total, applied, reviewing, interviewing, offered, avgScore };
+  }, [appliedJobs]);
+
+  // Drag & Drop between board columns
+  const handleDrop = (status: ApplicationStatus) => {
+    const id = dragJobId;
+    setDragJobId(null);
+    setDragOverStatus(null);
+    if (!id) return;
+    const job = appliedJobs.find((j) => j.id === id);
+    if (job && job.status !== status) {
+      onUpdateJob(job.id, { status });
+    }
+  };
+
+  const handleDownloadVersion = (job: AppliedJobRecord, versionIndex: number) => {
+    const version = job.resume_versions?.[versionIndex];
+    if (!version) return;
+    const safeCompany = (job.company_name || 'Application').replace(/[^a-zA-Z0-9]+/g, '_');
+    void downloadResumeAsPdf('', `JobStudio_${safeCompany}_${version.label}.pdf`, true, version.resume);
+  };
+
+  const canSaveVersion = Boolean(
+    currentResume &&
+      ((currentResume.tailored_summary || '').trim().length > 0 ||
+        (currentResume.experiences && currentResume.experiences.length > 0))
+  );
+
+  // Export to CSV
+  const handleExportCsv = () => {
+    if (appliedJobs.length === 0) return;
+    const headers = [
+      'Company',
+      'Job Title',
+      'Status',
+      'Applied Date',
+      'Match Score',
+      'Location',
+      'Platform',
+      'Portal URL',
+      'Resume Versions',
+      'Notes',
+    ];
+    const rows = appliedJobs.map((j) => [
+      `"${j.company_name.replace(/"/g, '""')}"`,
+      `"${j.job_title.replace(/"/g, '""')}"`,
+      `"${j.status}"`,
+      `"${j.applied_date}"`,
+      j.match_score ? `${j.match_score}%` : 'N/A',
+      `"${(j.location || '').replace(/"/g, '""')}"`,
+      `"${(j.platform || '').replace(/"/g, '""')}"`,
+      `"${(j.apply_url || '').replace(/"/g, '""')}"`,
+      j.resume_versions?.length || 0,
+      `"${(j.notes || '').replace(/"/g, '""')}"`,
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `JobStudio_Applied_Jobs_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const renderApplicationCard = (job: AppliedJobRecord) => {
+    const statusStyle = STATUS_CONFIG[job.status] || STATUS_CONFIG.Applied;
+    const versionCount = job.resume_versions?.length || 0;
+    const eventCount = job.events?.length || 0;
+    return (
+      <div
+        key={job.id}
+        draggable
+        onDragStart={(e) => {
+          setDragJobId(job.id);
+          e.dataTransfer.setData('text/plain', job.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragEnd={() => {
+          setDragJobId(null);
+          setDragOverStatus(null);
+        }}
+        onClick={() => setDetailJobId(job.id)}
+        className={`bg-card border border-border rounded-xl p-3.5 cursor-pointer transition-all hover:border-brand/40 hover:shadow-elevated text-left w-full ${
+          dragJobId === job.id ? 'opacity-50' : ''
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          <GripVertical className="w-3.5 h-3.5 text-subtle/60 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h4 className="font-display font-semibold text-[13px] text-foreground leading-snug line-clamp-2">
+              {job.job_title}
+            </h4>
+            <p className="text-[11px] text-subtle mt-0.5 flex items-center gap-1 min-w-0">
+              <Building2 className="w-3 h-3 shrink-0" />
+              <span className="truncate">{job.company_name}</span>
+            </p>
+          </div>
+        </div>
+
+        {(job.location || job.match_score !== undefined) && (
+          <div className="flex items-center gap-2 mt-2 pl-[22px] flex-wrap">
+            {job.match_score !== undefined && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success/10 text-success">
+                {job.match_score}% match
+              </span>
+            )}
+            {job.location && (
+              <span className="text-[10px] text-subtle flex items-center gap-1 min-w-0">
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">{job.location}</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2.5 mt-2.5 pl-[22px] text-[10px] text-subtle">
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            {job.applied_date || 'Recent'}
+          </span>
+          {versionCount > 0 && (
+            <span className="flex items-center gap-1 text-success" title={`${versionCount} saved resume version${versionCount > 1 ? 's' : ''}`}>
+              <Layers className="w-3 h-3" />
+              {versionCount}
+            </span>
+          )}
+          {eventCount > 0 && (
+            <span className="flex items-center gap-1" title={`${eventCount} activity entries`}>
+              <History className="w-3 h-3" />
+              {eventCount}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="workspace-applications space-y-6 max-w-6xl mx-auto">
+      <div className="workspace-page-header"><div><h1>Applied Jobs</h1><p>Your applications, progress, and next steps in one place.</p></div></div>
+      {/* KPI / Metrics Header Banner */}
+      <div className="workspace-metrics grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="apple-card p-4 flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">Total Applied</span>
+          <div className="text-2xl font-bold text-foreground mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+            {stats.total}
+          </div>
+          <span className="text-[10px] text-subtle mt-0.5">Tracked applications</span>
+        </div>
+
+        <div className="apple-card p-4 flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-brand uppercase tracking-wider">Sent / Pending</span>
+          <div className="text-2xl font-bold text-brand mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+            {stats.applied}
+          </div>
+          <span className="text-[10px] text-subtle mt-0.5">Awaiting initial review</span>
+        </div>
+
+        <div className="apple-card p-4 flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-warning uppercase tracking-wider">Under Review</span>
+          <div className="text-2xl font-bold text-warning mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+            {stats.reviewing}
+          </div>
+          <span className="text-[10px] text-subtle mt-0.5">Recruiter screening</span>
+        </div>
+
+        <div className="apple-card p-4 flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-info uppercase tracking-wider">Interviewing</span>
+          <div className="text-2xl font-bold text-info mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+            {stats.interviewing}
+          </div>
+          <span className="text-[10px] text-subtle mt-0.5">Active interview rounds</span>
+        </div>
+
+        <div className="apple-card p-4 flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-success uppercase tracking-wider">Offers</span>
+          <div className="text-2xl font-bold text-success mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+            {stats.offered}
+          </div>
+          <span className="text-[10px] text-subtle mt-0.5">Offers received</span>
+        </div>
+
+        <div className="apple-card p-4 flex flex-col justify-between">
+          <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">Avg Match</span>
+          <div className="text-2xl font-bold text-foreground mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+            {stats.avgScore ? `${stats.avgScore}%` : '—'}
+          </div>
+          <span className="text-[10px] text-subtle mt-0.5">ATS fit overlap</span>
+        </div>
+      </div>
+
+      {/* Control Bar: Search, Filters, View Toggle, and New Application CTA */}
+      <div className="apple-card p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search company, title, notes, or platform..."
+            className="w-full pl-10 pr-4 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-full text-xs text-foreground placeholder-subtle outline-none transition-all"
+          />
+        </div>
+
+        {/* Status Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-xs">
+          <button
+            onClick={() => setStatusFilter('All')}
+            className={`px-3 py-1.5 rounded-full transition-all cursor-pointer whitespace-nowrap text-xs font-medium ${
+              statusFilter === 'All'
+                ? 'bg-foreground text-primary-foreground shadow-sm'
+                : 'bg-surface text-subtle hover:text-foreground'
+            }`}
+          >
+            All ({appliedJobs.length})
+          </button>
+          {ALL_STATUSES.map((st) => {
+            const count = appliedJobs.filter((j) => j.status === st).length;
+            if (count === 0 && statusFilter !== st) return null;
+            return (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1.5 rounded-full transition-all cursor-pointer whitespace-nowrap text-xs font-medium flex items-center gap-1.5 ${
+                  statusFilter === st
+                    ? 'bg-foreground text-primary-foreground shadow-sm'
+                    : 'bg-surface text-subtle hover:text-foreground'
+                }`}
+              >
+                <span>{st}</span>
+                <span className="text-[10px] opacity-75">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Actions: View Toggle, Add Application & Export */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center bg-surface rounded-full p-0.5">
+            <button
+              onClick={() => setViewMode('board')}
+              title="Board view — drag cards between columns"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                viewMode === 'board' ? 'bg-card text-foreground shadow-sm' : 'text-subtle hover:text-foreground'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Board</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              title="List view"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-subtle hover:text-foreground'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>List</span>
+            </button>
+          </div>
+
+          {appliedJobs.length > 0 && (
+            <button
+              onClick={handleExportCsv}
+              title="Export as CSV"
+              className="p-2 text-subtle hover:text-foreground bg-surface hover:bg-surface-2 rounded-full transition-colors cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all shadow-elevated cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Track Application</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Applications: Board or List */}
+      {filteredJobs.length === 0 ? (
+        <div className="apple-card p-12 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-surface text-subtle mx-auto flex items-center justify-center">
+            <Briefcase className="w-7 h-7" />
+          </div>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="font-display font-semibold text-base text-foreground">
+              {searchQuery || statusFilter !== 'All'
+                ? 'No applications match your filter'
+                : 'No Applications Tracked Yet'}
+            </h3>
+            <p className="text-xs text-subtle leading-relaxed">
+              {searchQuery || statusFilter !== 'All'
+                ? 'Try clearing your search query or selecting "All" to view all tracked roles.'
+                : 'Keep all your applied roles, interview statuses, and follow-ups in one unified workspace. Track applications directly from the Job Evaluator or add them manually.'}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            {searchQuery || statusFilter !== 'All' ? (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('All');
+                }}
+                className="px-4 py-2 text-xs font-semibold bg-surface hover:bg-surface-2 text-foreground rounded-full transition-colors cursor-pointer"
+              >
+                Clear Filters
+              </button>
+            ) : (
+              <button
+                onClick={openAddModal}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-elevated"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Track Your First Application</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : viewMode === 'board' ? (
+        <div className="app-board">
+          {boardColumns.map(({ status: st, jobs: colJobs }) => {
+            const colStyle = STATUS_CONFIG[st];
+            const isDragOver = dragOverStatus === st;
+            return (
+              <div
+                key={st}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDragOverStatus(st);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDragOverStatus((cur) => (cur === st ? null : cur));
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDrop(st);
+                }}
+                className={`app-col ${isDragOver ? 'app-col-dragover' : ''}`}
+              >
+                <div className="flex items-center gap-2 px-1 pb-2.5 border-b border-border">
+                  <span className={`w-2 h-2 rounded-full ${colStyle.dot}`} />
+                  <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider">{st}</span>
+                  <span className="text-[11px] text-subtle ml-auto">{colJobs.length}</span>
+                </div>
+
+                <div className="pt-2.5 space-y-2 min-h-[80px]">
+                  {colJobs.length === 0 ? (
+                    <p className="text-[10px] text-subtle/70 text-center py-4 border border-dashed border-border rounded-lg">
+                      Drop a card here
+                    </p>
+                  ) : (
+                    colJobs.map((job) => renderApplicationCard(job))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredJobs.map((job) => {
+            const statusStyle = STATUS_CONFIG[job.status] || STATUS_CONFIG.Applied;
+            const versionCount = job.resume_versions?.length || 0;
+            return (
+              <div
+                key={job.id}
+                className="apple-card p-5 transition-all hover:shadow-elevated space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  {/* Company & Role */}
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-surface border border-border flex items-center justify-center text-foreground font-semibold text-sm shrink-0">
+                      {job.company_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-display font-semibold text-base text-foreground truncate" title={job.job_title}>
+                          {job.job_title}
+                        </h4>
+                        {job.match_score !== undefined && (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success">
+                            {job.match_score}% Match
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-subtle flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="font-medium text-foreground">{job.company_name}</span>
+                        {job.location && (
+                          <>
+                            <span className="text-subtle">·</span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-subtle" />
+                              {job.location}
+                            </span>
+                          </>
+                        )}
+                        {job.platform && (
+                          <>
+                            <span className="text-subtle">·</span>
+                            <span className="px-1.5 py-0.2 bg-surface rounded text-[11px] text-muted-foreground">
+                              {job.platform}
+                            </span>
+                          </>
+                        )}
+                        {versionCount > 0 && (
+                          <>
+                            <span className="text-subtle">·</span>
+                            <span className="flex items-center gap-1 text-success text-[11px]">
+                              <Layers className="w-3 h-3" />
+                              {versionCount} resume version{versionCount > 1 ? 's' : ''}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Dropdown Selector & Quick Actions */}
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <div className="relative inline-block">
+                      <select
+                        value={job.status}
+                        onChange={(e) =>
+                          onUpdateJob(job.id, {
+                            status: e.target.value as ApplicationStatus,
+                          })
+                        }
+                        className={`appearance-none cursor-pointer text-xs font-semibold px-3 py-1.5 pr-7 rounded-full border border-transparent transition-all outline-none ${statusStyle.bg} ${statusStyle.text}`}
+                      >
+                        {ALL_STATUSES.map((st) => (
+                          <option key={st} value={st}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        className={`w-3 h-3 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${statusStyle.text}`}
+                      />
+                    </div>
+
+                    <button
+                      onClick={() => setDetailJobId(job.id)}
+                      title="Open application details, resume versions, and activity"
+                      className="p-1.5 text-subtle hover:text-foreground hover:bg-surface rounded-full transition-colors cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => openEditModal(job)}
+                      title="Edit application details"
+                      className="p-1.5 text-subtle hover:text-foreground hover:bg-surface rounded-full transition-colors cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (confirm(`Remove ${job.company_name} - ${job.job_title} from your tracker?`)) {
+                          onDeleteJob(job.id);
+                        }
+                      }}
+                      title="Delete application"
+                      className="p-1.5 text-subtle hover:text-danger hover:bg-danger/10 rounded-full transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metadata & Notes row */}
+                <div className="border-t border-border pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-subtle">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Calendar className="w-3.5 h-3.5 text-subtle" />
+                      Applied: {job.applied_date || 'Recent'}
+                    </span>
+                    {job.salary && (
+                      <span className="text-foreground font-medium bg-surface px-2 py-0.5 rounded">
+                        {job.salary}
+                      </span>
+                    )}
+                    {job.apply_url && (
+                      <a
+                        href={job.apply_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-brand hover:underline font-medium"
+                      >
+                        <span>Portal Listing</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Cross-Tab Jumps */}
+                  <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+                    {onSelectForTailoring && (
+                      <button
+                        onClick={() => onSelectForTailoring(job)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground bg-surface hover:bg-surface-2 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                        title="Open tailored resume for this job"
+                      >
+                        <FileText className="w-3 h-3 text-brand" />
+                        <span>Resume</span>
+                      </button>
+                    )}
+                    {onViewScreening && (
+                      <button
+                        onClick={() => onViewScreening(job)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground bg-surface hover:bg-surface-2 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                        title="View ATS answers and interview prep"
+                      >
+                        <HelpCircle className="w-3 h-3 text-warning" />
+                        <span>ATS Prep</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notes snippet if present */}
+                {job.notes && (
+                  <div className="bg-surface rounded-xl p-3 text-xs text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground">Notes: </span>
+                    {job.notes}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Application Detail Drawer: resume versions + full activity trail */}
+      {detailJob && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+            onClick={() => setDetailJobId(null)}
+          />
+          <div className="relative bg-card border-l border-border w-full max-w-md h-full overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-200">
+            {/* Drawer header */}
+            <div className="sticky top-0 bg-card/95 backdrop-blur border-b border-border px-5 py-4 z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-surface border border-border flex items-center justify-center text-foreground font-semibold text-sm shrink-0">
+                    {detailJob.company_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display font-semibold text-base text-foreground leading-snug">
+                      {detailJob.job_title}
+                    </h3>
+                    <p className="text-xs text-subtle mt-0.5 truncate">{detailJob.company_name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailJobId(null)}
+                  className="p-2 rounded-full text-subtle hover:text-foreground hover:bg-surface transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2">
+                <div className="relative inline-block flex-1">
+                  <select
+                    value={detailJob.status}
+                    onChange={(e) =>
+                      onUpdateJob(detailJob.id, { status: e.target.value as ApplicationStatus })
+                    }
+                    className={`w-full appearance-none cursor-pointer text-xs font-semibold px-3 py-2 pr-8 rounded-lg border border-border transition-all outline-none ${STATUS_CONFIG[detailJob.status]?.bg} ${STATUS_CONFIG[detailJob.status]?.text}`}
+                  >
+                    {ALL_STATUSES.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-subtle" />
+                </div>
+                <button
+                  onClick={() => openEditModal(detailJob)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-foreground bg-surface hover:bg-surface-2 rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Remove ${detailJob.company_name} - ${detailJob.job_title} from your tracker?`)) {
+                      onDeleteJob(detailJob.id);
+                      setDetailJobId(null);
+                    }
+                  }}
+                  className="p-2 text-subtle hover:text-danger hover:bg-danger/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                  title="Delete application"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 space-y-5">
+              {/* Details */}
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1.5 border-b border-border/60">
+                  <span className="text-subtle flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" /> Applied
+                  </span>
+                  <span className="text-foreground font-medium">{detailJob.applied_date || 'Recent'}</span>
+                </div>
+                {detailJob.location && (
+                  <div className="flex items-center justify-between py-1.5 border-b border-border/60">
+                    <span className="text-subtle flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5" /> Location
+                    </span>
+                    <span className="text-foreground text-right">{detailJob.location}</span>
+                  </div>
+                )}
+                {detailJob.platform && (
+                  <div className="flex items-center justify-between py-1.5 border-b border-border/60">
+                    <span className="text-subtle">Platform</span>
+                    <span className="text-foreground">{detailJob.platform}</span>
+                  </div>
+                )}
+                {detailJob.salary && (
+                  <div className="flex items-center justify-between py-1.5 border-b border-border/60">
+                    <span className="text-subtle">Target Compensation</span>
+                    <span className="text-foreground font-medium">{detailJob.salary}</span>
+                  </div>
+                )}
+                {detailJob.match_score !== undefined && (
+                  <div className="flex items-center justify-between py-1.5 border-b border-border/60">
+                    <span className="text-subtle">Match Score</span>
+                    <span className="text-success font-semibold">{detailJob.match_score}%</span>
+                  </div>
+                )}
+                {detailJob.apply_url && (
+                  <a
+                    href={detailJob.apply_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between py-1.5 text-brand hover:underline font-medium"
+                  >
+                    <span>Portal Listing</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {detailJob.notes && (
+                  <div className="bg-surface rounded-xl p-3 text-muted-foreground leading-relaxed mt-2">
+                    <span className="font-semibold text-foreground">Notes: </span>
+                    {detailJob.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Cross-tab jumps */}
+              {(onSelectForTailoring || onViewScreening) && (
+                <div className="flex items-center gap-2">
+                  {onSelectForTailoring && (
+                    <button
+                      onClick={() => onSelectForTailoring(detailJob)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold text-foreground bg-surface hover:bg-surface-2 px-3 py-2 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-brand" />
+                      <span>Resume</span>
+                    </button>
+                  )}
+                  {onViewScreening && (
+                    <button
+                      onClick={() => onViewScreening(detailJob)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold text-foreground bg-surface hover:bg-surface-2 px-3 py-2 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-warning" />
+                      <span>ATS Prep</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Resume Versions */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[11px] font-semibold text-subtle uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" />
+                    Resume Versions
+                  </h4>
+                  <span className="text-[11px] text-subtle">
+                    {(detailJob.resume_versions || []).length}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {(detailJob.resume_versions || []).length === 0 ? (
+                    <p className="text-[11px] text-subtle leading-relaxed bg-surface rounded-xl p-3">
+                      No resume versions saved for this application yet.
+                    </p>
+                  ) : (
+                    [...(detailJob.resume_versions || [])].reverse().map((version, reverseIdx) => {
+                      const realIdx = (detailJob.resume_versions || []).length - 1 - reverseIdx;
+                      const summary = (version.resume?.tailored_summary || '').trim();
+                      return (
+                        <div key={version.id} className="border border-border rounded-xl p-3 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-xs font-semibold text-foreground">{version.label}</span>
+                              {version.match_score !== undefined && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success/10 text-success">
+                                  {version.match_score}% match
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleDownloadVersion(detailJob, realIdx)}
+                              title={`Download ${version.label} as PDF`}
+                              className="p-1.5 text-subtle hover:text-foreground hover:bg-surface rounded-full transition-colors cursor-pointer shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-subtle">Saved {formatStamp(version.saved_at)}</p>
+                          {summary && (
+                            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+                              {summary}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {onSaveResumeVersion && (
+                  <div className="mt-2.5">
+                    <button
+                      onClick={() => onSaveResumeVersion(detailJob.id, currentResume as TailoredResumeData)}
+                      disabled={!canSaveVersion}
+                      className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
+                        canSaveVersion
+                          ? 'text-primary-foreground bg-primary hover:bg-primary/90 cursor-pointer shadow-elevated'
+                          : 'text-subtle bg-surface cursor-not-allowed opacity-70'
+                      }`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Save Current Tailored Resume</span>
+                    </button>
+                    {!canSaveVersion && (
+                      <p className="text-[10px] text-subtle mt-1.5 leading-relaxed">
+                        Tailor a resume for this role in the Resume tab first — it will be saved here as an immutable version.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Activity / Audit Trail */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[11px] font-semibold text-subtle uppercase tracking-wider flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5" />
+                    Activity
+                  </h4>
+                  <span className="text-[11px] text-subtle">
+                    {(detailJob.events || []).length}
+                  </span>
+                </div>
+
+                <div className="space-y-0">
+                  {((detailJob.events || []).length === 0
+                    ? [{ id: 'none', at: detailJob.created_at, type: 'created', detail: 'Application added to tracker' }]
+                    : [...(detailJob.events || [])].reverse()
+                  ).map((event, idx, arr) => {
+                    const meta = EVENT_META[event.type] || EVENT_META.details_updated;
+                    const Icon = meta.icon;
+                    return (
+                      <div key={event.id} className="flex items-start gap-3">
+                        <div className="flex flex-col items-center">
+                          <span className="w-6 h-6 rounded-full bg-surface border border-border flex items-center justify-center shrink-0">
+                            <Icon className={`w-3 h-3 ${meta.tone}`} />
+                          </span>
+                          {idx < arr.length - 1 && <span className="w-px flex-1 bg-border min-h-[16px]" />}
+                        </div>
+                        <div className="pb-3 min-w-0">
+                          <p className="text-[11px] text-foreground leading-snug">{event.detail}</p>
+                          <p className="text-[10px] text-subtle mt-0.5">{formatStamp(event.at)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Application Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-card rounded-3xl border border-border max-w-lg w-full p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setIsAddModalOpen(false)}
+              className="absolute top-5 right-5 p-2 rounded-full text-subtle hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <span className="apple-badge-blue text-[11px]">TRACKER</span>
+              <h3 className="font-display font-semibold text-lg text-foreground">
+                {editingJob ? 'Edit Application' : 'Track New Application'}
+              </h3>
+            </div>
+
+            <form onSubmit={handleSaveForm} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                  Company Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formCompany}
+                  onChange={(e) => setFormCompany(e.target.value)}
+                  placeholder="e.g. Revolut, Honeywell, Google"
+                  className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                  Job Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="e.g. Real-Time Operations SME / Product Ops Lead"
+                  className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value as ApplicationStatus)}
+                    className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                  >
+                    {ALL_STATUSES.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                    Applied Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                  >
+                  </input>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                    Location / Work Type
+                  </label>
+                  <input
+                    type="text"
+                    value={formLocation}
+                    onChange={(e) => setFormLocation(e.target.value)}
+                    placeholder="e.g. Remote Hybrid / Bengaluru"
+                    className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                    Platform / ATS
+                  </label>
+                  <input
+                    type="text"
+                    value={formPlatform}
+                    onChange={(e) => setFormPlatform(e.target.value)}
+                    placeholder="e.g. Workday, SmartRecruiters, LinkedIn"
+                    className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                    Match Score (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formMatchScore ?? ''}
+                    onChange={(e) => setFormMatchScore(e.target.value ? Number(e.target.value) : undefined)}
+                    placeholder="e.g. 94"
+                    className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                    Target Compensation
+                  </label>
+                  <input
+                    type="text"
+                    value={formSalary}
+                    onChange={(e) => setFormSalary(e.target.value)}
+                    placeholder="e.g. ₹22-26 LPA"
+                    className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                  Portal URL / Listing Link
+                </label>
+                <input
+                  type="url"
+                  value={formUrl}
+                  onChange={(e) => setFormUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                  Notes / Interview Next Steps
+                </label>
+                <textarea
+                  rows={3}
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="Recruiter contact, interview scheduled date, screening questions asked, etc."
+                  className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-subtle hover:text-foreground hover:bg-surface rounded-full transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all shadow-elevated cursor-pointer"
+                >
+                  {editingJob ? 'Save Changes' : 'Add to Applications'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
