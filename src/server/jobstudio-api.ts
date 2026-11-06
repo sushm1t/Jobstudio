@@ -1,20 +1,19 @@
-// @ts-nocheck -- ported verbatim from the original project
-// Ported from the original Express server.ts. Handlers run through an Express-compatible
-// shim on the local/edge runtime.
-// Primary AI Engine: Local Ollama (e.g. Gemma 4 / Gemma 3 / Qwen) running entirely on-device with zero API costs.
-import * as zlib from 'node:zlib';
-import { createRequire } from 'node:module';
+// @ts-nocheck -- imported compatibility handlers
+import { buildInterviewPrompt, normalizePracticeQuestion } from '../jobstudio/utils/interviewPrompt';
+import { sortExperiencesReverseChronological } from '../jobstudio/utils/chronology';
+import * as guard from './api-guard';
 
-const nodeRequire = createRequire(import.meta.url);
-let PDFParseClass: any = null;
-try {
-  const pdfParseMod = nodeRequire('pdf-parse');
-  PDFParseClass = pdfParseMod?.PDFParse || pdfParseMod?.default?.PDFParse || pdfParseMod;
-} catch (e) {
-  console.warn('Note: pdf-parse loaded with fallback:', e);
+// Polyfill dummy WebSocket in Node.js environments (such as Node 20) where native WebSocket
+// is not globally defined, preventing @supabase/realtime-js from throwing on client initialization.
+if (typeof globalThis.WebSocket === 'undefined') {
+  // @ts-ignore
+  globalThis.WebSocket = class DummyWebSocket {};
 }
 
-// `Type` mirrors JSON Schema types for structured output
+// Ported from the original Express server.ts. Handlers are kept verbatim and
+// run through a tiny Express-compatible shim so they work on the edge runtime.
+// AI runs through the Lovable AI Gateway (or direct Gemini API if GEMINI_API_KEY is configured).
+// `Type` mirrors @google/genai's schema enum so ported schemas stay unchanged.
 const Type = { OBJECT: 'object', STRING: 'string', INTEGER: 'integer', NUMBER: 'number', BOOLEAN: 'boolean', ARRAY: 'array' } as const;
 
 type Handler = (req: any, res: any) => any;
@@ -40,322 +39,162 @@ function toUserContent(contents: any): any {
 
 class GatewayError extends Error { status: number; constructor(m: string, s: number) { super(m); this.status = s; } }
 
-function decodeAscii85(str: string): Buffer {
-  str = str.replace(/\s+/g, '');
-  if (str.endsWith('~>')) str = str.slice(0, -2);
-  if (str.startsWith('<~')) str = str.slice(2);
-  const bytes: number[] = [];
-  let count = 0;
-  let val = 0;
-  for (let i = 0; i < str.length; i++) {
-    const c = str.charCodeAt(i);
-    if (c >= 33 && c <= 117) {
-      val = val * 85 + (c - 33);
-      count++;
-      if (count === 5) {
-        bytes.push((val >>> 24) & 255, (val >>> 16) & 255, (val >>> 8) & 255, val & 255);
-        val = 0;
-        count = 0;
-      }
-    } else if (c === 122) {
-      bytes.push(0, 0, 0, 0);
-    }
-  }
-  if (count > 0) {
-    for (let j = count; j < 5; j++) val = val * 85 + 84;
-    for (let j = 0; j < count - 1; j++) bytes.push((val >>> (24 - 8 * j)) & 255);
-  }
-  return Buffer.from(bytes);
-}
-
-async function extractTextFromPdfBase64(cleanBase64: string): Promise<string> {
-  try {
-    const buf = Buffer.from(cleanBase64, 'base64');
-
-    // 1. Primary: Use pdf-parse (handles TrueType fonts, CMaps, and all text stream layouts)
-    if (PDFParseClass) {
-      try {
-        const parser = new PDFParseClass(new Uint8Array(buf));
-        if (typeof parser.load === 'function') {
-          await parser.load();
-        }
-        if (typeof parser.getText === 'function') {
-          const res = await parser.getText();
-          const parsedStr = typeof res === 'string' ? res : res?.text;
-          if (parsedStr && parsedStr.trim().length > 30) {
-            return parsedStr.trim();
-          }
-        }
-      } catch (err: any) {
-        console.warn('PDFParse notice, trying stream parser:', err?.message || err);
-      }
-    }
-
-    // 2. Fallback: Decompress stream chunks & scan Tj/TJ operators
-    const textChunks: string[] = [];
-    let offset = 0;
-
-    while (true) {
-      const streamStart = buf.indexOf(Buffer.from('stream'), offset);
-      if (streamStart === -1) break;
-
-      const dictStart = buf.lastIndexOf(Buffer.from('<<'), streamStart);
-      let isAscii85 = false;
-      if (dictStart !== -1 && dictStart < streamStart) {
-        const dict = buf.slice(dictStart, streamStart).toString('binary');
-        if (dict.includes('ASCII85Decode')) isAscii85 = true;
-      }
-
-      const streamEnd = buf.indexOf(Buffer.from('endstream'), streamStart);
-      if (streamEnd === -1) break;
-
-      let dataStart = streamStart + 6;
-      if (buf[dataStart] === 0x0d) dataStart++;
-      if (buf[dataStart] === 0x0a) dataStart++;
-      let dataEnd = streamEnd;
-      if (buf[dataEnd - 1] === 0x0a) dataEnd--;
-      if (buf[dataEnd - 1] === 0x0d) dataEnd--;
-
-      let streamBytes = buf.slice(dataStart, dataEnd);
-      if (isAscii85) {
-        try {
-          streamBytes = decodeAscii85(streamBytes.toString('latin1'));
-        } catch {}
-      }
-
-      let streamText = '';
-      try {
-        streamText = zlib.inflateSync(streamBytes).toString('latin1');
-      } catch {
-        try {
-          streamText = zlib.inflateRawSync(streamBytes).toString('latin1');
-        } catch {
-          streamText = streamBytes.toString('latin1');
-        }
-      }
-
-      const tjRegex = /\(([^)]*)\)\s*Tj/g;
-      let match;
-      while ((match = tjRegex.exec(streamText)) !== null) {
-        textChunks.push(match[1]);
-      }
-      const arrayTjRegex = /\[(.*?)\]\s*TJ/g;
-      let arrMatch;
-      while ((arrMatch = arrayTjRegex.exec(streamText)) !== null) {
-        const innerTjRegex = /\(([^)]*)\)/g;
-        let innerMatch;
-        while ((innerMatch = innerTjRegex.exec(arrMatch[1])) !== null) {
-          textChunks.push(innerMatch[1]);
-        }
-      }
-
-      offset = streamEnd + 9;
-    }
-
-    return textChunks
-      .join(' ')
-      .replace(/\\177/g, ' • ')
-      .replace(/\\([()\\])/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim();
-  } catch (e) {
-    console.warn('PDF text extraction note:', e);
-    return '';
-  }
-}
-
-function cleanMarkdownCodeBlocks(str: string): string {
-  let cleaned = (str || '').trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\s*/, '').replace(/\s*```$/, '').trim();
-  }
-  return cleaned;
-}
-
-function toGeminiParts(contents: any): any[] {
-  if (typeof contents === 'string') return [{ text: contents }];
-  const parts = Array.isArray(contents) ? contents : [contents];
-  return parts.map((p: any) => {
-    if (typeof p === 'string') return { text: p };
-    if (p?.inlineData) {
-      const { mimeType, data } = p.inlineData;
-      return { inlineData: { mimeType, data } };
-    }
-    if (p?.text) return { text: p.text };
-    return { text: JSON.stringify(p) };
-  });
-}
-
-// Local Ollama AI Engine - Zero API Costs
-async function callOllama(params: { contents: any; config?: any }, modelOverride?: string) {
-  const baseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  const model = modelOverride || process.env.OLLAMA_MODEL || 'gemma4:latest';
-
-  let prompt = '';
-  if (typeof params.contents === 'string') {
-    prompt = params.contents;
-  } else if (Array.isArray(params.contents)) {
-    const textPieces: string[] = [];
-    for (const part of params.contents) {
-      if (typeof part === 'string') {
-        textPieces.push(part);
-      } else if (part?.text) {
-        textPieces.push(part.text);
-      } else if (part?.inlineData?.mimeType === 'application/pdf' && part?.inlineData?.data) {
-        const extracted = await extractTextFromPdfBase64(part.inlineData.data);
-        if (extracted && extracted.trim()) {
-          textPieces.push(`### EXTRACTED RESUME TEXT CONTENT:\n${extracted}\n`);
-        } else {
-          textPieces.push(`[Attached PDF Document]`);
-        }
-      }
-    }
-    prompt = textPieces.join('\n\n');
-  } else if (params.contents?.text) {
-    prompt = params.contents.text;
-  } else {
-    prompt = JSON.stringify(params.contents);
-  }
-
+async function callGateway(model: string, params: { contents: any; config?: any }) {
+  const key = process.env['LOVABLE_API_KEY'];
+  if (!key) throw new GatewayError('AI is not configured.', 401);
+  const body: any = { model, stream: true, messages: [{ role: 'user', content: toUserContent(params.contents) }] };
   const cfg = params.config || {};
-  const body: any = {
-    model,
-    prompt,
-    stream: false,
-    options: {
-      temperature: 0.1,
-      num_ctx: 16384,
-      num_predict: 4096,
-    },
+  if (cfg.responseSchema) {
+    body.response_format = { type: 'json_schema', json_schema: { name: 'result', schema: cfg.responseSchema } };
+  } else if (cfg.responseMimeType === 'application/json') {
+    body.messages[0].content = typeof body.messages[0].content === 'string'
+      ? body.messages[0].content + '\n\nRespond with JSON only.' : body.messages[0].content;
+  }
+  const r = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Lovable-AIG-SDK': 'fetch' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok || !r.body) {
+    let msg = `AI request failed (${r.status})`;
+    try { const j: any = await r.json(); msg = j?.error?.message || j?.message || msg; } catch {}
+    if (r.status === 402) msg = 'AI credits are used up. Add credits in Settings → Plans & credits.';
+    if (r.status === 429) msg = 'Too many AI requests right now. Please try again shortly.';
+    throw new GatewayError(msg, r.status);
+  }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith('data:')) continue;
+      const d = line.slice(5).trim();
+      if (d === '[DONE]') continue;
+      try { const j = JSON.parse(d); text += j.choices?.[0]?.delta?.content || ''; } catch {}
+    }
+  }
+  return { text };
+}
+
+// Fallback direct Gemini API caller when running with GEMINI_API_KEY / GOOGLE_API_KEY
+async function callGeminiDirect(apiKey: string, model: string, params: { contents: any; config?: any }) {
+  const cfg = params.config || {};
+  let parts: any[] = [];
+  if (typeof params.contents === 'string') {
+    parts = [{ text: params.contents }];
+  } else if (Array.isArray(params.contents)) {
+    parts = params.contents.map((p) => {
+      if (typeof p === 'string') return { text: p };
+      if (p?.inlineData) return { inlineData: p.inlineData };
+      if (p?.text) return { text: p.text };
+      return { text: JSON.stringify(p) };
+    });
+  } else if (params.contents?.inlineData) {
+    parts = [{ inlineData: params.contents.inlineData }];
+  } else {
+    parts = [{ text: JSON.stringify(params.contents) }];
+  }
+
+  const payload: any = {
+    contents: [{ parts }],
   };
 
-  if (cfg.responseSchema) {
-    body.format = cfg.responseSchema;
-  } else if (cfg.responseMimeType === 'application/json' || prompt.includes('JSON')) {
-    body.format = 'json';
+  const generationConfig: any = {};
+  if (cfg.responseMimeType) generationConfig.responseMimeType = cfg.responseMimeType;
+  if (cfg.responseSchema) generationConfig.responseSchema = cfg.responseSchema;
+  if (Object.keys(generationConfig).length > 0) {
+    payload.generationConfig = generationConfig;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (err: any) {
+  const cleanModel = (model.includes('gemini') ? model : 'gemini-3.8-flash').replace(/^models\//, '');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let errMsg = `Gemini API error (${res.status})`;
+    try {
+      const errJson = await res.json();
+      errMsg = errJson?.error?.message || errMsg;
+    } catch {}
+    throw new GatewayError(errMsg, res.status);
+  }
+
+  const resData = await res.json();
+  const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return { text };
+}
+
+// Model fallback chain: uses Lovable AI Gateway if LOVABLE_API_KEY is present,
+// or direct Gemini API if GEMINI_API_KEY / GOOGLE_API_KEY is provided.
+async function generateWithFallback(params: { contents: any; config?: any }) {
+  const rawLovable = process.env['LOVABLE_API_KEY'];
+  const lovableKey = (rawLovable && rawLovable !== '...' && !rawLovable.startsWith('...')) ? rawLovable.trim() : undefined;
+  const rawGemini = process.env['GEMINI_API_KEY'] || process.env['GOOGLE_API_KEY'] || process.env['VITE_GEMINI_API_KEY'];
+  const geminiKey = (rawGemini && rawGemini !== '...' && !rawGemini.startsWith('...')) ? rawGemini.trim() : undefined;
+
+  if (!lovableKey && !geminiKey) {
     throw new GatewayError(
-      `Failed to connect to local Ollama at ${baseUrl}. Ensure Ollama is running ('ollama serve') with model '${model}'. (${err?.message || err})`,
-      503
+      'AI is not configured. Please add LOVABLE_API_KEY or GEMINI_API_KEY in your .env file.',
+      401
     );
   }
 
-  if (!res.ok) {
-    let msg = `Ollama generation failed (${res.status} ${res.statusText})`;
-    try {
-      const errData = await res.json();
-      msg = errData?.error || msg;
-    } catch {}
-    throw new GatewayError(msg, res.status);
-  }
-
-  const data: any = await res.json();
-  const rawText = cleanMarkdownCodeBlocks(data?.response || '');
-  return { text: rawText };
-}
-
-async function callGateway(model: string, params: { contents: any; config?: any }) {
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-
-  if (geminiKey) {
-    const cleanModel = model.replace(/^google\//, '');
-    const parts = toGeminiParts(params.contents);
-    const body: any = {
-      contents: [{ parts }],
-    };
-
-    const cfg = params.config || {};
-    if (cfg.responseSchema || cfg.responseMimeType) {
-      body.generationConfig = {};
-      if (cfg.responseMimeType) body.generationConfig.responseMimeType = cfg.responseMimeType;
-      if (cfg.responseSchema) body.generationConfig.responseSchema = cfg.responseSchema;
-    }
-
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${geminiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!r.ok) {
-      let msg = `Gemini AI request failed (${r.status})`;
+  if (lovableKey) {
+    const models = ['google/gemini-3.8-flash', 'google/gemini-3.6-flash'];
+    let lastError: any = null;
+    for (const model of models) {
       try {
-        const j: any = await r.json();
-        msg = j?.error?.message || msg;
-      } catch {}
-      throw new GatewayError(msg, r.status);
+        return await callGateway(model, params);
+      } catch (err: any) {
+        lastError = err;
+        if (!(err?.status === 429 || err?.status >= 500)) throw err;
+        console.warn(`Model ${model} unavailable, trying fallback:`, err?.message || err);
+      }
     }
-
-    const data: any = await r.json();
-    const textParts = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').filter(Boolean) || [];
-    return { text: cleanMarkdownCodeBlocks(textParts.join('')) };
+    // If Lovable gateway failed and Gemini direct key is available, attempt fallback
+    if (geminiKey) {
+      try {
+        return await callGeminiDirect(geminiKey, 'gemini-3.8-flash', params);
+      } catch {}
+    }
+    throw lastError;
   }
 
-  throw new GatewayError('AI is not configured. Start Ollama with Gemma 4 or set GEMINI_API_KEY.', 401);
-}
-
-// Primary AI dispatcher: Uses local Ollama (Gemma 4) to avoid external LLM API costs.
-async function generateWithFallback(params: { contents: any; config?: any }) {
-  const provider = (process.env.AI_PROVIDER || 'ollama').toLowerCase();
-  const disableExternal = process.env.DISABLE_EXTERNAL_APIS !== 'false'; // defaults to true: avoid paid APIs
-
-  // 1. Primary Engine: Local Ollama (Gemma 4)
-  if (provider === 'ollama' || disableExternal) {
-    return await callOllama(params);
-  }
-
-  // 2. Cloud Fallback (only if explicitly enabled by setting DISABLE_EXTERNAL_APIS=false and GEMINI_API_KEY)
-  const models = ['google/gemini-3.8-flash', 'google/gemini-3.6-flash'];
+  // Direct Gemini fallback
+  const directModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-flash-latest'];
   let lastError: any = null;
-  for (const model of models) {
+  for (const model of directModels) {
     try {
-      return await callGateway(model, params);
+      return await callGeminiDirect(geminiKey, model, params);
     } catch (err: any) {
       lastError = err;
-      if (!(err?.status === 429 || err?.status >= 500)) throw err;
-      console.warn(`Model ${model} unavailable, trying fallback:`, err?.message || err);
+      if (!(err?.status === 404 || err?.status === 429 || err?.status >= 500)) throw err;
+      console.warn(`Direct model ${model} unavailable (${err?.status}), trying fallback:`, err?.message || err);
     }
   }
   throw lastError;
 }
 
 // Health check endpoint
-app.get('/api/health', async (req, res) => {
-  const provider = (process.env.AI_PROVIDER || 'ollama').toLowerCase();
-  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  const ollamaModel = process.env.OLLAMA_MODEL || 'gemma4:latest';
-
-  let ollamaConnected = false;
-  if (provider === 'ollama') {
-    try {
-      const ping = await fetch(`${ollamaBaseUrl}/api/tags`, { method: 'GET', signal: AbortSignal.timeout(1500) });
-      ollamaConnected = ping.ok;
-    } catch {
-      ollamaConnected = false;
-    }
-  }
-
-  const hasCloudKey = Boolean(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY);
-
+app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    provider,
-    model: provider === 'ollama' ? ollamaModel : 'gemini',
-    isLocal: provider === 'ollama',
-    ollamaConnected,
-    hasApiKey: provider === 'ollama' ? ollamaConnected : hasCloudKey,
-    avoidExternalApis: true,
+    hasApiKey: Boolean(
+      process.env['LOVABLE_API_KEY'] ||
+      process.env['GEMINI_API_KEY'] ||
+      process.env['GOOGLE_API_KEY'] ||
+      process.env['VITE_GEMINI_API_KEY']
+    ),
     timestamp: new Date().toISOString(),
   });
 });
@@ -385,13 +224,10 @@ Evaluation criteria:
 3. Set should_apply to true only if match_score >= ${minScore}.
 4. Provide a verdict: "STRONG_APPLY" (>=85), "APPLY" (70-84), "CONSIDER" (55-69), or "SKIP" (<55).
 5. Identify 3-5 specific matching factors (direct experiences/skills candidate has that match JD needs).
-6. Identify 1-3 genuine missing critical skills or qualification gaps based specifically on this JD.
-   - "missing_critical_skills": list of real, concise skill names missing (e.g., ["Marketing Automation & MarTech Stack", "Enterprise Cross-Functional Governance"]).
-   - "gaps": array of structured objects:
-     * "missing": genuine name of the missing skill or domain requirement.
-     * "where_to_work": actionable advice on where and how the candidate should study, practice, or bridge this gap.
-     * "severity": "CRITICAL", "MODERATE", or "NICE_TO_HAVE".
-   CRITICAL REQUIREMENT: Output authentic, clear English text for all skills, gaps, and factors. NEVER output placeholder variable names, template tokens, or keys like "missing_1_title_gap_domain_focus".
+6. List any missing critical skills or gaps. Provide structured "gaps" (1-3 items) explicitly detailing:
+   - "missing": what specific skill, tool, qualification, or domain background is missing from the candidate's profile for this JD.
+   - "where_to_work": actionable advice on where and how the candidate should work on, practice, study, or bridge this gap.
+   - "severity": "CRITICAL", "MODERATE", or "NICE_TO_HAVE".
 7. Provide 3-5 concrete tailoring recommendations to emphasize during application.
 8. Extract any location, office, or remote details mentioned.
 9. Construct a concrete, actionable "skill_roadmap" (2-4 steps) for bridging missing skills, domain gaps, or areas where candidate has less match:
@@ -496,24 +332,14 @@ Evaluation criteria:
     });
 
     const parsed = JSON.parse(response.text || '{}');
-    parsed.isEvaluated = true;
-
-    // Sanitize any potential placeholder tokens produced by local LLM
-    const isPlaceholder = (s: any) =>
-      typeof s === 'string' && (/^missing_\d/i.test(s) || /_gap_/i.test(s) || /title_gap/i.test(s));
-
-    if (Array.isArray(parsed.missing_critical_skills)) {
-      parsed.missing_critical_skills = parsed.missing_critical_skills.filter((s: string) => !isPlaceholder(s));
+    if (Array.isArray(parsed.experiences)) {
+      parsed.experiences = sortExperiencesReverseChronological(parsed.experiences);
     }
-    if (Array.isArray(parsed.gaps)) {
-      parsed.gaps = parsed.gaps.filter((g: any) => g && !isPlaceholder(g.missing));
-    }
-
     res.json(parsed);
   } catch (error: any) {
     console.error('Error evaluating job:', error);
     res.status(500).json({
-      error: error?.message || 'Failed to evaluate job with AI engine',
+      error: error?.message || 'Failed to evaluate job with Gemini',
     });
   }
 });
@@ -569,7 +395,7 @@ app.post('/api/scrape-url', async (req, res) => {
     }
 
     // 1. If FIRECRAWL_API_KEY is available:
-    const firecrawlKey = process.env.FIRECRAWL_API_KEY;
+    const firecrawlKey = process.env['FIRECRAWL_API_KEY'];
     if (firecrawlKey) {
       try {
         const fcRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -638,16 +464,11 @@ app.post('/api/discover-jobs', async (req, res) => {
     const {
       location = 'India (Remote / Hybrid)',
       roles = [],
-      query = '',
-      candidateProfile = '',
     } = req.body;
 
-    const targetRoles = Array.isArray(roles) && roles.length > 0
-      ? roles.join(', ')
-      : (query || 'Software Engineering, Product Management, Operations, Data Analytics, or Design');
-
-    const prompt = `Search the live web using Google Search for authentic, currently open job postings in ${location} matching target roles: ${targetRoles}.
-${candidateProfile ? `\nCandidate Profile Context:\n${candidateProfile.slice(0, 3000)}\n` : ''}
+    const prompt = `Search for job postings in ${location} matching the user's requested roles.
+Roles to search: ${Array.isArray(roles) ? roles.join(', ') : roles}.
+Candidate profile (only supplied facts): ${(req.body.masterProfile || '').slice(0, 10000)}
 
 Find 6 authentic, currently active job postings from real hiring portals (SmartRecruiters, Greenhouse, Lever, Ashby, Workday, LinkedIn, or company career pages).
 Only include real, open vacancies with actual links to apply.
@@ -655,12 +476,12 @@ Only include real, open vacancies with actual links to apply.
 For each vacancy, provide:
 1. "title": Official job title.
 2. "company": Company hiring.
-3. "location": Workplace location (e.g. "Bengaluru, India (Hybrid)" or "Remote, Global").
+3. "location": Workplace location (e.g. "Bengaluru, India (Hybrid)" or "Remote, India").
 4. "platform": ATS or portal (e.g. "SmartRecruiters", "Greenhouse", "Lever", "Ashby", "LinkedIn", "Workday", "Direct Portal").
 5. "applyUrl": Direct link to job listing or application portal.
-6. "category": Job category or domain.
-7. "matchScore": Eligibility match score (0-100) based on qualification overlap.
-8. "matchHighlight": 1-2 concise sentences explaining why this posting matches the target search.
+6. "category": One of "Real-Time Operations & WFM", "Incident & Service Ops", "Business Operations & Analytics", "Product Operations", "Resource & Capacity Planning".
+7. "matchScore": Eligibility match score (0-100) based on candidate's qualification overlap.
+8. "matchHighlight": 1-2 concise sentences explaining why candidate is eligible for this specific posting.
 9. "description": 2-3 paragraph summary detailing the role responsibilities, team function, and requirements.
 
 Return ONLY a valid JSON array of job objects with no other commentary or markdown formatting.`;
@@ -698,14 +519,14 @@ Return ONLY a valid JSON array of job objects with no other commentary or markdo
 
     const normalizedJobs = jobs.map((j: any, idx: number) => ({
       id: `discovered-${Date.now()}-${idx}`,
-      title: j.title || 'Operations Specialist',
+      title: j.title || 'Target Role',
       company: j.company || 'Tech Employer',
       location: j.location || location,
       platform: j.platform || 'Direct Portal',
       applyUrl: j.applyUrl || '#',
       category: j.category || 'Business Operations & Analytics',
-      matchScore: typeof j.matchScore === 'number' ? j.matchScore : 88,
-      matchHighlight: j.matchHighlight || 'Direct match for operations and analytics background.',
+      matchScore: typeof j.matchScore === 'number' ? j.matchScore : 0,
+      matchHighlight: j.matchHighlight || 'Not assessed.',
       description: j.description || `${j.title} at ${j.company}. Active vacancy.`,
       isLive: true,
       isVerified: true,
@@ -738,36 +559,11 @@ app.post('/api/interview-prep', async (req, res) => {
       return res.status(400).json({ error: 'companyName or jobTitle is required' });
     }
 
-    const prompt = `Search Google for authentic interview questions asked at company "${companyName || 'Target Employer'}" or for the role "${jobTitle || 'Operations Specialist'}" across hiring and review portals (Glassdoor, AmbitionBox, Indeed, Blind, or career forums).
-
-Step 1: Check if there are real reported interview questions for ${companyName} or similar roles at ${companyName}.
-- If found, mark them with category "Portal Reported" and specify the source (e.g. "Glassdoor Candidate Report", "AmbitionBox Verified").
-Step 2: Supplement with high-probability role-specific interview questions tailored to the Job Description:
-- Categories: "Technical & Systems", "Behavioral (STAR)", "Situational Case".
-
-Target Candidate Profile:
-${(masterProfile || '').slice(0, 10000)}
-
-Target Job Description:
-${(jobDescription || '').slice(0, 10000)}
-
-For EACH question (provide 5 to 6 questions total):
-1. "question": The exact interview question.
-2. "category": One of "Portal Reported", "Technical & Systems", "Behavioral (STAR)", "Situational Case".
-3. "source": e.g. "Glassdoor Candidate Report", "AmbitionBox", "Role Competency Model".
-4. "isFromPortal": boolean (true if discovered from real candidate reports on Glassdoor/AmbitionBox/etc., false if derived from role competencies).
-5. "why_asked": 1-sentence explanation of what competencies, leadership principles, or technical skills the interviewer is evaluating.
-6. "key_talking_points": Array of 2-3 concise bullet points the candidate should remember.
-7. "suggested_answer": A high-impact 3-5 sentence STAR-method answer directly utilizing the candidate's actual verified background and accomplishments from their master profile (or relevant domain best practices if no profile is provided).
-
-Return ONLY a valid JSON array of question objects with no markdown code fences or commentary.`;
-
-    const response = await generateWithFallback({
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-      },
-    });
+    if (!jobTitle || !masterProfile?.trim() || /No resume uploaded yet/i.test(masterProfile)) {
+      return res.status(400).json({ error: 'Select a target role and save your Master Profile first.' });
+    }
+    const prompt = buildInterviewPrompt(companyName || '', jobTitle, jobDescription || '', masterProfile);
+    const response = await generateWithFallback({ contents: prompt });
 
     let raw = response.text || '';
     if (raw.includes('```json')) {
@@ -793,15 +589,7 @@ Return ONLY a valid JSON array of question objects with no markdown code fences 
       questions = [questions];
     }
 
-    const normalized = questions.map((q: any) => ({
-      question: q.question || 'Describe your operational experience.',
-      category: q.category || 'Behavioral (STAR)',
-      source: q.source || (q.isFromPortal ? 'Glassdoor Candidate Report' : 'Role Competency Model'),
-      isFromPortal: Boolean(q.isFromPortal),
-      why_asked: q.why_asked || 'Evaluates operational competence and stakeholder alignment.',
-      key_talking_points: Array.isArray(q.key_talking_points) ? q.key_talking_points : [],
-      suggested_answer: q.suggested_answer || 'Structured response highlighting quantifiable metrics.',
-    }));
+    const normalized = questions.map(normalizePracticeQuestion);
 
     res.json({
       success: true,
@@ -826,7 +614,7 @@ app.post('/api/ats/answer-question', async (req, res) => {
     const {
       question,
       companyName = 'Target Employer',
-      jobTitle = 'Operations Specialist',
+      jobTitle = 'Target Role',
       jobDescription = '',
       masterProfile = '',
       candidateProfile = '',
@@ -854,22 +642,17 @@ The candidate is filling out an application form on a major ATS portal (Greenhou
 - Target Role: "${jobTitle}"
 
 Job Context / Requirements:
-${effectiveJd || 'Operational excellence, stakeholder management, analytics, and process improvement.'}
+${effectiveJd || 'No job description supplied; do not infer requirements.'}
 
-Candidate Master Profile:
-${effectiveProfile || 'Professional background emphasizing relevant domain competencies, key project achievements, and technical expertise.'}
+Candidate Saved Master Profile:
+${effectiveProfile || 'No saved profile supplied; ask for a real example rather than inventing experience.'}
 
 The application form asks this exact question:
 "${question.trim()}"
 
 Instructions:
 1. Generate an authentic, tailored, ATS-optimized answer designed to score maximally with ATS keyword screeners and hiring managers.
-2. Ground answers strictly in the candidate's actual qualifications from the provided profile (or relevant domain best practices if no profile is provided):
-   - For challenging situation / problem-solving questions: Highlight structured root-cause diagnosis, cross-functional collaboration, and measurable recovery or improvement.
-   - For "Why work here / Why this company": Connect candidate qualifications directly with ${companyName}'s product, scale, and challenges.
-   - For automation / efficiency: Highlight workflow optimization, tool utilization, and metrics-driven productivity gains.
-   - For conflict / stakeholder: Highlight clear communication, objective data, and collaborative alignment across teams.
-   - For salary / availability: State professional, flexible market rate alignment and standard/immediate availability.
+2. Ground all answers solely in the saved profile. Never invent employers, achievements, tools, credentials, numbers, salary benchmarks, or availability. If information is missing, clearly ask the candidate to supply it. Tailor to the target role, not to a generic operations persona.
 3. ${lengthGuide}
 4. Tone: Confident, professional, metric-oriented, articulate, and completely natural (avoid robotic clichés).
 
@@ -901,69 +684,8 @@ Return ONLY a valid JSON object matching this schema (no markdown formatting or 
       console.warn('AI generation error, using smart profile fallback:', aiErr);
     }
 
-    // High quality deterministic fallback if API is unreachable
     if (!parsedResult || !parsedResult.suggested_answer) {
-      if (qLower.includes('fail') || qLower.includes('incident') || qLower.includes('mitigat') || qLower.includes('crisis') || qLower.includes('challeng')) {
-        parsedResult = {
-          suggested_answer: `In a previous role, our team faced a critical service disruption during peak operational hours that impacted customer workflows and threatened key SLA milestones.\n\nI immediately stepped in to coordinate triage between frontline teams and engineering. By analyzing system metrics and identifying the root-cause bottleneck, I implemented an emergency mitigation protocol that restored stability within 45 minutes, preventing broader customer impact.\n\nFollowing resolution, I led a cross-functional post-mortem to institute automated monitoring and safeguards, permanently eliminating the failure mode from our recurring workflow.`,
-          key_points: [
-            'Immediate cross-functional coordination and rapid root-cause diagnosis',
-            'Data-backed mitigation restoring stability under high-stakes deadlines',
-            'Permanent preventative safeguards implemented to ensure long-term resilience'
-          ],
-          keywords: ['Root Cause Analysis', 'Rapid Triage', 'SLA Adherence', 'Process Improvement', 'Cross-Functional Collaboration'],
-          category: 'Operational',
-          word_count: 110
-        };
-      } else if (qLower.includes('why') && (qLower.includes('work') || qLower.includes('company') || qLower.includes('join') || qLower.includes('here') || qLower.includes('us'))) {
-        parsedResult = {
-          suggested_answer: `${companyName}'s rapid innovation and mission-driven approach strongly resonates with my background and career goals. Throughout my career, I have found that the biggest driver of sustained success is combining technical execution with empathetic, cross-functional collaboration.\n\n${companyName}'s commitment to high standards creates the ideal environment where my domain experience, analytical mindset, and focus on scalable quality can deliver immediate, tangible value. I want to contribute to a forward-thinking organization that values velocity, operational rigor, and continuous learning as it scales.`,
-          key_points: [
-            `Direct alignment between candidate capabilities and ${companyName}'s mission`,
-            'Proven track record of high-quality execution and collaboration',
-            'Long-term dedication to scalable, high-impact outcomes'
-          ],
-          keywords: ['Mission Alignment', 'Scalable Execution', 'Domain Excellence', 'Continuous Improvement', 'Cross-Functional Teamwork'],
-          category: 'Why Company',
-          word_count: 105
-        };
-      } else if (qLower.includes('automat') || qLower.includes('efficien') || qLower.includes('process') || qLower.includes('improv')) {
-        parsedResult = {
-          suggested_answer: `In my previous position, repetitive manual workflows were consuming significant team hours each week, creating operational bottlenecks and delayed reporting.\n\nI designed and deployed an automated data aggregation pipeline and interactive dashboard that synchronized updates directly from our core tools. By automating recurring reports, we eliminated manual data entry, provided stakeholders with real-time exception visibility, and improved cycle time by over 30%.\n\nThis initiative saved dozens of managerial hours each month and allowed our team to refocus energy on strategic, high-leverage initiatives.`,
-          key_points: [
-            'Replaced time-consuming manual workflows with automated reporting pipelines',
-            'Provided real-time operational visibility for key stakeholders',
-            'Achieved 30%+ efficiency improvement in recurring cycle times'
-          ],
-          keywords: ['Workflow Automation', 'Dashboard Analytics', 'Cycle Time Optimization', 'Operational Efficiency', 'Process Scalability'],
-          category: 'Operational',
-          word_count: 98
-        };
-      } else if (qLower.includes('salary') || qLower.includes('comp') || qLower.includes('notice') || qLower.includes('availab')) {
-        parsedResult = {
-          suggested_answer: `My salary expectations are aligned with competitive market rates for a ${jobTitle} role at ${companyName}, taking into account my proven experience and the scope of responsibility. I am open to discussing a total compensation package that reflects the role's expectations and industry benchmarks.\n\nRegarding availability, my notice period is standard, and I can transition smoothly upon mutual agreement to ensure seamless onboarding.`,
-          key_points: [
-            'Flexible and market-aligned compensation stance',
-            'Emphasis on role scope and total compensation package',
-            'Clean and professional notice period availability'
-          ],
-          keywords: ['Competitive Compensation', 'Market Benchmarks', 'Notice Period', 'Seamless Onboarding'],
-          category: 'General',
-          word_count: 75
-        };
-      } else {
-        parsedResult = {
-          suggested_answer: `Throughout my career, my approach has centered on objective data, clear cross-functional communication, and rapid execution. Whether resolving complex operational challenges or aligning project deliverables across international teams, I prioritize transparency and measurable business outcomes.\n\nFor ${companyName}, I bring proven experience in workflow optimization, stakeholder coordination, and high-standard execution, ensuring that team goals are consistently met with high quality.`,
-          key_points: [
-            'Proven track record of high-impact execution and team leadership',
-            'Data-first methodology combined with empathetic stakeholder management',
-            'Immediate readiness to support organization goals from Day 1'
-          ],
-          keywords: ['Cross-Functional Execution', 'Data-Driven Problem Solving', 'Stakeholder Management', 'Process Excellence', 'Quality Standards'],
-          category: 'Behavioral',
-          word_count: 78
-        };
-      }
+      return res.status(503).json({ success: false, error: 'Could not generate your answer. Please try again; no substitute achievements were added.' });
     }
 
     res.json({
@@ -1172,93 +894,9 @@ function detectAtsFromUrlOrSlug(input: string): {
   return null;
 }
 
-function calculateCandidateMatch(title: string, department: string = '', descriptionSnippet: string = '') {
-  const combined = `${title} ${department} ${descriptionSnippet}`.toLowerCase();
-  const lowerTitle = title.toLowerCase();
-
-  // 1. Critical Disqualifiers: Specialized Domain / Tooling Mismatches
-  // Financial Close / Accounting ERP (e.g., BlackLine, SAP FICO, R2R, CPA, Statutory Tax)
-  const isAccountingErpMismatch =
-    lowerTitle.includes('blackline') ||
-    combined.includes('blackline') ||
-    lowerTitle.includes('sap fico') ||
-    lowerTitle.includes('record to report') ||
-    lowerTitle.includes('r2r') ||
-    lowerTitle.includes('statutory accounting') ||
-    lowerTitle.includes('chartered accountant') ||
-    lowerTitle.includes('cpa required') ||
-    (lowerTitle.includes('tax') && lowerTitle.includes('analyst'));
-
-  if (isAccountingErpMismatch) {
-    return {
-      score: 38,
-      highlight:
-        'Low overlap (38%): Requires 5+ years of specialized BlackLine / SAP R2R financial close accounting software not in your profile.',
-    };
-  }
-
-  // Specialized Software / Hardware Engineering mismatch
-  const isEngineeringMismatch =
-    lowerTitle.includes('c++') ||
-    lowerTitle.includes('embedded') ||
-    lowerTitle.includes('firmware') ||
-    lowerTitle.includes('ios developer') ||
-    lowerTitle.includes('android developer') ||
-    lowerTitle.includes('golang') ||
-    lowerTitle.includes('rust developer') ||
-    lowerTitle.includes('verilog') ||
-    lowerTitle.includes('fpga');
-
-  if (isEngineeringMismatch) {
-    return {
-      score: 32,
-      highlight:
-        'Low overlap (32%): Requires specialized native software engineering or hardware firmware programming not present in your profile.',
-    };
-  }
-
-  // Clinical / Healthcare mismatch
-  if (lowerTitle.includes('nurse') || lowerTitle.includes('physician') || lowerTitle.includes('pharmacist')) {
-    return {
-      score: 25,
-      highlight: 'Low overlap (25%): Clinical medical credentials required.',
-    };
-  }
-
-  // Core professional keywords across tech, business, and operations
-  const coreKeywords = [
-    'experience', 'management', 'analysis', 'communication', 'leadership',
-    'strategy', 'collaboration', 'development', 'workflow', 'reporting',
-    'stakeholder', 'optimization', 'project', 'metrics', 'governance',
-    'sql', 'agile', 'data', 'cloud', 'analytics'
-  ];
-
-  let matches = 0;
-  coreKeywords.forEach((kw) => {
-    if (combined.includes(kw)) matches++;
-  });
-
-  let score = 70;
-  if (matches >= 8) {
-    score = 85 + Math.min(matches, 9); // 85 - 94%
-  } else if (matches >= 4) {
-    score = 72 + matches * 2; // 80 - 86%
-  } else {
-    score = 60 + matches * 3; // 60 - 72%
-  }
-
-  if (score > 95) score = 95;
-
-  let highlight = 'Strong alignment with core professional qualifications and role responsibilities.';
-  if (matches >= 8) {
-    highlight = 'High alignment across key domain competencies, technical tooling, and execution requirements.';
-  } else if (matches >= 4) {
-    highlight = 'Solid overlap with foundational qualifications, analytical problem solving, and stakeholder coordination.';
-  } else {
-    highlight = 'Moderate overlap: core transferable skills apply, with room for role-specific tailoring.';
-  }
-
-  return { score, highlight };
+function calculateCandidateMatch(title: string, department = '', descriptionSnippet = '') {
+  // Browser ranking uses the current Master Profile; a listing fetch has no candidate context.
+  return { score: 0, highlight: 'Not assessed. Compare this role with your saved Master Profile.' };
 }
 
 // 7.1M+ Jobs Catalogue Fetcher with parallel multi-offset batching
@@ -1602,6 +1240,8 @@ app.post('/api/ats/crawl', async (req, res) => {
       // 2. Query top corporate ATS platforms concurrently
       const providers = [
         { name: 'Stripe', url: 'https://boards-api.greenhouse.io/v1/boards/stripe/jobs', ats: 'Greenhouse' },
+        { name: 'Anthropic', url: 'https://api.ashbyhq.com/posting-api/job-board/anthropic', ats: 'Ashby' },
+        { name: 'OpenAI', url: 'https://api.ashbyhq.com/posting-api/job-board/openai', ats: 'Ashby' },
         { name: 'Figma', url: 'https://boards-api.greenhouse.io/v1/boards/figma/jobs', ats: 'Greenhouse' },
         { name: 'Linear', url: 'https://api.ashbyhq.com/posting-api/job-board/linear', ats: 'Ashby' },
         { name: 'Palantir', url: 'https://api.lever.co/v0/postings/palantir?mode=json', ats: 'Lever' },
@@ -1611,15 +1251,24 @@ app.post('/api/ats/crawl', async (req, res) => {
         { name: 'Plaid', url: 'https://api.ashbyhq.com/posting-api/job-board/plaid', ats: 'Ashby' },
         { name: 'Notion', url: 'https://api.ashbyhq.com/posting-api/job-board/notion', ats: 'Ashby' },
         { name: 'Ramp', url: 'https://api.ashbyhq.com/posting-api/job-board/ramp', ats: 'Ashby' },
-        { name: 'Anthropic', url: 'https://api.ashbyhq.com/posting-api/job-board/anthropic', ats: 'Ashby' },
         { name: 'Scale AI', url: 'https://boards-api.greenhouse.io/v1/boards/scaleai/jobs', ats: 'Greenhouse' },
         { name: 'Vercel', url: 'https://api.ashbyhq.com/posting-api/job-board/vercel', ats: 'Ashby' },
+        { name: 'Supabase', url: 'https://api.ashbyhq.com/posting-api/job-board/supabase', ats: 'Ashby' },
         { name: 'Retool', url: 'https://boards-api.greenhouse.io/v1/boards/retool/jobs', ats: 'Greenhouse' },
         { name: 'Deel', url: 'https://api.ashbyhq.com/posting-api/job-board/deel', ats: 'Ashby' },
         { name: 'Canva', url: 'https://boards-api.greenhouse.io/v1/boards/canva/jobs', ats: 'Greenhouse' },
         { name: 'Automattic', url: 'https://boards-api.greenhouse.io/v1/boards/automattic/jobs', ats: 'Greenhouse' },
         { name: 'Cloudflare', url: 'https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs', ats: 'Greenhouse' },
+        { name: 'Coinbase', url: 'https://boards-api.greenhouse.io/v1/boards/coinbase/jobs', ats: 'Greenhouse' },
+        { name: 'Robinhood', url: 'https://boards-api.greenhouse.io/v1/boards/robinhood/jobs', ats: 'Greenhouse' },
+        { name: 'Databricks', url: 'https://boards-api.greenhouse.io/v1/boards/databricks/jobs', ats: 'Greenhouse' },
+        { name: 'GitLab', url: 'https://boards-api.greenhouse.io/v1/boards/gitlab/jobs', ats: 'Greenhouse' },
+        { name: 'Perplexity', url: 'https://api.ashbyhq.com/posting-api/job-board/perplexity', ats: 'Ashby' },
+        { name: 'Cohere', url: 'https://api.ashbyhq.com/posting-api/job-board/cohere', ats: 'Ashby' },
       ];
+
+      // Add Revolut verified roles to pool
+      
 
       const [fhResult, remotiveResult, ...fetchedResults] = await Promise.allSettled([
         cataloguePromise,
@@ -1760,9 +1409,11 @@ app.post('/api/ats/crawl', async (req, res) => {
           companyDisplayName = matchedCurated.name;
         }
 
+        // Revolut uses catalogue fallback; no sample jobs are injected.
         if (slug.toLowerCase() === 'revolut') {
+          rawJobs = [];
           const fhHits = await fetchLiveAtsCatalogueJobs('revolut', 50);
-          rawJobs = [...fhHits];
+          rawJobs.push(...fhHits);
           activeAts = 'Direct ATS Network';
         } else {
           // Probe Greenhouse
@@ -2132,14 +1783,14 @@ app.post('/api/ats/import', async (req, res) => {
       fullDescription = `Company: ${job.company}\nRole: ${job.title}\nDepartment: ${job.department || 'Operations'}\nLocation: ${job.location}\nPlatform: ${job.platform}\n\nRole Overview:\n${job.descriptionSnippet || 'Official verified listing on corporate ATS.'}\n\nApply URL: ${job.applyUrl}`;
     }
 
+    const matchAnalysis = calculateCandidateMatch(job.title, job.department, fullDescription);
     const opportunity = {
       id: `ats-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       company: job.company,
       title: job.title,
       location: job.location || 'Remote / Hybrid',
-      matchScore: 0,
-      matchHighlight: 'Awaiting AI evaluation. Click Tailor Application to analyze match & gaps.',
-      isEvaluated: false,
+      matchScore: job.matchScore !== undefined ? job.matchScore : matchAnalysis.score,
+      matchHighlight: job.matchHighlight || matchAnalysis.highlight,
       platform: job.platform || 'Greenhouse',
       applyUrl: job.applyUrl,
       verifiedLive: true,
@@ -2158,6 +1809,37 @@ app.post('/api/ats/import', async (req, res) => {
 });
 
 // Endpoint: Verify Live Job Listing from Internet URL & Add Only if Confirmed Active
+// Loads full job descriptions for a small batch of listings so quick fit labels use the whole posting.
+app.post('/api/ats/details', async (req, res) => {
+  try {
+    const slugs: string[] = Array.isArray(req.body?.slugs) ? req.body.slugs : [];
+    const valid = [...new Set(slugs.filter((s) => typeof s === 'string' && /^[a-z0-9][a-z0-9_-]{0,199}$/i.test(s)))].slice(0, 30);
+    const descriptions: Record<string, string> = {};
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < valid.length) {
+        const slug = valid[cursor++];
+        try {
+          const r = await fetch(`https://freehire.me/api/v1/jobs/${encodeURIComponent(slug)}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', Accept: 'application/json' },
+            signal: AbortSignal.timeout(4000),
+          });
+          if (!r.ok) continue;
+          const data = await r.json();
+          const item = data?.data || data;
+          if (item?.description) descriptions[slug] = cleanHtmlText(item.description).slice(0, 8000);
+        } catch {
+          // Skip listings whose full description cannot be loaded; the summary is used instead.
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+    res.json({ success: true, descriptions });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to load job details.' });
+  }
+});
+
 app.post('/api/verify-and-import-job', async (req, res) => {
   try {
     const { url, rawText } = req.body;
@@ -2276,7 +1958,7 @@ app.post('/api/verify-and-import-job', async (req, res) => {
       }
 
       // 1. Try Firecrawl if key is configured
-      const firecrawlKey = process.env.FIRECRAWL_API_KEY;
+      const firecrawlKey = process.env['FIRECRAWL_API_KEY'];
 
       if (!pageText && firecrawlKey) {
         try {
@@ -2379,7 +2061,7 @@ Reject (isValidJob: false) if:
 Accept (isValidJob: true) if:
 - It is an authentic, specific job vacancy with job title, company/organization, and responsibilities/requirements.
 
-If accepted, compute match score (0-100) and eligibility highlight based on authentic qualification overlap with the candidate profile and role requirements.
+If accepted, return job details only. Candidate fit has not been assessed: matchScore: 0, matchHighlight: "Not assessed. Full assessment pending.".
 
 WEB PAGE CONTENT:
 ${pageText.slice(0, 10000)}
@@ -2494,12 +2176,11 @@ ${pageText.slice(0, 10000)}
       platform: platformDerived,
       applyUrl: url || '#',
       category: parsed.category || 'Incident & Service Ops',
-      matchScore: 0,
-      matchHighlight: 'Awaiting AI evaluation. Click Tailor Application to analyze match & gaps.',
+      matchScore: matchAnalysis.score,
+      matchHighlight: matchAnalysis.highlight,
       description: parsed.cleanDescription || pageText.slice(0, 3000),
       isLive: true,
       isVerified: true,
-      isEvaluated: false,
       verifiedAt: new Date().toISOString(),
     };
 
@@ -2524,55 +2205,46 @@ app.post('/api/parse-resume', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Either raw resume text or a PDF resume upload is required.' });
     }
 
-    let extractedResumeText = (rawText || '').trim();
-    if (pdfBase64) {
-      const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim();
-      const pdfText = await extractTextFromPdfBase64(cleanBase64);
-      if (pdfText && pdfText.trim()) {
-        extractedResumeText = `${pdfText.trim()}${extractedResumeText ? `\n\n${extractedResumeText}` : ''}`;
-      }
-    }
+    const prompt = `
+You are an expert executive resume parser and ATS extraction engine.
+Carefully read the candidate resume (provided as an attached PDF document and/or raw text) and extract complete, high-fidelity candidate information.
 
-    if (!extractedResumeText || extractedResumeText.length < 30) {
-      return res.status(400).json({
-        success: false,
-        error: 'Unable to extract text from the provided resume PDF. Please ensure the PDF is not password protected or an empty scan.',
-      });
-    }
-
-    const prompt = `You are a strict, privacy-first ATS resume parser and extraction engine.
-Carefully read the candidate's authentic resume text below and extract their exact, authentic information into JSON.
-DO NOT invent, fabricate, synthesize, or assume any career information. Use ONLY what is explicitly stated in the resume text.
-
-### AUTHENTIC RESUME TEXT:
-${extractedResumeText}
+${rawText ? `### RAW RESUME TEXT CONTENT:\n${rawText.slice(0, 30000)}\n` : ''}
 ${fileName ? `### SOURCE FILENAME: ${fileName}\n` : ''}
 
-CRITICAL STRICT ANTI-HALLUCINATION & PRIVACY RULES:
-1. Extract ONLY information explicitly present in the provided resume text.
-2. If any field (email, phone, location, linkedin, headline, summary, education, certifications) is missing or not mentioned in the resume text, set it to an empty string "" or an empty array [].
-3. NEVER generate placeholder brackets, template text, or dummy data such as "[Job Title]", "[Company Name]", "[Candidate Email]", "[Candidate Phone]", "[feature] using [technology]", "[metric]%", etc.
-4. NEVER assume or default to "Software Engineer" or any other profession unless the resume text explicitly states it.
-5. Every single work experience, title, company, date, bullet point, and educational institution MUST originate directly from the candidate's provided text.
-
 Instructions:
-1. Extract full_name, headline (their exact target role / professional headline from the top of the resume), email, phone, location (city/state/country), and linkedin URL.
-2. Extract or formulate a clean professional summary based strictly on their actual work history.
-3. Extract each work experience entry:
-   - title: exact job title as written
-   - company: exact employer / organization name
-   - date_range: timeline
-   - location: location or Remote (leave empty "" if not mentioned)
-   - bullets: array of specific achievement bullets
-4. Extract all core technical, domain, and operational skills into an array of strings.
+1. Extract or determine full_name, first_name, last_name, headline / target role (e.g. "Senior Full-Stack Engineer" or "Operations Specialist"), email, phone, location (city/state/country), and linkedin URL.
+2. Extract or formulate a clean, high-impact 3-4 sentence professional summary.
+3. Extract each work experience entry in STRICT REVERSE-CHRONOLOGICAL ORDER (most recent position first):
+   - title: exact job title
+   - company: employer / organization name
+   - date_range: timeline (e.g. "Oct 2022 – Present", "Jan 2020 – Sep 2022")
+   - location: city/state or Remote (leave empty if not mentioned)
+   - bullets: array of specific achievement bullets (keep concrete metrics and action verbs)
+4. Extract all core technical and domain skills into an array of strings (e.g. ["TypeScript", "React", "PostgreSQL", "AWS"]).
 5. Extract education entries (degree, institution, year).
 6. Extract certifications into an array of strings.
-7. Generate a clean markdown master_profile_text summarizing this candidate's authentic career without any brackets or placeholders.
+7. Generate a comprehensive markdown master_profile_text that thoroughly summarizes the candidate's authentic career history and proof-of-work.
+`;
 
-Format response as raw JSON matching the candidate's actual profile.`;
+    let contents: any;
+    if (pdfBase64) {
+      const cleanBase64 = pdfBase64.replace(/^data:[^;]+;base64,/, '').trim();
+      contents = [
+        {
+          inlineData: {
+            mimeType: 'application/pdf',
+            data: cleanBase64,
+          },
+        },
+        prompt,
+      ];
+    } else {
+      contents = prompt;
+    }
 
     const response = await generateWithFallback({
-      contents: prompt,
+      contents,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -2589,6 +2261,7 @@ Format response as raw JSON matching the candidate's actual profile.`;
             summary: { type: Type.STRING },
             experiences: {
               type: Type.ARRAY,
+              description: 'Work experiences extracted in strict reverse-chronological order (most recent position first).',
               items: {
                 type: Type.OBJECT,
                 properties: {
@@ -2626,6 +2299,7 @@ Format response as raw JSON matching the candidate's actual profile.`;
             },
             master_profile_text: { type: Type.STRING },
           },
+          required: ['full_name', 'email', 'experiences', 'skills'],
         },
       },
     });
@@ -2635,89 +2309,10 @@ Format response as raw JSON matching the candidate's actual profile.`;
       cleanText = cleanText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
     }
     const parsed = JSON.parse(cleanText);
-
-    // Server-side strict PII and anti-placeholder sanitization:
-    // Guarantees no hallucinated bracket placeholders ever get returned or saved
-    const cleanStr = (s?: any) => {
-      if (!s || typeof s !== 'string') return '';
-      const trimmed = s.trim();
-      if (
-        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-        trimmed.includes('[Job Title]') ||
-        trimmed.includes('[Company Name]') ||
-        trimmed.includes('[Candidate') ||
-        trimmed.includes('[Extracted') ||
-        trimmed.includes('[Degree Name]') ||
-        trimmed.includes('[University Name]') ||
-        trimmed.includes('Software Engineer with 4+ years of experience specializing in full-stack development') ||
-        trimmed.includes('Software Engineer with X years of experience')
-      ) {
-        return '';
-      }
-      return trimmed;
-    };
-
-    const cleanBullets = (bullets: any[]) => {
-      if (!Array.isArray(bullets)) return [];
-      return bullets
-        .map((b) => (typeof b === 'string' ? cleanStr(b) : ''))
-        .filter((b) => b && !b.includes('[feature]') && !b.includes('[technology]') && !b.includes('[metric]%') && !b.includes('[number]'));
-    };
-
-    const cleanExperiences = Array.isArray(parsed.experiences)
-      ? parsed.experiences
-          .filter((exp: any) => exp && typeof exp === 'object')
-          .map((exp: any) => ({
-            title: cleanStr(exp.title),
-            company: cleanStr(exp.company),
-            date_range: cleanStr(exp.date_range),
-            location: cleanStr(exp.location),
-            bullets: cleanBullets(exp.bullets),
-          }))
-          .filter((exp: any) => exp.title && exp.company) // Drop invalid/dummy entries
-      : [];
-
-    const cleanEducation = Array.isArray(parsed.education)
-      ? parsed.education
-          .filter((edu: any) => edu && typeof edu === 'object')
-          .map((edu: any) => ({
-            degree: cleanStr(edu.degree),
-            institution: cleanStr(edu.institution),
-            year: cleanStr(edu.year),
-          }))
-          .filter((edu: any) => edu.degree && edu.institution)
-      : [];
-
-    const cleanCertifications = Array.isArray(parsed.certifications)
-      ? parsed.certifications
-          .map((c: any) => cleanStr(typeof c === 'string' ? c : c?.name))
-          .filter(Boolean)
-      : [];
-
-    const cleanSkills = Array.isArray(parsed.skills)
-      ? parsed.skills
-          .map((s: any) => cleanStr(typeof s === 'string' ? s : s?.name))
-          .filter((s: string) => s && !s.includes('[') && !s.includes(']'))
-      : [];
-
-    const sanitizedProfile = {
-      full_name: cleanStr(parsed.full_name),
-      first_name: cleanStr(parsed.first_name),
-      last_name: cleanStr(parsed.last_name),
-      headline: cleanStr(parsed.headline),
-      email: cleanStr(parsed.email),
-      phone: cleanStr(parsed.phone),
-      location: cleanStr(parsed.location),
-      linkedin: cleanStr(parsed.linkedin),
-      summary: cleanStr(parsed.summary),
-      experiences: cleanExperiences,
-      skills: cleanSkills,
-      education: cleanEducation,
-      certifications: cleanCertifications,
-      master_profile_text: cleanStr(parsed.master_profile_text) || '',
-    };
-
-    res.json({ success: true, profile: sanitizedProfile });
+    if (Array.isArray(parsed.experiences)) {
+      parsed.experiences = sortExperiencesReverseChronological(parsed.experiences);
+    }
+    res.json({ success: true, profile: parsed });
   } catch (err: any) {
     console.error('Error in /api/parse-resume:', err);
     res.status(500).json({ success: false, error: err?.message || 'Failed to parse resume with AI.' });
@@ -2725,6 +2320,8 @@ Format response as raw JSON matching the candidate's actual profile.`;
 });
 
 // Endpoint: Generate Tailored ATS Resume & Cover Letter Content
+app.get('/api/entitlement', (req, res) => res.json({}));
+
 app.post('/api/tailor', async (req, res) => {
   try {
     const { jobText, masterProfile, recommendations = [], candidateInfo } = req.body;
@@ -2758,15 +2355,20 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
 6. Strict timeline date formatting: The date_range field for every experience must ONLY contain pure date strings (e.g. "Oct 2023 – Present", "Oct 2022 – Sep 2023", "Sep 2020 – Sep 2022"). Never append operational descriptors (like "Global Operations" or "Regulated Fintech") or location tags to date_range or timeline text.
 7. Leave experience location empty ("") or clean city/country without operational descriptors.
 8. Do not include location preference notes like "Open to Kochi & Hybrid" or "Hyderabad" in summaries or headers.
-9. Projects: Include relevant portfolio projects from the candidate's master profile only if they add clear, tangible value for the target role. Omit irrelevant projects to maintain conciseness.
+9. Include only projects documented in the saved profile and directly relevant to the job. Never insert sample projects. Return projects: [] when none are relevant.
 10. Craft an ATS-friendly, 3-paragraph compelling Cover Letter addressed specifically to the company and role.
-11. Provide tailored answers to 3 standard ATS screening questions based on the candidate's actual background and target position:
+11. Provide tailored answers to 3 standard ATS screening questions:
    - "Why are you interested in this role at our company?"
-   - "Describe your relevant experience and key technical or domain achievements that align with this position."
+   - "Describe your experience relevant to the responsibilities and skills in this job description."
    - "What is your location status and availability?"
-12. Select and prioritize up to 3 relevant certifications strictly from the candidate's verified certifications documented in their master profile. If the candidate has no certifications listed in their profile, return an empty array: certifications: []. DO NOT hallucinate or invent certifications not present in the candidate's profile.
-13. Retain the candidate's authentic education (degrees, institutions, and dates) from their Master Profile.
-14. CRITICAL ANTI-PLACEHOLDER RULE: Never output generic brackets or placeholder text like "[Job Title]", "[Company Name]", "[feature]", "[metric]%", "[Extracted Email Address]", or "Software Engineer with X years of experience". Tailor ONLY the candidate's actual authentic career and credentials documented in their Master Profile.
+12. Select up to 3 relevant certifications ONLY from the candidate's saved profile. Preserve their exact names; return [] if none are documented. Never invent credentials.
+13. MANDATORY STRICT REVERSE-CHRONOLOGICAL ORDER FOR EXPERIENCES:
+    The "experiences" array MUST ALWAYS be strictly ordered in REVERSE CHRONOLOGICAL ORDER (most recent / current position at the top, followed by older positions in descending date order).
+    - NEVER reorder experiences based on relevance or keyword match to the target JD.
+    - For example: An experience from "Oct 2022 – Sep 2023" MUST ALWAYS appear ABOVE/BEFORE an experience from "Sep 2020 – Sep 2022".
+    - Never place an older position (e.g. 2020–2022) above a more recent position (e.g. 2022–2023 or 2023–Present).
+    - The hiring committee strictly penalizes broken chronology. All positions must flow backwards in time from present/most recent to oldest.
+
 `;
 
     const response = await generateWithFallback({
@@ -2787,12 +2389,13 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
             },
             experiences: {
               type: Type.ARRAY,
+              description: 'Work experiences in STRICT REVERSE-CHRONOLOGICAL ORDER (most recent / current position at the top, descending to oldest). Never reorder by JD relevance.',
               items: {
                 type: Type.OBJECT,
                 properties: {
                   title: { type: Type.STRING },
                   company: { type: Type.STRING },
-                  date_range: { type: Type.STRING },
+                  date_range: { type: Type.STRING, description: 'Pure date range, e.g. "Oct 2023 – Present" or "Oct 2022 – Sep 2023"' },
                   location: { type: Type.STRING },
                   bullets: {
                     type: Type.ARRAY,
@@ -2825,19 +2428,6 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
               items: { type: Type.STRING },
               description: 'Top 3-5 certifications selected strictly from the candidate verified credentials matching the JD.',
             },
-            education: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  degree: { type: Type.STRING },
-                  institution: { type: Type.STRING },
-                  year: { type: Type.STRING },
-                },
-                required: ['degree', 'institution'],
-              },
-              description: 'Authentic education history preserved strictly from candidate profile.',
-            },
             cover_letter: {
               type: Type.OBJECT,
               properties: {
@@ -2869,67 +2459,14 @@ CRITICAL ANTI-HALLUCINATION & FORMATTING RULES (FROM MASTER VAULT):
     });
 
     const parsed = JSON.parse(response.text || '{}');
-
-    // Server-side anti-hallucination & anti-placeholder sanitizer for tailored output
-    const cleanStr = (s?: any) => {
-      if (!s || typeof s !== 'string') return '';
-      const trimmed = s.trim();
-      if (
-        (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
-        trimmed.includes('[Job Title]') ||
-        trimmed.includes('[Company Name]') ||
-        trimmed.includes('[Candidate') ||
-        trimmed.includes('[Extracted') ||
-        trimmed.includes('[Degree Name]') ||
-        trimmed.includes('[University Name]') ||
-        trimmed.includes('Software Engineer with X years of experience')
-      ) {
-        return '';
-      }
-      return trimmed;
-    };
-
-    const cleanBullets = (bullets: any[]) => {
-      if (!Array.isArray(bullets)) return [];
-      return bullets
-        .map((b) => (typeof b === 'string' ? cleanStr(b) : ''))
-        .filter((b) => b && !b.includes('[feature]') && !b.includes('[technology]') && !b.includes('[metric]%') && !b.includes('[number]'));
-    };
-
     if (Array.isArray(parsed.experiences)) {
-      parsed.experiences = parsed.experiences
-        .filter((exp: any) => exp && typeof exp === 'object')
-        .map((exp: any) => ({
-          ...exp,
-          title: cleanStr(exp.title),
-          company: cleanStr(exp.company),
-          date_range: cleanStr(exp.date_range),
-          location: cleanStr(exp.location),
-          bullets: cleanBullets(exp.bullets),
-        }))
-        .filter((exp: any) => exp.title && exp.company);
+      parsed.experiences = sortExperiencesReverseChronological(parsed.experiences);
     }
-
-    if (Array.isArray(parsed.education)) {
-      parsed.education = parsed.education
-        .filter((edu: any) => edu && typeof edu === 'object')
-        .map((edu: any) => ({
-          degree: cleanStr(edu.degree),
-          institution: cleanStr(edu.institution),
-          year: cleanStr(edu.year),
-        }))
-        .filter((edu: any) => edu.degree && edu.institution);
-    }
-
-    if (parsed.tailored_summary) {
-      parsed.tailored_summary = cleanStr(parsed.tailored_summary);
-    }
-
     res.json(parsed);
   } catch (error: any) {
     console.error('Error tailoring materials:', error);
     res.status(500).json({
-      error: error?.message || 'Failed to tailor application materials with AI engine',
+      error: error?.message || 'Failed to tailor application materials with Gemini',
     });
   }
 });
@@ -3023,7 +2560,7 @@ app.post('/api/recruiter-review', async (req, res) => {
 Target Role: "${jobTitle}" at "${companyName}".
 
 Target Job Description:
-${(jobDescription || 'Senior operations, technical execution, and leadership.').slice(0, 5000)}
+${(jobDescription || 'No job description supplied. Do not assume role requirements.').slice(0, 5000)}
 
 Candidate Resume Content:
 ${resumeText.slice(0, 8000)}
@@ -3079,50 +2616,7 @@ Return ONLY a valid JSON object matching this schema:
       const parsed = JSON.parse(raw);
       return res.json({ success: true, ...parsed });
     } catch (aiErr) {
-      console.warn('AI recruiter review fallback:', aiErr);
-      // Smart contextual fallback
-      return res.json({
-        success: true,
-        overall_score: 89,
-        consensus_verdict: 'STRONG_HIRE',
-        executive_summary: `The hiring panel strongly endorses the candidate for ${jobTitle} at ${companyName}. The resume demonstrates exceptional quantifiable impact, strong operational leadership, and deep technical competencies.`,
-        panel: {
-          recruiter: {
-            role: 'Senior Talent Acquisition Specialist',
-            score: 92,
-            scan_time_verdict: '5.2s scan - Passes ATS keyword screener with 94% alignment',
-            feedback: 'The resume structure is exceptionally clean with a standard single-column layout that ATS parsers parse without errors. The summary immediately positions the candidate as a seasoned specialist.',
-            top_strength: 'Crisp reverse-chronological trajectory with zero employment gaps.',
-            critical_flag: 'Ensure all industry acronyms (SLA, WFM, ERP) have full spelled-out definitions on first mention.',
-          },
-          hiring_manager: {
-            role: 'Hiring Manager / Department Lead',
-            score: 88,
-            business_impact_score: 'Superior (91%)',
-            feedback: 'Every bullet point is backed by concrete outcomes and deliverables. Demonstrates high autonomy and ownership under demanding conditions.',
-            leadership_assessment: 'Strong experience coordinating cross-functional initiatives and mentoring team members.',
-            major_concern: 'Probe during the behavioral loop on direct budget authorization vs. analytical planning.',
-          },
-          technical_lead: {
-            role: 'Technical / Domain Lead',
-            score: 87,
-            execution_confidence: 'High',
-            feedback: 'Demonstrates verified command of core domain tools, data analysis, and structured problem-solving workflows.',
-            tooling_depth: 'Advanced database querying, root-cause triage, and workflow automation.',
-            gap_to_fill: 'Could highlight API integrations or Python scripting if the role requires custom bot development.',
-          },
-        },
-        top_strengths: [
-          'High density of quantified business metrics and outcomes',
-          'Clear experience leading cross-functional projects and communicating with stakeholders',
-          'Clean ATS-compatible formatting that eliminates parsing dropouts',
-        ],
-        top_fixes: [
-          `Tailor the top 2 bullets in the most recent role to directly highlight ${jobTitle} keywords`,
-          'Add specific metrics or measurable outcomes to mid-level project bullets',
-          'Ensure contact details include city/country and active LinkedIn profile link',
-        ],
-      });
+      return res.status(503).json({ success: false, error: 'Could not generate this assessment. Please try again; no sample results were substituted.' });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Server error during recruiter review' });
@@ -3138,13 +2632,15 @@ app.post('/api/negotiate-offer', async (req, res) => {
     const {
       candidateName = 'Candidate',
       companyName = 'Target Employer',
-      jobTitle = 'Senior Specialist',
-      offeredBase = '$95,000',
-      targetBase = '$115,000',
-      benefitsSummary = 'Standard health, 15 days PTO, 401(k) match',
+      jobTitle = 'Target Role',
+      offeredBase = '',
+      targetBase = '',
+      benefitsSummary = '',
       competingOffer = '',
-      leveragePoints = 'Market benchmark, relevant domain expertise, track record of delivering measurable ROI',
+      leveragePoints = '',
     } = req.body;
+
+    if (!offeredBase || !targetBase) return res.status(400).json({ success: false, error: 'Enter the actual offer and desired compensation first.' });
 
     const prompt = `You are a world-class executive compensation coach.
 A candidate has received a job offer and needs a strategic negotiation package.
@@ -3156,9 +2652,10 @@ Details:
 - Offered Base: ${offeredBase}
 - Target Base Counter: ${targetBase}
 - Benefits/Perks: ${benefitsSummary}
-- Competing Offer Context: ${competingOffer || 'No competing offer, leveraging market rate & unique skill profile'}
+- Competing Offer Context: ${competingOffer || 'No competing offer supplied; do not invent one'}
 - Core Leverage Points: ${leveragePoints}
 
+Use only supplied leverage and offer details. Do not invent achievements, numerical targets, current market data, or compensation benchmarks. State that market benchmarks are unverified when no source is supplied.
 Generate a comprehensive negotiation strategy:
 1. "counter_offer_email": A polite, professional, and persuasive counter-offer email to the recruiter. It should express genuine enthusiasm, anchor at the target compensation with clear rationale, and leave room for collaborative flexibility (e.g., signing bonus, equity, or review timeline).
 2. "phone_script": A verbatim script for when the candidate speaks with the recruiter on the phone. Includes how to deliver the number, pause, and handle initial reactions.
@@ -3192,30 +2689,7 @@ Return ONLY a valid JSON object matching this schema:
       const parsed = JSON.parse(raw);
       return res.json({ success: true, ...parsed });
     } catch (aiErr) {
-      console.warn('AI negotiation fallback:', aiErr);
-      return res.json({
-        success: true,
-        counter_offer_email: `Subject: ${candidateName} - Offer Discussion & Next Steps (${jobTitle})\n\nDear Hiring Team,\n\nThank you so much for extending the offer for the ${jobTitle} position at ${companyName}. I am genuinely excited about the opportunity to join the team and contribute to your initiatives.\n\nAfter reviewing the full details of the offer and taking into account current market benchmarks for this scope of responsibility—along with my proven track record of delivering measurable outcomes—I would like to discuss the base salary component. Based on the value and immediate impact I will deliver from Day 1, I am seeking a base salary of ${targetBase}.\n\nI am deeply enthusiastic about joining ${companyName} and am confident we can find a package that works for both sides. If base flexibility is constrained by internal bands, I would be open to discussing bridging the difference via a one-time sign-on bonus or an accelerated 6-month performance review.\n\nThank you again for your time and advocacy throughout this process. I look forward to connecting!\n\nWarm regards,\n${candidateName}`,
-        phone_script: `When the recruiter calls or when you dial in:\n\n1. State genuine excitement first:\n"Thank you so much for walking me through the offer. I loved meeting the team and am genuinely thrilled about the mission at ${companyName}."\n\n2. Introduce the counter respectfully with rationale:\n"I took time to review the complete package against market benchmarks and the specific scope of this role. Given my proven track record in driving measurable impact and delivering key objectives, I was targeting ${targetBase} base salary."\n\n3. PAUSE (Do not speak first. Let the recruiter process and respond).\n\n4. If they indicate constraint:\n"I completely understand internal band structures. If base is strictly capped at ${offeredBase}, could we explore a one-time sign-on bonus or an equity adjustment to bridge the difference?"`,
-        talking_points: [
-          `Market Benchmark: Compensation for ${jobTitle} roles with comparable scope and impact sits in the ${targetBase} range.`,
-          'Immediate Impact: Proven track record delivering key business outcomes and high-quality results from Day 1.',
-          'Value Creation: Direct ability to optimize workflows and scale initiatives effectively.',
-        ],
-        objection_handlers: [
-          {
-            objection: 'Our salary bands for this level are strictly non-negotiable.',
-            response: 'I respect your internal equity framework completely. If the base salary cannot be adjusted, could we explore flexibility in a sign-on bonus, extra equity RSUs, or an agreed 6-month compensation review milestone?',
-            backup_tactic: 'Negotiate for professional development budget, remote equipment allowance, or additional PTO.',
-          },
-          {
-            objection: 'We have other qualified candidates waiting if you cannot accept today.',
-            response: 'I appreciate you letting me know where we stand, and I want to make this commitment with 100% confidence. Could we take until tomorrow at 12 PM so I can review the written benefits details and give you my definitive answer?',
-            backup_tactic: 'Reiterate top enthusiasm while maintaining professional composure; high-value candidates never rush blindly.',
-          },
-        ],
-        market_benchmark_insight: `Current market data for ${jobTitle} positions at scaling tech companies places the mid-to-senior base between ${offeredBase} and ${targetBase}, typically paired with 10–15% bonus potential and annual equity incentives.`,
-      });
+      return res.status(503).json({ success: false, error: 'Could not generate this assessment. Please try again; no sample results were substituted.' });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Server error during negotiation generation' });
@@ -3231,7 +2705,7 @@ app.post('/api/behavioral-practice', async (req, res) => {
     const {
       question,
       candidateAnswer,
-      jobTitle = 'Operations Specialist',
+      jobTitle = 'Target Role',
       companyName = 'Target Employer',
     } = req.body;
 
@@ -3260,6 +2734,7 @@ Provide:
 2. Actionable feedback per dimension.
 3. 2-3 specific strengths.
 4. 1-2 weaknesses or red flags.
+Never add achievements, tools, metrics, targets, or outcomes absent from the candidate answer. Qualitative results are valid when numeric results are not supplied.
 5. "gold_standard_answer": A masterclass rewrite of the candidate's exact story in first person, elevating the vocabulary, tightening the structure, and highlighting measurable results while staying 100% true to their facts.
 
 Return ONLY a valid JSON object matching this schema:
@@ -3289,27 +2764,7 @@ Return ONLY a valid JSON object matching this schema:
       const parsed = JSON.parse(raw);
       return res.json({ success: true, ...parsed });
     } catch (aiErr) {
-      console.warn('AI behavioral practice fallback:', aiErr);
-      return res.json({
-        success: true,
-        overall_score: 86,
-        situation_task_score: 22,
-        situation_task_feedback: 'Clear context and business stakes. You established the operational deadline and customer impact well.',
-        action_ownership_score: 22,
-        action_ownership_feedback: 'Strong focus on personal initiative and root-cause analysis rather than generic team actions.',
-        results_metrics_score: 20,
-        results_metrics_feedback: 'Good results mentioned, but could be made punchier by emphasizing permanent recurrence prevention.',
-        delivery_polish_score: 22,
-        delivery_polish_feedback: 'Professional and crisp delivery with good executive pacing.',
-        strengths: [
-          'Strong personal ownership and rapid diagnostic thinking under pressure',
-          'Good inclusion of specific tooling and cross-functional coordination',
-        ],
-        weaknesses: [
-          'Ensure the final takeaway articulates the long-term system improvement to prove senior maturity',
-        ],
-        gold_standard_answer: `Situation: During a critical project milestone, our team experienced an unexpected technical bottleneck that risked our target delivery deadline.\n\nTask: As the lead contributor, I needed to identify the root cause and restore operational throughput within a tight timeframe without compromising quality.\n\nAction: I conducted an immediate cross-functional triage, analyzed system metrics to pinpoint the anomaly, and coordinated with engineering to deploy an interim mitigation while implementing a permanent fix.\n\nResult: We resolved the blocker within 30 minutes, maintained full SLA adherence, and documented preventative safeguards in our team runbook, eliminating similar failures permanently.`,
-      });
+      return res.status(503).json({ success: false, error: 'Could not generate this assessment. Please try again; no sample results were substituted.' });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Server error during behavioral grading' });
@@ -3328,11 +2783,13 @@ app.post('/api/roadmap-readiness', async (req, res) => {
       masterProfileText = '',
     } = req.body;
 
+    if (!masterProfileText.trim() || /No resume uploaded yet/i.test(masterProfileText)) return res.status(400).json({ success: false, error: 'Save your Master Profile before assessing readiness.' });
+
     const prompt = `You are a Principal Career Architect and Technical Hiring Director.
 Evaluate the candidate's master profile against the career roadmap for: "${roadmapTitle}".
 
 Candidate Master Profile:
-${(masterProfileText || 'Candidate master profile with core domain competencies, relevant project accomplishments, and verified technical skills.').slice(0, 6000)}
+${masterProfileText.slice(0, 6000)}
 
 Determine:
 1. "readiness_score": (0-100) realistic percentage indicating candidate's current qualification level for entry into/advancement in this role.
@@ -3372,33 +2829,7 @@ Return ONLY a valid JSON object matching this schema:
       const parsed = JSON.parse(raw);
       return res.json({ success: true, ...parsed });
     } catch (aiErr) {
-      console.warn('AI roadmap readiness fallback:', aiErr);
-      return res.json({
-        success: true,
-        readiness_score: 82,
-        readiness_level: 'READY',
-        summary: `You possess a solid foundation for ${roadmapTitle}, with demonstrated capabilities in core domain competencies and continuous skill growth.`,
-        matched_competencies: [
-          'Cross-functional execution and project delivery',
-          'Data-driven analysis and workflow optimization',
-          'Stakeholder collaboration and requirement scoping',
-          'Standard operating procedures and quality governance',
-        ],
-        priority_gaps: [
-          {
-            skill: 'Automated Python Scripting & API Orchestration',
-            rationale: 'Modern tech companies expect senior leaders to script repetitive operational workflows.',
-            recommended_action: 'Complete the Stage 3 automation project building a webhook alert monitor in Python.',
-            estimated_weeks: '2-3 weeks',
-          },
-          {
-            skill: 'Cloud Security Compliance (SOC2 / ISO 27001)',
-            rationale: 'Validates operational adherence in regulated enterprise software environments.',
-            recommended_action: 'Review SC-900 compliance standards and document an access audit runbook.',
-            estimated_weeks: '1-2 weeks',
-          },
-        ],
-      });
+      return res.status(503).json({ success: false, error: 'Could not generate this assessment. Please try again; no sample results were substituted.' });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Server error during roadmap readiness assessment' });
@@ -3406,15 +2837,159 @@ Return ONLY a valid JSON object matching this schema:
 });
 
 
-export async function handleApi(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const route = routes.find((r) => r.method === request.method && r.path === url.pathname);
-  if (!route) return Response.json({ error: 'Not found' }, { status: 404 });
-  let body: any = {};
-  if (request.method !== 'GET') {
-    try { body = await request.json(); } catch { body = {}; }
+// Bug Reports Store (stores up to 200 reports in memory and mirrors to Supabase user_data when available)
+interface BugReportRecord {
+  id: string;
+  subject: string;
+  description: string;
+  category: string;
+  severity: string;
+  screenshot?: string;
+  screenshotName?: string;
+  contactEmail?: string;
+  userId?: string;
+  diagnostics?: Record<string, any>;
+  status: string;
+  createdAt: string;
+}
+
+const bugReportsStore: BugReportRecord[] = [];
+
+app.post('/api/report-bug', async (req, res) => {
+  try {
+    const { subject, description, category, severity, screenshot, screenshotName, contactEmail, diagnostics } = req.body || {};
+    if (!subject || !String(subject).trim()) {
+      return res.status(400).json({ success: false, error: 'Subject is required' });
+    }
+    if (!description || !String(description).trim()) {
+      return res.status(400).json({ success: false, error: 'Description is required' });
+    }
+
+    const id = `BUG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const report: BugReportRecord = {
+      id,
+      subject: String(subject).trim().slice(0, 200),
+      description: String(description).trim().slice(0, 10000),
+      category: category || 'General',
+      severity: severity || 'medium',
+      screenshot: typeof screenshot === 'string' && screenshot.startsWith('data:image/') ? screenshot : undefined,
+      screenshotName: screenshotName ? String(screenshotName).slice(0, 100) : undefined,
+      contactEmail: contactEmail ? String(contactEmail).slice(0, 120) : undefined,
+      userId: req.userId || undefined,
+      diagnostics: typeof diagnostics === 'object' && diagnostics ? diagnostics : {},
+      status: 'open',
+      createdAt: new Date().toISOString(),
+    };
+
+    bugReportsStore.unshift(report);
+    if (bugReportsStore.length > 200) {
+      bugReportsStore.pop();
+    }
+
+    // Attempt to persist to Supabase user_data table if available
+    try {
+      const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('user_data').upsert({
+          user_id: req.userId || 'system_bug_reports',
+          key: `jobstudio_bug_${report.id}`,
+          value: JSON.stringify(report),
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      // In offline / local mock mode, in-memory store retains the report
+    }
+
+    console.log(`[BUG REPORT SUBMITTED] #${report.id} - ${report.subject} (${report.category}) by ${report.contactEmail || req.userId || 'guest'}`);
+
+    return res.json({
+      success: true,
+      id: report.id,
+      message: 'Bug report received successfully.',
+    });
+  } catch (err: any) {
+    console.error('Error in /api/report-bug:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to record bug report' });
   }
-  const req = { body, query: Object.fromEntries(url.searchParams), headers: Object.fromEntries(request.headers) };
+});
+
+app.get('/api/bug-reports', async (req, res) => {
+  return res.json({
+    success: true,
+    reports: bugReportsStore,
+    total: bugReportsStore.length,
+  });
+});
+
+export async function handleApi(request: Request): Promise<Response> {
+  console.log('>>> [handleApi] incoming request:', request.method, request.url);
+  console.log('>>> [handleApi] auth header:', request.headers.get('authorization'));
+  try {
+    const url = new URL(request.url);
+    const route = routes.find((r) => r.method === request.method && r.path === url.pathname);
+    if (!route) return Response.json({ error: 'Not found' }, { status: 404 });
+    let userId: string | null = null;
+    if (route.path !== '/api/health' && route.path !== '/api/report-bug' && route.path !== '/api/bug-reports') {
+      userId = await guard.verifyCaller(request);
+      if (!userId) return Response.json({ success: false, error: 'Please sign in to use this feature.' }, { status: 401 });
+    } else if (route.path === '/api/report-bug' || route.path === '/api/bug-reports') {
+      userId = await guard.verifyCaller(request).catch(() => null);
+    }
+    let body: any = {};
+    if (request.method !== 'GET') {
+      try { body = await request.json(); } catch { body = {}; }
+    }
+    if (body && typeof body === 'object') {
+      if (body.url) {
+        const reason = guard.unsafeUrlReason(body.url);
+        if (reason) return Response.json({ success: false, verified: false, error: reason }, { status: 400 });
+      }
+      if (body.job?.slug != null && !guard.SAFE_SLUG.test(String(body.job.slug))) {
+        return Response.json({ success: false, error: 'Invalid job reference.' }, { status: 400 });
+      }
+    }
+    if (route.path === '/api/entitlement') {
+      const plan = await guard.getUserPlan(userId!);
+      const pro = plan === 'pro';
+      const isPlus = plan === 'plus';
+      const used = await guard.getTailorUsage(userId!);
+      const limit = guard.getPlanLimit(plan);
+      return Response.json({
+        plan,
+        isPro: pro,
+        isPlus,
+        tailoredCount: used,
+        limit,
+        freeLimit: guard.FREE_TAILOR_LIMIT,
+        plusLimit: guard.PLUS_TAILOR_LIMIT,
+      });
+    }
+    let quotaUsed: number | null = null;
+    const userPlan = await guard.getUserPlan(userId!);
+    const planLimit = guard.getPlanLimit(userPlan);
+    if ((route.path === '/api/tailor' || route.path === '/api/evaluate') && userPlan !== 'pro') {
+      quotaUsed = await guard.getTailorUsage(userId!);
+      if (quotaUsed >= planLimit) {
+        const errorMsg = userPlan === 'plus'
+          ? 'You have reached your monthly limit of 50 tailored resumes on the Plus plan. Upgrade to Pro for unlimited tailoring.'
+          : 'You have reached the free tailoring limit for this month. Upgrade to Plus or Pro to continue.';
+        return Response.json({ success: false, error: errorMsg, quotaExceeded: true, plan: userPlan }, { status: 402 });
+      }
+    }
+    const req = { body, query: Object.fromEntries(url.searchParams), headers: Object.fromEntries(request.headers), userId };
+    const response = await runRoute(route, req);
+    if (route.path === '/api/tailor' && quotaUsed !== null && response.ok) {
+      try { await guard.incrementTailorUsage(userId!, quotaUsed); } catch (e) { console.error('usage update failed', e); }
+    }
+    return response;
+  } catch (err: any) {
+    console.error('Unhandled error in handleApi:', err);
+    return Response.json({ success: false, error: err?.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+async function runRoute(route: any, req: any): Promise<Response> {
   return await new Promise<Response>((resolve) => {
     let status = 200;
     const res: any = {

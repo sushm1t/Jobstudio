@@ -15,12 +15,12 @@ import { CinematicHome } from '@/jobstudio/components/CinematicHome';
 afterEach(cleanup);
 
 describe('Landing search navigation', () => {
-  it.each([0, 1])('opens signup/sign-in from search action %i', (index) => {
+  it('opens signup/sign-in from search action', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
     const navigate = vi.fn();
     render(<CinematicHome onNavigateToTab={navigate} />);
-    const action = screen.getAllByRole('button', { name: 'Start searching jobs' })[index];
-    if (!action) throw new Error(`Missing landing search action ${index}`);
+    const action = screen.getByRole('button', { name: 'Start searching jobs' });
+    expect(action).toBeInTheDocument();
     fireEvent.click(action);
     expect(navigate).toHaveBeenCalledExactlyOnceWith('auth');
     vi.unstubAllGlobals();

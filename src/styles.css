@@ -529,8 +529,13 @@ html.lenis, html.lenis body { height: auto; }
 .workspace-account strong { display: block; font-weight: 500; margin-bottom: 3px; }
 .workspace-account div > span { color: var(--subtle); font-size: 11px; }
 .workspace-avatar { display: grid; place-items: center; width: 30px; height: 30px; background: var(--surface-2); color: var(--muted-foreground); border-radius: 6px; font-size: 10px; }
+.workspace-active-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; background: var(--surface-2); color: var(--foreground); border: 1px solid var(--border); max-width: 100%; line-height: 1.4; }
+.workspace-active-dot { width: 6px; height: 6px; border-radius: 9999px; background: #10b981; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25); }
 .workspace-nav-group { margin: 16px 0 24px; }
-.workspace-nav-group > p { font-size: 10px; font-weight: 500; color: var(--subtle); padding: 0 12px; margin-bottom: 8px; }
+.workspace-nav-group > p { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--subtle); padding: 0 12px; margin-bottom: 8px; }
+.workspace-accordion-toggle summary::-webkit-details-marker { display: none; }
+.workspace-accordion-toggle summary { list-style: none; }
+.workspace-accordion-toggle[open] .accordion-chevron { transform: rotate(180deg); }
 .workspace-nav-item { display: flex; justify-content: flex-start; width: 100%; padding: 0 12px; gap: 10px; height: 38px; margin-bottom: 3px; font-size: 12px; font-weight: 400; color: var(--muted-foreground); border-radius: 5px; }
 .workspace-nav-item svg { color: var(--subtle); width: 16px; height: 16px; }
 .workspace-nav-item:hover { background: var(--surface); color: var(--foreground); }
@@ -624,7 +629,7 @@ html.lenis, html.lenis body { height: auto; }
 .job-workspace .workspace-main .workspace-discovery > div:first-child > div:first-child > div:first-child > span { display: none; }
 .job-workspace .workspace-main .workspace-discovery > div:first-child > div:first-child > div:last-child > span { background: none; padding: 0; }
 /* Shared workspace polish: flatten sections, retain individual records and paper. */
-.job-workspace .workspace-main > :is(.workspace-evaluator, .workspace-screening, .workspace-profile, .workspace-roadmaps, .workspace-applications, .workspace-cover-letter) > :is(.apple-card, .bg-card) { background: transparent !important; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 0; }
+.job-workspace .workspace-main > :is(.workspace-evaluator, .workspace-screening, .workspace-profile, .workspace-roadmaps, .workspace-applications, .workspace-cover-letter, .workspace-referral) > :is(.apple-card, .bg-card) { background: transparent !important; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 0; }
 .job-workspace .workspace-main :is(h2, h3, h4, h5):not(#printable-resume-container *):not(.workspace-letter-paper *) { font-weight: 500; line-height: 1.45; }
 .job-workspace .workspace-main h1 { font-size: 26px; font-weight: 500; }
 .job-workspace .workspace-main :is(.workspace-page-header, .workspace-document-toolbar) { padding-bottom: 20px; }
@@ -642,6 +647,10 @@ html.lenis, html.lenis body { height: auto; }
 .job-workspace .workspace-main .workspace-empty-symbol svg { width: 18px; height: 18px; }
 .job-workspace .workspace-main .workspace-screening > .space-y-6 > .bg-card { background: transparent !important; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 0; }
 .job-workspace .workspace-main .workspace-screening > .space-y-6 > .bg-card > :first-child > :first-child > span[class*="uppercase"] { background: transparent; border: 0; padding: 0; color: var(--subtle); }
+.workspace-roadmaps .roadmap-category-filters { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; align-items: center !important; min-width: 0 !important; overflow: visible !important; }
+.workspace-roadmaps .roadmap-category-filters button { flex: 0 0 auto !important; flex-shrink: 0 !important; min-width: max-content !important; white-space: nowrap !important; width: auto !important; max-width: none !important; border-radius: 9999px !important; }
+.role-dossier-nav { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
+.role-dossier-nav button { flex-shrink: 0 !important; white-space: nowrap !important; }
 @media (max-width: 1100px) {
   .job-workspace { --workspace-sidebar-width: 210px; }
   .job-workspace .workspace-main { padding: 24px 20px 48px; }
@@ -688,4 +697,105 @@ html.lenis, html.lenis body { height: auto; }
 .app-col-dragover { background: var(--brand-weak, rgba(45,212,191,.08)); box-shadow: inset 0 0 0 1.5px var(--brand, #2dd4bf); }
 @media (max-width: 767px) {
   .app-col { flex-basis: 220px; min-width: 220px; }
+}
+
+/* Onboarding: welcome screen, tour card, getting-started checklist */
+.onboarding-welcome { max-width: 56rem; margin: 3rem auto; padding: 2.5rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--card); }
+.onboarding-eyebrow { font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); }
+.onboarding-welcome h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 600; margin: .5rem 0 .75rem; color: var(--foreground); }
+.onboarding-lead { color: var(--muted-foreground); max-width: 36rem; }
+.onboarding-path { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0; margin: 2rem 0; border-top: 1px solid var(--border); }
+.onboarding-path li { display: flex; flex-direction: column; gap: .4rem; padding: 1.25rem 1rem 1.25rem 0; border-bottom: 1px solid var(--border); }
+.onboarding-path li svg { width: 1.25rem; height: 1.25rem; color: var(--primary); }
+.onboarding-path strong { color: var(--foreground); font-size: .95rem; }
+.onboarding-path span { color: var(--muted-foreground); font-size: .85rem; }
+.onboarding-path .onboarding-step-index { font-size: .7rem; font-variant-numeric: tabular-nums; }
+.onboarding-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+
+.job-workspace .workspace-main > .tour-card, .tour-card { position: fixed; margin: 0; right: 1.5rem; bottom: 1.5rem; z-index: 60; width: min(24rem, calc(100vw - 2rem)); max-width: min(24rem, calc(100vw - 2rem)); padding: 1.25rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 20px 50px -20px color-mix(in oklab, var(--foreground) 35%, transparent); }
+.tour-card h2 { font-size: 1.125rem; font-weight: 600; margin-bottom: .5rem; }
+.tour-card p { font-size: .875rem; color: var(--muted-foreground); margin-bottom: .5rem; }
+.tour-card p strong { color: var(--foreground); }
+.tour-card .tour-tip { font-size: .8rem; }
+.tour-card-head { display: flex; justify-content: space-between; align-items: center; font-size: .75rem; color: var(--muted-foreground); margin-bottom: .25rem; }
+.tour-card-actions { display: flex; justify-content: space-between; gap: .5rem; margin-top: .75rem; }
+.tour-highlight { outline: 2px solid var(--primary) !important; outline-offset: 3px; border-radius: .5rem; position: relative; z-index: 1; }
+@media (max-width: 640px) { .job-workspace .workspace-main > .tour-card, .tour-card { left: .75rem; right: .75rem; bottom: .75rem; width: auto; max-width: none; } }
+
+.job-workspace .workspace-main > .onboarding-checklist, .onboarding-checklist { position: fixed; margin: 0; right: 1.5rem; bottom: 1.5rem; z-index: 50; width: 17rem; max-width: 17rem; padding: 1rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--popover); color: var(--popover-foreground); }
+.onboarding-checklist-head { display: flex; align-items: center; gap: .5rem; font-size: .875rem; }
+.onboarding-checklist-head span { margin-left: auto; color: var(--muted-foreground); font-size: .75rem; }
+.onboarding-progress { height: 3px; background: var(--muted); border-radius: 999px; margin: .5rem 0 .75rem; overflow: hidden; }
+.onboarding-progress span { display: block; height: 100%; background: var(--primary); }
+.onboarding-checklist ul { display: flex; flex-direction: column; gap: .25rem; }
+.onboarding-checklist li button { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .35rem .25rem; font-size: .825rem; color: var(--foreground); text-align: left; border-radius: .375rem; }
+.onboarding-checklist li button:hover { background: var(--accent); }
+.onboarding-checklist li button svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.onboarding-checklist li button.is-done { color: var(--muted-foreground); text-decoration: line-through; }
+.onboarding-checklist li button.is-done svg { color: var(--primary); }
+@media (max-width: 640px) { .job-workspace .workspace-main > .onboarding-checklist, .onboarding-checklist { left: .75rem; right: .75rem; bottom: .75rem; width: auto; max-width: none; } }
+
+/* Phone layouts: let content grow rather than squeeze or conceal its labels.
+   Screen-only rules keep paper exports and desktop layouts unchanged. */
+@media screen and (max-width: 767px) {
+  .workspace-topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .workspace-topbar > div:last-child { gap: 8px; flex-shrink: 0; }
+  .workspace-topbar > div:last-child button { width: 36px; height: 36px; padding: 8px; flex-shrink: 0; }
+  .workspace-topbar > div:last-child button span { display: none; }
+  .workspace-mobile-navigation { width: 100%; }
+  .workspace-mobile-navigation select { max-width: none; min-height: 44px; }
+  .job-workspace .workspace-main :is(.truncate, [class*="line-clamp-"]):not(#printable-resume-container *) {
+    overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
+    -webkit-line-clamp: unset; line-clamp: unset; display: block; max-width: 100%;
+  }
+  .job-workspace .workspace-main :is(h1, h2, h3, h4, h5, p, a, label) { overflow-wrap: anywhere; }
+  .job-workspace .workspace-main button:not(#printable-resume-container *) { white-space: normal; height: auto; }
+  .job-workspace .workspace-main button svg { flex-shrink: 0; }
+  .job-workspace .workspace-main .overflow-x-auto > button { flex-shrink: 0; white-space: nowrap; }
+  .workspace-section-tabs button { min-height: 52px; }
+  .workspace-document-toolbar > div:first-child > div { flex-wrap: wrap; }
+  .workspace-roadmaps .roadmap-category-filters { display: flex; flex-wrap: wrap; overflow: visible; gap: 8px; }
+  .workspace-roadmaps .roadmap-category-filters button { flex: 0 0 auto !important; white-space: nowrap !important; text-align: left; padding: 6px 12px; }
+  .workspace-roadmaps .roadmap-detail-navigation { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .workspace-roadmaps .roadmap-detail-navigation > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .workspace-roadmaps .roadmap-detail-navigation button { min-height: 40px; }
+  .workspace-roadmaps .roadmap-skill-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+  .workspace-roadmaps .roadmap-skill-heading > div { align-items: flex-start; }
+  .workspace-roadmaps .roadmap-skill-heading > div > button { margin-top: 2px; }
+  .workspace-roadmaps .roadmap-progress-heading { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .workspace-roadmaps .roadmap-stats { flex-wrap: wrap; gap: 6px 10px; }
+  .workspace-roadmaps .roadmap-card-stats { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .job-workspace .mobile-dialog-panel { max-height: calc(100dvh - 32px); overflow-y: auto; margin-block: 0; min-width: 0; }
+  .mobile-dialog-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+  .mobile-dialog-heading > div { min-width: 0; }
+  .mobile-dialog-heading > div > div { flex-wrap: wrap; }
+  .mobile-dialog-heading svg { flex-shrink: 0; }
+  .job-workspace .mobile-recruiter-panel { display: flex; flex-direction: column; }
+  .mobile-recruiter-panel > .mobile-dialog-heading { padding: 16px; flex-shrink: 0; background: var(--surface); }
+  .mobile-recruiter-panel > .mobile-dialog-heading > div { align-items: flex-start; }
+  .mobile-recruiter-panel > .mobile-dialog-heading > div > div:first-child { flex-shrink: 0; }
+  .mobile-recruiter-panel > .mobile-dialog-heading > div > div:last-child > div { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .mobile-recruiter-panel > .mobile-dialog-heading h3 { overflow-wrap: anywhere; }
+  .mobile-recruiter-panel > .mobile-dialog-content { min-height: 0; padding: 16px; }
+  .mobile-application-heading { padding-right: 36px; flex-wrap: wrap; }
+  .onboarding-welcome { margin: 0 auto; padding: 20px 0; border: none; }
+  .onboarding-path { grid-template-columns: 1fr; }
+  .job-workspace .workspace-main > .onboarding-checklist { position: static; width: 100%; margin-bottom: 24px; }
+  .tour-card { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .job-workspace .workspace-main h1 { font-size: 24px; }
+  .job-workspace .workspace-main :is(input:not([type=checkbox]):not([type=radio]), select, textarea):not(#printable-resume-container *) { font-size: 16px; }
+  .workspace-letter > .bg-card > div:first-child > div, .workspace-letter > .bg-card > div:last-child { flex-wrap: wrap; }
+  .workspace-profile .profile-mode-tabs { display: grid; grid-template-columns: 1fr; width: 100%; gap: 4px; }
+  .workspace-profile .profile-mode-tabs button { min-height: 40px; justify-content: flex-start; }
+  .workspace-profile .profile-save-context { display: grid; grid-template-columns: 32px minmax(0, 1fr); width: 100%; align-items: start; }
+  .workspace-profile .profile-save-context > div:first-child { width: 32px; height: 32px; }
+  .workspace-pricing table { min-width: 560px; }
+  .workspace-pricing .overflow-x-auto { scrollbar-width: thin; padding-bottom: 8px; }
+  .app-board { scroll-snap-type: x proximity; }
+  .app-col { scroll-snap-align: start; }
+  #printable-resume-container { overflow-wrap: anywhere; padding: 20px 16px; }
+  #printable-resume-container :is(p, ul) { text-align: left; font-size: 13px; line-height: 1.5; }
+  #printable-resume-container .education-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+  #printable-resume-container .resume-header a { overflow-wrap: anywhere; min-width: 0; }
+  #printable-resume-container textarea { background: var(--paper-background); color: var(--paper-ink); border: 1px solid var(--paper-border); font-size: 16px; }
 }

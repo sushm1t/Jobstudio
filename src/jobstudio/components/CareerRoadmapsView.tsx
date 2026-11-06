@@ -1,5 +1,6 @@
 // @ts-nocheck -- ported verbatim from the original project
 import React, { useState, useMemo, useEffect } from 'react';
+import { LoadingProgress } from './LoadingProgress';
 import {
   CAREER_ROADMAPS,
   CareerRoadmap,
@@ -179,6 +180,30 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
     });
   }, [selectedCategory, searchQuery]);
 
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: CAREER_ROADMAPS.length };
+    CAREER_ROADMAPS.forEach((r) => {
+      counts[r.category] = (counts[r.category] || 0) + 1;
+    });
+    return counts;
+  }, []);
+
+  const categories = useMemo(
+    () => [
+      'All',
+      'Engineering',
+      'AI & Data',
+      'Cloud & DevOps',
+      'Operations',
+      'Product & Project',
+      'Solutions & GTM',
+      'Business & Finance',
+      'Travel & Hospitality',
+      'Creative & Design',
+    ],
+    []
+  );
+
   // Calculate completed progress for active roadmap
   const activeRoadmapProgress = useMemo(() => {
     if (!activeRoadmap) return { completed: 0, total: 0, percent: 0 };
@@ -226,7 +251,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
       {activeRoadmap ? (
         <div className="space-y-6">
           {/* Back button & quick navigation */}
-          <div className="flex items-center justify-between">
+          <div className="roadmap-detail-navigation flex items-center justify-between">
             <button
               type="button"
               onClick={() => setSelectedRoadmapId(null)}
@@ -281,7 +306,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                   {activeRoadmap.description}
                 </p>
-                <div className="flex items-center gap-3 text-xs text-subtle font-mono pt-1">
+                <div className="roadmap-stats flex items-center gap-3 text-xs text-subtle font-mono pt-1">
                   <span>{activeRoadmap.stages.length} stages</span>
                   <span>·</span>
                   <span>{activeRoadmapProgress.total} skills</span>
@@ -301,7 +326,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                   className="px-4 py-2 bg-brand/10 hover:bg-brand/15 border border-brand/20 text-brand text-xs font-semibold rounded-full transition-all cursor-pointer inline-flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{isAssessingReadiness ? 'Analyzing Profile...' : 'Assess My Readiness'}</span>
+                  <LoadingProgress inline active={isAssessingReadiness} label="Analyzing profile" idleLabel="Assess My Readiness" expectedSeconds={35} resultToken={readinessData} />
                 </button>
 
                 <button
@@ -340,7 +365,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
 
           {/* Progress Tracker Card */}
           <div className="bg-card rounded-2xl border border-border p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between text-xs font-mono">
+            <div className="roadmap-progress-heading flex items-center justify-between text-xs font-mono">
               <span className="text-subtle font-semibold tracking-wider uppercase">
                 TRACK YOUR PROGRESS
               </span>
@@ -473,7 +498,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                         }`}
                       >
                         {/* Skill Row Header */}
-                        <div className="p-4 flex items-center justify-between gap-3">
+                        <div className="roadmap-skill-heading p-4 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
                             {/* Checkbox */}
                             <button
@@ -625,113 +650,188 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
               <ArrowRight className="w-4 h-4 text-subtle group-hover:text-brand group-hover:translate-x-1 transition-all shrink-0" />
             </div>
 
-            {/* Category Filter Pills & Search */}
-            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-border">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-                {['All', 'Engineering', 'AI & Data', 'Cloud & DevOps', 'Product & Project', 'Solutions & GTM', 'Operations'].map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3.5 py-1.5 rounded-full font-mono text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                      selectedCategory === cat
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-surface text-muted-foreground hover:text-foreground hover:bg-surface-2'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+            {/* Search and Domain Filters */}
+            <div className="pt-4 border-t border-border space-y-4">
+              {/* Row 1: Search Bar & Result Summary */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search roles, skills, or tech (e.g. React, Python, Cloud)..."
+                    className="w-full pl-10 pr-9 py-2 bg-surface focus:bg-card border border-border focus:border-brand rounded-xl text-xs text-foreground placeholder:text-subtle focus:outline-none transition-all"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-subtle hover:text-foreground text-xs font-bold p-1 cursor-pointer"
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-subtle shrink-0">
+                  <span>
+                    Showing <strong className="text-foreground font-semibold">{filteredRoadmaps.length}</strong> of {CAREER_ROADMAPS.length} learning paths
+                  </span>
+                  {(selectedCategory !== 'All' || searchQuery.trim()) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory('All');
+                        setSearchQuery('');
+                      }}
+                      className="text-xs font-semibold text-brand hover:underline cursor-pointer ml-1"
+                    >
+                      Reset filters
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative sm:w-64">
-                <Search className="w-3.5 h-3.5 text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter by skill, role, tech..."
-                  className="w-full pl-8 pr-3 py-1.5 bg-surface focus:bg-card border border-transparent focus:border-brand rounded-full text-xs text-foreground placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand/10 transition-all"
-                />
+              {/* Row 2: Category Filter Pills */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider block">
+                  Browse by Domain:
+                </span>
+                <div className="roadmap-category-filters flex flex-wrap items-center gap-2">
+                  {categories.map((cat) => {
+                    const isSelected = selectedCategory === cat;
+                    const count = categoryCounts[cat] || 0;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                            : 'bg-surface text-muted-foreground hover:text-foreground hover:bg-surface-2 border border-border/80'
+                        }`}
+                      >
+                        <span>{cat}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                            isSelected
+                              ? 'bg-card/25 text-primary-foreground font-bold'
+                              : 'bg-surface-2 text-subtle'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Roadmaps Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredRoadmaps.map((roadmap) => (
-              <div
-                key={roadmap.id}
-                onClick={() => setSelectedRoadmapId(roadmap.id)}
-                className="bg-card hover:bg-[#FAFAFC] p-6 rounded-3xl border border-border hover:border-brand/40 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-5 group shadow-elevated hover:shadow-elevated hover:-translate-y-0.5"
+          {filteredRoadmaps.length === 0 ? (
+            <div className="p-12 text-center bg-card rounded-2xl border border-border space-y-3 shadow-xs">
+              <div className="w-10 h-10 rounded-full bg-surface text-subtle flex items-center justify-center mx-auto">
+                <Search className="w-5 h-5" />
+              </div>
+              <h3 className="font-display font-semibold text-base text-foreground">
+                No learning paths found
+              </h3>
+              <p className="text-xs text-subtle max-w-sm mx-auto">
+                {selectedCategory !== 'All'
+                  ? `There are currently no learning paths in "${selectedCategory}". Check back soon or browse another domain.`
+                  : `No learning paths match "${searchQuery}". Try searching for another skill, role, or technology.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('All');
+                  setSearchQuery('');
+                }}
+                className="mt-2 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer"
               >
-                <div className="space-y-3.5">
-                  {/* Top Stack Icons + Optional Badge */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {roadmap.coreStack.slice(0, 4).map((tech) => (
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredRoadmaps.map((roadmap) => (
+                <div
+                  key={roadmap.id}
+                  onClick={() => setSelectedRoadmapId(roadmap.id)}
+                  className="bg-card hover:bg-surface p-6 rounded-3xl border border-border hover:border-brand/40 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-5 group shadow-elevated hover:shadow-elevated hover:-translate-y-0.5"
+                >
+                  <div className="space-y-3.5">
+                    {/* Top Stack Icons + Optional Badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {roadmap.coreStack.slice(0, 4).map((tech) => (
+                          <span
+                            key={tech.name}
+                            className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-surface border border-border text-foreground"
+                            title={tech.name}
+                          >
+                            {tech.tag}
+                          </span>
+                        ))}
+                        {roadmap.coreStack.length > 4 && (
+                          <span className="text-[10px] font-mono text-subtle">
+                            +{roadmap.coreStack.length - 4}
+                          </span>
+                        )}
+                      </div>
+
+                      {roadmap.badge && (
                         <span
-                          key={tech.name}
-                          className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-surface border border-border text-foreground"
-                          title={tech.name}
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                            roadmap.badge.toUpperCase() === 'START HERE'
+                              ? 'bg-brand/10 text-brand border border-brand/20'
+                              : 'bg-danger/10 text-danger border border-danger/20'
+                          }`}
                         >
-                          {tech.tag}
-                        </span>
-                      ))}
-                      {roadmap.coreStack.length > 4 && (
-                        <span className="text-[10px] font-mono text-subtle">
-                          +{roadmap.coreStack.length - 4}
+                          {roadmap.badge}
                         </span>
                       )}
                     </div>
 
-                    {roadmap.badge && (
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          roadmap.badge.toUpperCase() === 'START HERE'
-                            ? 'bg-brand/10 text-brand border border-brand/20'
-                            : 'bg-danger/10 text-danger border border-danger/20'
-                        }`}
-                      >
-                        {roadmap.badge}
-                      </span>
-                    )}
-                  </div>
+                    {/* Title & Subtitle */}
+                    <div className="space-y-1">
+                      <h3 className="font-display font-bold text-lg text-foreground group-hover:text-brand transition-colors tracking-tight">
+                        {roadmap.title}
+                      </h3>
+                      <p className="text-[11px] font-mono text-brand">
+                        {roadmap.subtitle}
+                      </p>
+                    </div>
 
-                  {/* Title & Subtitle */}
-                  <div className="space-y-1">
-                    <h3 className="font-display font-bold text-lg text-foreground group-hover:text-brand transition-colors tracking-tight">
-                      {roadmap.title}
-                    </h3>
-                    <p className="text-[11px] font-mono text-brand">
-                      {roadmap.subtitle}
+                    {/* Description snippet */}
+                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                      {roadmap.description}
                     </p>
                   </div>
 
-                  {/* Description snippet */}
-                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-                    {roadmap.description}
-                  </p>
+                  {/* Footer Stats */}
+                  <div className="roadmap-card-stats pt-3.5 border-t border-border flex items-center justify-between text-xs text-subtle font-mono group-hover:text-foreground transition-colors">
+                    <span>
+                      {roadmap.stages.length} stages · {roadmap.stages.flatMap((s) => s.skills).length} skills · {roadmap.stages.flatMap((s) => s.skills).flatMap((k) => k.resources).length} resources
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-brand group-hover:translate-x-1 transition-transform" />
+                  </div>
                 </div>
-
-                {/* Footer Stats */}
-                <div className="pt-3.5 border-t border-border flex items-center justify-between text-xs text-subtle font-mono group-hover:text-foreground transition-colors">
-                  <span>
-                    {roadmap.stages.length} stages · {roadmap.stages.flatMap((s) => s.skills).length} skills · {roadmap.stages.flatMap((s) => s.skills).flatMap((k) => k.resources).length} resources
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-brand group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* 2-Minute Career Quiz Modal */}
       {isQuizOpen && (
         <div className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card text-foreground rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-border shadow-2xl space-y-5 animate-scale-up">
+          <div role="dialog" aria-modal="true" aria-label="Career Path Matcher" className="mobile-dialog-panel bg-card text-foreground rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-border shadow-2xl space-y-5 animate-scale-up">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-brand" />

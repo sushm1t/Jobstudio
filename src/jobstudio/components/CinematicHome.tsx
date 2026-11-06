@@ -17,20 +17,20 @@ import {
 gsap.registerPlugin(ScrollTrigger);
 
 const JOBS = [
-  { t: 'Senior Operations Analyst', c: 'Stripe', l: 'Dublin · Hybrid', s: 92 },
-  { t: 'Operations Systems Lead', c: 'Apex', l: 'London · Remote', s: 88 },
-  { t: 'Support Analytics Manager', c: 'Linear', l: 'Remote · EU', s: 74 },
-  { t: 'Workforce Planning Analyst', c: 'Notion', l: 'Amsterdam', s: 61 },
-  { t: 'Trust & Safety Specialist', c: 'Figma', l: 'Remote', s: 55 },
+  { t: 'Senior Distributed Systems Engineer', c: 'Stripe', l: 'San Francisco · Hybrid', s: 94 },
+  { t: 'Staff Backend Infrastructure Engineer', c: 'Linear', l: 'Remote · Global', s: 91 },
+  { t: 'Principal Platform Engineer', c: 'Figma', l: 'New York · Remote', s: 87 },
+  { t: 'Lead Cloud Infrastructure Architect', c: 'Notion', l: 'Remote · US', s: 76 },
+  { t: 'Site Reliability Engineering Lead', c: 'Revolut', l: 'London · Remote', s: 62 },
 ];
-const MATCH = ['SQL', 'Queue Mgmt', 'Process Optimization', 'Looker', 'SLA Ownership'];
-const MISS = ['Python', 'dbt'];
+const MATCH = ['Go', 'Kubernetes', 'Distributed Systems', 'PostgreSQL', 'System Design'];
+const MISS = ['Rust', 'gRPC'];
 const POSTED = ['2h ago', '5h ago', '1d ago', '2d ago'];
 const QUESTIONS = [
-  { k: 'Behavioural', q: 'Tell me about a time you handled an urgent technical issue under pressure.' },
-  { k: 'Technical', q: 'How would you design a real-time queue health dashboard?' },
-  { k: 'Behavioural', q: 'Describe a conflict with engineering and how you resolved it.' },
-  { k: 'Role-specific', q: 'Which SLA metrics would you prioritise in your first 30 days?' },
+  { k: 'Technical', q: 'How would you design a distributed, idempotent payment processing engine?' },
+  { k: 'Behavioural', q: 'Tell me about a high-severity production outage you resolved under pressure.' },
+  { k: 'System Design', q: 'How would you partition an event streaming cluster to scale to 100k events/sec?' },
+  { k: 'Role-specific', q: 'Which latency thresholds and reliability SLAs would you establish in your first 30 days?' },
 ];
 
 function SampleTag() {
@@ -67,7 +67,7 @@ function SceneCopy({ idx, eyebrow, title, steps, cta, onCta }) {
   );
 }
 
-export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: 'signin' | 'signup') => void }> = ({ onNavigateToTab }) => {
+export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> = ({ onNavigateToTab }) => {
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -234,7 +234,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
             Job Studio searches live job boards, scores every role against your real experience, rewrites your resume for each one and gets you ready for the interview.
           </p>
           <div className="cine-hero-ctas mt-9 flex flex-wrap items-center justify-center gap-3">
-            <button onClick={() => onNavigateToTab('auth', 'signup')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
+            <button onClick={() => onNavigateToTab('auth')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
           </div>
         </div>
 
@@ -324,7 +324,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_150px] gap-4 items-start">
             <div>
               <div className="cine-label">Your resume</div>
-              {['5+ yrs operations analysis', 'SQL investigations at scale', 'Process & SLA optimization', 'BI & executive reporting', 'Cross-functional team leadership'].map((t, i) => (
+              {['Relevant work history', 'Analytical problem solving', 'Team coordination', 'Reporting experience', 'Service operations'].map((t, i) => (
                 <div key={i} className="cine-resume-line">{t}</div>
               ))}
             </div>
@@ -358,13 +358,13 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
         <div className="cine-stage grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-4">
           <div className="cine-doc paper relative overflow-hidden">
             <div className="cine-scan" aria-hidden />
-            <div className="text-[13px] font-bold tracking-wide">ALEX MORGAN</div>
-            <div className="text-[10px] opacity-60 mb-3">Operations &amp; Systems Analyst</div>
+            <div className="text-[13px] font-bold tracking-wide">TOM CRUISE</div>
+            <div className="text-[10px] opacity-60 mb-3">Staff Software Engineer · Distributed Systems &amp; Cloud</div>
             <div className="text-[10px] font-semibold tracking-widest opacity-70 mb-1.5">EXPERIENCE</div>
             {[
-              ['Monitored daily system workflows.', 'Optimized multi-region queue workflows, maintaining 99.2% SLA adherence across 450+ team members.'],
-              ['Built database reports.', 'Engineered automated SQL tracking pipelines, reducing manual query latency and cycle times by 32%.'],
-              ['Managed critical issue triage.', 'Standardized cross-functional issue triage workflows, reducing mean time to resolution by 40%.'],
+              ['Wrote backend APIs in Go and Node.', 'Architected distributed Go microservices handling 45,000 req/sec at 99.99% uptime.'],
+              ['Maintained PostgreSQL queries.', 'Optimized PostgreSQL sharding and indexes, cutting p99 query latency by 68%.'],
+              ['Managed service deployments.', 'Engineered Kubernetes GitOps pipelines enabling zero-downtime canary rollouts.'],
             ].map(([o, n], i) => (
               <div key={i} className="relative min-h-[34px] text-[11px] leading-snug mb-1.5 pl-3">
                 <span className="absolute left-0 top-1.5 w-1 h-1 rounded-full bg-current opacity-60" />
@@ -373,16 +373,16 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
               </div>
             ))}
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {['SLA', 'SQL', 'Automation', 'Workflow'].map((k) => <span key={k} className="cine-kw">{k}</span>)}
+              {['Go', 'Kubernetes', 'PostgreSQL', 'Distributed Systems'].map((k) => <span key={k} className="cine-kw">{k}</span>)}
             </div>
           </div>
           <div className="space-y-3">
             <div className="cine-window p-4">
               <div className="cine-label">ATS check</div>
               <div className="cine-bar h-2"><div className="cine-ats-fill" /></div>
-              <div className="cine-ats-badge mt-3 inline-flex items-center gap-1.5 text-xs text-success"><ShieldCheck className="w-3.5 h-3.5" /> 96 / 100 · 1 page</div>
+              <div className="cine-ats-badge mt-3 inline-flex items-center gap-1.5 text-xs text-success"><ShieldCheck className="w-3.5 h-3.5" /> 98 / 100 · 1 page</div>
             </div>
-            {['Add numbers to your results', 'Use the job’s wording: “SLA”', 'Put incident leadership first'].map((t, i) => (
+            {['Quantify latency & scale metrics', 'Highlight distributed architecture', 'Put system impact first'].map((t, i) => (
               <div key={i} className="cine-tip"><Sparkles className="w-3.5 h-3.5 text-brand shrink-0" />{t}</div>
             ))}
             <SampleTag />
@@ -392,8 +392,8 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
 
       {/* ================= SCENE 4 ================= */}
       <section className="cine-scene cine-s4">
-        <SceneCopy idx={4} eyebrow="Prepare" title="Walk in already knowing the questions."
-          steps={['Questions written for this role', 'Behavioural and technical, sorted', 'Answers laid out in STAR format', 'Track how ready you are']}
+        <SceneCopy idx={4} eyebrow="Prepare" title="Walk in ready for every tough question."
+          steps={['Targeted questions modeled on this role', 'Behavioural and technical scenarios, sorted', 'Answers laid out in STAR format', 'Track how ready you are']}
           cta="Practise interviews" onCta={() => onNavigateToTab('screening')} />
         <Window title="Interview prep · Stripe" className="cine-stage">
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-4">
@@ -444,11 +444,11 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
                 <div className="flex items-center justify-between mb-3"><span className="text-xs uppercase tracking-widest text-subtle">{c}</span><span className="text-[11px] font-mono text-subtle">{[3, 1, 0][ci]}</span></div>
                 <div className="space-y-2 min-h-[150px]">
                   {ci === 0 && (<>
-                    <div className="cine-kcard cine-move-b"><FileText className="w-3.5 h-3.5 text-brand" /> Stripe · Ops Analyst</div>
-                    <div className="cine-kcard cine-move-a"><FileText className="w-3.5 h-3.5 text-brand" /> Apex · Ops Lead</div>
-                    <div className="cine-kcard"><FileText className="w-3.5 h-3.5 text-subtle" /> Linear · Support Mgr</div>
+                    <div className="cine-kcard cine-move-b"><FileText className="w-3.5 h-3.5 text-brand" /> Stripe · Staff Backend Engineer</div>
+                    <div className="cine-kcard cine-move-a"><FileText className="w-3.5 h-3.5 text-brand" /> Linear · Distributed Systems Engineer</div>
+                    <div className="cine-kcard"><FileText className="w-3.5 h-3.5 text-subtle" /> Figma · Principal Platform Architect</div>
                   </>)}
-                  {ci === 1 && <div className="cine-kcard"><FileText className="w-3.5 h-3.5 text-subtle" /> Notion · WFM Analyst</div>}
+                  {ci === 1 && <div className="cine-kcard"><FileText className="w-3.5 h-3.5 text-subtle" /> Notion · Lead Cloud Engineer</div>}
                 </div>
               </div>
             ))}
@@ -456,14 +456,6 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string, authMode?: '
           <div className="mt-4"><SampleTag /></div>
         </div>
         <div className="mt-10 text-center"><button onClick={() => onNavigateToTab('applied')} className="cine-link">Open my applications <ArrowRight className="w-4 h-4" /></button></div>
-      </section>
-
-      {/* ================= FINAL CTA ================= */}
-      <section className="cine-final cine-reveal">
-        <h2 className="cine-display">Stop sending generic resumes.<br /><span className="cine-grad">Start getting interview-ready.</span></h2>
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <button onClick={() => onNavigateToTab('auth', 'signup')} className="cine-btn-primary">Start searching jobs <ArrowRight className="w-4 h-4" /></button>
-        </div>
       </section>
     </div>
   );

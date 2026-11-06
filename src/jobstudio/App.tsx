@@ -5,25 +5,29 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Bug, CheckCircle2, ExternalLink } from 'lucide-react';
 import { Header } from './components/Header';
-import { LandingHeader } from './components/LandingHeader';
+import { BusyIndicator } from './components/BusyIndicator';
 import { WorkspaceNavigation } from './components/WorkspaceNavigation';
 import { HomeView } from './components/HomeView';
 import { AuthView } from './components/AuthView';
-import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { installCloudSync, startCloudSession, endCloudSession } from './utils/cloudSync';
 import { CinematicHome } from './components/CinematicHome';
 import { CareerRoadmapsView } from './components/CareerRoadmapsView';
 import { JobEvaluatorView } from './components/JobEvaluatorView';
-import { ResumeDocument, TailoredRoleItem } from './components/ResumeDocument';
+import { ResumeDocument } from './components/ResumeDocument';
 import { CoverLetterView } from './components/CoverLetterView';
+import { ReferralMessageView } from './components/ReferralMessageView';
 import { ScreeningAnswersView } from './components/ScreeningAnswersView';
 import { CandidateProfileModal } from './components/CandidateProfileModal';
 import { AppliedJobsView } from './components/AppliedJobsView';
 import { PricingView } from './components/PricingView';
 import { ProfileBuilderView } from './components/ProfileBuilderView';
 import { RecruiterReviewModal, RecruiterPanelData } from './components/RecruiterReviewModal';
+import { ReportBugModal } from './components/ReportBugModal';
 import { generatePlainTextResume } from './utils/pdfExport';
+import { sortExperiencesReverseChronological } from './utils/chronology';
 import {
   getUserMasterProfile,
   saveUserMasterProfile,
@@ -32,14 +36,9 @@ import {
 } from './data/candidateProfiles';
 import {
   PRESET_JOBS,
-  DEMO_PROFILE_TEXT,
-  DEMO_USER_INFO,
   MASTER_BASE_RESUME,
   EMPTY_EVALUATION,
   EMPTY_COVER_LETTER,
-  EMPTY_RESUME,
-  INITIAL_SCREENING_ANSWERS,
-  INITIAL_INTERVIEW_PREP_QUESTIONS,
   JobEvaluationData,
   TailoredResumeData,
   CoverLetterData,
@@ -51,6 +50,15 @@ import {
 } from './data/defaultData';
 import { applyJobUpdate, withCreatedEvent, withNewResumeVersion } from './data/applicationHistory';
 import { downloadResumeAsPdf } from './utils/pdfExport';
+import { installApiAuth, fetchEntitlement } from './utils/apiAuth';
+import { WelcomeScreen } from './components/onboarding/WelcomeScreen';
+import { ProductTour } from './components/onboarding/ProductTour';
+import { GettingStartedChecklist } from './components/onboarding/GettingStartedChecklist';
+import { TOUR_STEPS } from './components/onboarding/tourSteps';
+import { readOnboarding, shouldShowOnboarding, writeOnboarding, type OnboardingState } from './components/onboarding/onboardingState';
+import { readWorkspaceTab, rememberWorkspaceTab, clearWorkspaceTab } from './utils/workspaceNavigation';
+
+installApiAuth();
 
 const getAppliedJobsKey = (email?: string): string => {
   const clean = (email || '').toLowerCase().trim();
@@ -72,6 +80,13 @@ const loadUserAppliedJobs = (email?: string): AppliedJobRecord[] => {
   return [];
 };
 
+export type PlanTier = 'free' | 'plus' | 'pro';
+
+const getUserPlanKey = (email?: string): string => {
+  const clean = (email || '').toLowerCase().trim();
+  return `jobstudio_plan_${clean}`;
+};
+
 const getProUserKey = (email?: string): string => {
   const clean = (email || '').toLowerCase().trim();
   return `jobstudio_is_pro_${clean}`;
@@ -82,16 +97,9 @@ const getTailoredCountKey = (email?: string): string => {
   return `jobstudio_tailored_count_${clean}`;
 };
 
-export default function App({ initialTab }: { initialTab?: string } = {}) {
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (initialTab) return initialTab;
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const tabParam = urlParams.get('tab');
-      if (tabParam) return tabParam;
-    }
-    return 'home';
-  });
+export default function App() {
+  const [activeTab, setActiveTab] = useState<string>('home');
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [opportunities, setOpportunities] = useState<JobOpportunity[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string>('');
   const [customJobText, setCustomJobText] = useState<string>('');
@@ -107,9 +115,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
   const [userName, setUserName] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('jobstudio_user_name') || '';
+      return localStorage.getItem('jobstudio_user_name') || 'Candidate';
     }
-    return '';
+    return 'Candidate';
   });
 
   const [userEmail, setUserEmail] = useState<string>(() => {
@@ -118,22 +126,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
     return '';
   });
-
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-
-  const handleNavigateToTab = (tab: string, mode?: 'signin' | 'signup') => {
-    if (mode) {
-      setAuthMode(mode);
-    }
-    if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
-      setAuthMode(mode || 'signup');
-      setActiveTab('auth');
-      window.scrollTo(0, 0);
-      return;
-    }
-    setActiveTab(tab);
-    window.scrollTo(0, 0);
-  };
 
   const handleLogin = (name: string, email: string) => {
     const cleanEmail = email.toLowerCase().trim();
@@ -157,29 +149,15 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     const userJobs = loadUserAppliedJobs(cleanEmail);
     setAppliedJobs(userJobs);
 
-    // Load user-scoped Pro status & tailored count
-    const userPro = localStorage.getItem(getProUserKey(cleanEmail));
-    setIsProUser(userPro === 'true');
+    // Load user-scoped Pro/Plus status & tailored count
+    const savedPlan = (localStorage.getItem(getUserPlanKey(cleanEmail)) as PlanTier) || (localStorage.getItem(getProUserKey(cleanEmail)) === 'true' ? 'pro' : 'free');
+    setUserPlan(savedPlan);
     const userTailored = localStorage.getItem(getTailoredCountKey(cleanEmail));
-    let parsedCount = userTailored ? parseInt(userTailored, 10) : 0;
-
-    // Load user-scoped tailored roles for each job
-    try {
-      const savedRoles = localStorage.getItem(`jobstudio_tailored_roles_${cleanEmail}`);
-      if (savedRoles) {
-        const rolesObj = JSON.parse(savedRoles);
-        setTailoredRoles(rolesObj);
-        parsedCount = Math.max(parsedCount, Object.keys(rolesObj).length);
-      } else {
-        setTailoredRoles({});
-      }
-    } catch {
-      setTailoredRoles({});
-    }
-    setTailoredCount(parsedCount);
+    setTailoredCount(userTailored ? parseInt(userTailored, 10) : 0);
   };
 
   const handleLogout = () => {
+    if (onboardingUserId) clearWorkspaceTab(onboardingUserId);
     void endCloudSession().then(() => supabase.auth.signOut());
     setIsLoggedIn(false);
     if (typeof window !== 'undefined') {
@@ -191,7 +169,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     setUserName('');
     setUserEmail('');
     setAppliedJobs([]);
-    setTailoredRoles({});
     setTailoredCount(0);
     setIsProUser(false);
     setCandidateInfo({
@@ -203,11 +180,20 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       linkedin: '',
     });
     setMasterProfileText('');
-    setResume(EMPTY_RESUME);
+    setResume(MASTER_BASE_RESUME);
+    setEvaluation(EMPTY_EVALUATION);
+    setCoverLetter(EMPTY_COVER_LETTER);
+    setScreeningAnswers([]);
+    setInterviewQuestions([]);
+    setOpportunities([]);
+    setSelectedJobId('');
+    setCustomJobText('');
+    setCustomUrl('');
     setActiveTab('home');
   };
 
   const [evaluation, setEvaluation] = useState<JobEvaluationData>(EMPTY_EVALUATION);
+  const [isEvaluationComplete, setIsEvaluationComplete] = useState(false);
   const [resume, setResume] = useState<TailoredResumeData>(() => {
     if (typeof window !== 'undefined') {
       const isLogged = localStorage.getItem('jobstudio_logged_in') === 'true';
@@ -218,7 +204,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         if (p) return profileRecordToResume(p);
       }
     }
-    return EMPTY_RESUME;
+    return MASTER_BASE_RESUME;
   });
   const [coverLetter, setCoverLetter] = useState<CoverLetterData>(EMPTY_COVER_LETTER);
   const [screeningAnswers, setScreeningAnswers] = useState<ScreeningAnswer[]>([]);
@@ -257,36 +243,46 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     };
   });
 
-  // Track tailored resumes saved for each role so the user can easily view and switch between tailored roles
-  const [tailoredRoles, setTailoredRoles] = useState<Record<string, TailoredRoleItem>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
-        const saved = localStorage.getItem(`jobstudio_tailored_roles_${email}`);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse tailored roles from storage', e);
-      }
-    }
-    return {};
-  });
-
-  const handleSelectTailoredRole = (role: TailoredRoleItem) => {
-    setSelectedJobId(role.id);
-    if (role.evaluation) {
-      setEvaluation(role.evaluation);
-    }
-    setResume(role.resume);
+  // Real accounts (Lovable Cloud): restore saved data on sign-in, keep browser state in sync with the session.
+  // Onboarding (per account): welcome screen once for new sign-ups, replayable tour, checklist.
+  const [onboardingUserId, setOnboardingUserId] = useState<string | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  const onboardingPendingRef = React.useRef(false);
+  const updateOnboarding = (patch: Partial<OnboardingState>) => {
+    if (!onboardingUserId) return;
+    setOnboarding(writeOnboarding(onboardingUserId, patch));
   };
-
-  const handleSelectMasterBaseline = () => {
-    setSelectedJobId('');
-    setEvaluation(EMPTY_EVALUATION);
-    const p = getUserMasterProfile(userEmail, userName);
-    setResume(profileRecordToResume(p));
+  const startTour = () => {
+    onboardingPendingRef.current = false;
+    updateOnboarding({ welcomed: true });
+    setTourStep(0);
+    setActiveTab(TOUR_STEPS[0].tab);
+    window.scrollTo(0, 0);
   };
+  const goToTourStep = (step: number) => {
+    setTourStep(step);
+    const target = TOUR_STEPS[step];
+    if (target) { setActiveTab(target.tab); window.scrollTo(0, 0); }
+  };
+  const closeTour = (completed: boolean) => {
+    setTourStep(null);
+    updateOnboarding({ tourDone: true, welcomed: true });
+    if (completed) { setActiveTab('profile'); window.scrollTo(0, 0); }
+  };
+  const skipWelcome = () => {
+    onboardingPendingRef.current = false;
+    updateOnboarding({ welcomed: true });
+    setActiveTab('profile');
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => {
+    if (!onboardingUserId || !onboarding || onboarding.visited.includes(activeTab)) return;
+    if (!['roadmaps', 'evaluator', 'resume', 'applied', 'screening'].includes(activeTab)) return;
+    updateOnboarding({ visited: [...onboarding.visited, activeTab] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, onboardingUserId]);
 
-  // Real accounts (Supabase): restore saved data on sign-in, keep browser state in sync with the session.
   const handleLoginRef = React.useRef(handleLogin);
   handleLoginRef.current = handleLogin;
 
@@ -302,24 +298,14 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       });
     }
   }, [activeTab]);
-
-  // Route Guard: unauthenticated visitors cannot access workspace tabs directly
-  useEffect(() => {
-    if (!isLoggedIn && activeTab !== 'home' && activeTab !== 'auth') {
-      setActiveTab('auth');
-    }
-  }, [isLoggedIn, activeTab]);
   useEffect(() => {
     installCloudSync();
-    if (!isSupabaseConfigured()) {
-      // Local/offline authentication mode: do not attach remote Supabase session listener that wipes local state
-      return;
-    }
     let lastUserId: string | null = null;
     const apply = async (session: any) => {
       const user = session?.user;
       if (!user) {
         if (lastUserId !== null || localStorage.getItem('jobstudio_logged_in') === 'true') {
+          if (lastUserId) clearWorkspaceTab(lastUserId);
           lastUserId = null;
           await endCloudSession();
           setIsLoggedIn(false);
@@ -334,15 +320,45 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       await startCloudSession(user.id);
       const name = user.user_metadata?.full_name || user.user_metadata?.name || (user.email || '').split('@')[0];
       handleLoginRef.current(name, user.email || '');
+      setOnboardingUserId(user.id);
+      if (shouldShowOnboarding(user.id, user.created_at)) {
+        setOnboarding(writeOnboarding(user.id, {}));
+        onboardingPendingRef.current = true;
+        try { sessionStorage.removeItem('jobstudio_auth_intent'); } catch { /* ignore */ }
+        setActiveTab('onboarding');
+        window.scrollTo(0, 0);
+        return;
+      }
+      setOnboarding(readOnboarding(user.id));
+      // After a successful sign-in launched from the auth screen (e.g. Google
+      // OAuth returns to the site root), open the workspace. Runs after the
+      // login state applies so the signed-out snap-back rule cannot override it.
+      const signingIn = sessionStorage.getItem('jobstudio_auth_intent') !== null;
+      sessionStorage.removeItem('jobstudio_auth_intent');
+      setActiveTab(signingIn ? 'evaluator' : readWorkspaceTab(user.id));
+      window.scrollTo(0, 0);
     };
-    supabase.auth.getSession().then(({ data }) => apply(data.session));
+    // Serialize restoration so overlapping sign-in events cannot finish the
+    // initial session check before account data and navigation are ready.
+    let restoration = Promise.resolve();
+    const restore = (session: any) => {
+      restoration = restoration.catch(() => {}).then(() => apply(session));
+      return restoration;
+    };
+    supabase.auth.getSession().then(({ data }) => restore(data.session)).finally(() => setSessionChecked(true));
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
-        setTimeout(() => apply(session), 0);
+        setTimeout(() => restore(session), 0);
       }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (sessionChecked && isLoggedIn && onboardingUserId) {
+      rememberWorkspaceTab(onboardingUserId, activeTab);
+    }
+  }, [sessionChecked, isLoggedIn, onboardingUserId, activeTab]);
 
   // Re-sync master profile and user-scoped data across application whenever user account changes
   useEffect(() => {
@@ -367,23 +383,15 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       setAppliedJobs(userJobs);
 
       // 3. Pro status & quota isolation
-      const userPro = localStorage.getItem(getProUserKey(cleanEmail));
-      setIsProUser(userPro === 'true');
+      const savedPlan = (localStorage.getItem(getUserPlanKey(cleanEmail)) as PlanTier) || (localStorage.getItem(getProUserKey(cleanEmail)) === 'true' ? 'pro' : 'free');
+      setUserPlan(savedPlan);
 
       const userTailored = localStorage.getItem(getTailoredCountKey(cleanEmail));
-      let parsedCount = userTailored ? parseInt(userTailored, 10) : 0;
-      try {
-        const savedRoles = localStorage.getItem(`jobstudio_tailored_roles_${cleanEmail}`);
-        if (savedRoles) {
-          const rolesObj = JSON.parse(savedRoles);
-          parsedCount = Math.max(parsedCount, Object.keys(rolesObj).length);
-        }
-      } catch {}
-      setTailoredCount(parsedCount);
+      setTailoredCount(userTailored ? parseInt(userTailored, 10) : 0);
     } else if (!isLoggedIn) {
       setAppliedJobs([]);
       setTailoredCount(0);
-      setIsProUser(false);
+      setUserPlan('free');
       setCandidateInfo({
         first_name: '',
         last_name: '',
@@ -393,42 +401,54 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         linkedin: '',
       });
       setMasterProfileText('');
-      if (activeTab !== 'home' && activeTab !== 'auth') {
-        setActiveTab('home');
-      }
     }
-  }, [isLoggedIn, userEmail, userName, activeTab]);
+  }, [isLoggedIn, userEmail, userName]);
+
+  // Tab navigation must not rehydrate the master resume over tailored materials.
+  // Keep the signed-out navigation guard separate from account synchronization.
+  useEffect(() => {
+    if (!sessionChecked) return;
+    if (isLoggedIn && activeTab === 'auth') {
+      setActiveTab(onboardingPendingRef.current ? 'onboarding' : 'evaluator');
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (!isLoggedIn && activeTab !== 'home' && activeTab !== 'auth') {
+      setActiveTab('home');
+    }
+  }, [sessionChecked, isLoggedIn, activeTab]);
 
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isReportBugOpen, setIsReportBugOpen] = useState<boolean>(false);
 
-  // Pro Subscription & Free Tailoring Quota State (strictly user-scoped)
-  const [isProUser, setIsProUser] = useState<boolean>(() => {
+  // 3-Tier Subscription (Free, Plus, Pro) & Tailoring Quota State (strictly user-scoped)
+  const [userPlan, setUserPlan] = useState<PlanTier>(() => {
     if (typeof window !== 'undefined') {
       try {
         const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
-        return localStorage.getItem(getProUserKey(email)) === 'true' || localStorage.getItem('jobstudio_is_pro_user') === 'true';
+        const plan = localStorage.getItem(getUserPlanKey(email)) as PlanTier;
+        if (plan === 'pro' || plan === 'plus' || plan === 'free') return plan;
+        if (localStorage.getItem(getProUserKey(email)) === 'true') return 'pro';
+        return 'free';
       } catch {
-        return false;
+        return 'free';
       }
     }
-    return false;
+    return 'free';
   });
+
+  const isProUser = userPlan === 'pro';
+  const isPlusUser = userPlan === 'plus';
 
   const [tailoredCount, setTailoredCount] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       try {
         const email = (localStorage.getItem('jobstudio_user_email') || '').toLowerCase().trim();
         const val = localStorage.getItem(getTailoredCountKey(email));
-        let count = val ? parseInt(val, 10) : 0;
-        const savedRoles = localStorage.getItem(`jobstudio_tailored_roles_${email}`);
-        if (savedRoles) {
-          const parsed = JSON.parse(savedRoles);
-          count = Math.max(count, Object.keys(parsed).length);
-        }
-        return count;
+        return val ? parseInt(val, 10) : 0;
       } catch {
         return 0;
       }
@@ -466,28 +486,39 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
   };
 
+  // Plan status and tailoring usage come from the server; the browser never grants Pro.
+  useEffect(() => {
+    if (!userEmail) return;
+    let cancelled = false;
+    fetchEntitlement().then((ent) => {
+      if (cancelled || !ent) return;
+      const nextPlan: PlanTier = ent.plan || (ent.isPro ? 'pro' : ent.isPlus ? 'plus' : 'free');
+      setUserPlan(nextPlan);
+      setTailoredCount(ent.tailoredCount ?? 0);
+      if (typeof window !== 'undefined' && userEmail) {
+        try {
+          localStorage.setItem(getUserPlanKey(userEmail), nextPlan);
+          localStorage.setItem(getProUserKey(userEmail), String(nextPlan === 'pro'));
+        } catch {}
+      }
+    });
+    return () => { cancelled = true; };
+  }, [userEmail]);
+
+  const handleUpgradeToPlan = (targetPlan: 'plus' | 'pro') => {
+    alert(`Online checkout is not available yet, so ${targetPlan === 'pro' ? 'Pro' : 'Plus'} cannot be activated from here.`);
+  };
+
   const handleUpgradeToPro = () => {
-    setIsProUser(true);
-    if (typeof window !== 'undefined') {
-      try {
-        const cleanEmail = (userEmail || '').toLowerCase().trim();
-        if (cleanEmail) {
-          localStorage.setItem(getProUserKey(cleanEmail), 'true');
-        }
-        localStorage.setItem('jobstudio_is_pro_user', 'true');
-      } catch {}
-    }
+    handleUpgradeToPlan('pro');
   };
 
   const handleDowngradeToFree = () => {
-    setIsProUser(false);
-    if (typeof window !== 'undefined') {
+    setUserPlan('free');
+    if (typeof window !== 'undefined' && userEmail) {
       try {
-        const cleanEmail = (userEmail || '').toLowerCase().trim();
-        if (cleanEmail) {
-          localStorage.setItem(getProUserKey(cleanEmail), 'false');
-        }
-        localStorage.setItem('jobstudio_is_pro_user', 'false');
+        localStorage.setItem(getUserPlanKey(userEmail), 'free');
+        localStorage.setItem(getProUserKey(userEmail), 'false');
       } catch {}
     }
   };
@@ -543,6 +574,39 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     setAppliedJobs([]);
   };
 
+  const activeOpportunity =
+    opportunities.find((j) => j.id === selectedJobId) ||
+    PRESET_JOBS.find((j) => j.id === selectedJobId) ||
+    opportunities.find(
+      (j) =>
+        Boolean(evaluation.company_name) &&
+        Boolean(evaluation.job_title) &&
+        j.company?.toLowerCase() === evaluation.company_name.toLowerCase() &&
+        j.title?.toLowerCase() === evaluation.job_title.toLowerCase()
+    );
+
+  const trackedJobRecord = appliedJobs.find(
+    (j) =>
+      Boolean(evaluation.company_name) &&
+      Boolean(evaluation.job_title) &&
+      j.company_name.toLowerCase() === evaluation.company_name.toLowerCase() &&
+      j.job_title.toLowerCase() === evaluation.job_title.toLowerCase()
+  );
+
+  const effectiveApplyUrl =
+    (activeOpportunity?.applyUrl && activeOpportunity.applyUrl.startsWith('http')
+      ? activeOpportunity.applyUrl
+      : '') ||
+    (trackedJobRecord?.apply_url && trackedJobRecord.apply_url.startsWith('http')
+      ? trackedJobRecord.apply_url
+      : '') ||
+    (customUrl && customUrl.startsWith('http') ? customUrl : '') ||
+    (evaluation.company_name
+      ? `https://www.google.com/search?q=${encodeURIComponent(
+          `${evaluation.company_name} ${evaluation.job_title || ''} careers apply`
+        )}`
+      : '');
+
   const isCurrentJobTracked = Boolean(
     evaluation.company_name &&
     evaluation.job_title &&
@@ -572,21 +636,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     );
 
     if (existingIndex >= 0) {
-      const updated = [...appliedJobs];
-      updated[existingIndex] = applyJobUpdate(updated[existingIndex], {
-        status: 'Applied',
-        applied_date: new Date().toISOString().split('T')[0],
-        apply_url: customData?.apply_url || customUrl || updated[existingIndex].apply_url,
-      });
-      setAppliedJobs(updated);
+      // Toggle OFF: Remove from appliedJobs so button flips back to "Mark as applied"
+      setAppliedJobs((prev) => prev.filter((_, idx) => idx !== existingIndex));
     } else {
+      // Toggle ON: Add to appliedJobs
+      const resolvedApplyUrl =
+        customData?.apply_url ||
+        effectiveApplyUrl ||
+        (customUrl && customUrl.startsWith('http') ? customUrl : undefined);
+
       const newRecord: AppliedJobRecord = withCreatedEvent({
         id: `app-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         company_name: company,
         job_title: title,
         location: customData?.location || evaluation.location_info || 'Remote / Hybrid',
         platform: customData?.platform || 'Direct Portal',
-        apply_url: customData?.apply_url || customUrl || undefined,
+        apply_url: resolvedApplyUrl || undefined,
         applied_date: new Date().toISOString().split('T')[0],
         match_score: customData?.match_score || evaluation.match_score || 90,
         status: 'Applied',
@@ -620,13 +685,14 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
   // Switch preset or live discovered target opportunity
   const handleSelectPreset = (jobId: string, jobOverride?: JobOpportunity) => {
+    setIsEvaluationComplete(false);
     // If clicking the currently selected job or clearing, return to plain state
     if (!jobId || (jobId === selectedJobId && !jobOverride)) {
       setSelectedJobId('');
       setCustomJobText('');
       setCustomUrl('');
       setEvaluation(EMPTY_EVALUATION);
-      setResume(MASTER_BASE_RESUME);
+      setResume(profileRecordToResume(getUserMasterProfile(userEmail, userName)));
       setCoverLetter(EMPTY_COVER_LETTER);
       setScreeningAnswers([]);
       setInterviewQuestions([]);
@@ -639,32 +705,24 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
     setCustomJobText(found.description);
     setCustomUrl(found.applyUrl);
+    setEvaluation({ ...EMPTY_EVALUATION, job_title: found.title, company_name: found.company,
+      location_info: found.location, executive_summary: 'Full assessment pending.' });
+    setResume(profileRecordToResume(getUserMasterProfile(userEmail, userName)));
+    setCoverLetter(EMPTY_COVER_LETTER);
+    setScreeningAnswers([]);
+    setInterviewQuestions([]);
+  };
 
-    const existingTailored = tailoredRoles[jobId];
-    if (existingTailored && existingTailored.evaluation && existingTailored.evaluation.match_score > 0) {
-      setEvaluation({ ...existingTailored.evaluation, isEvaluated: true });
-      if (existingTailored.resume) {
-        setResume(existingTailored.resume);
-      }
-    } else {
-      // Un-evaluated role: do not show fake mock match score or dummy gaps.
-      // Keep in an un-evaluated state until the user clicks 'Tailor Application'.
-      setEvaluation({
-        ...EMPTY_EVALUATION,
-        job_title: found.title,
-        company_name: found.company,
-        location_info: found.location,
-        match_score: 0,
-        verdict: 'PENDING',
-        isEvaluated: false,
-      });
-      // Ground the resume directly in this user's current authentic master profile
-      const userMaster = getUserMasterProfile(userEmail, userName);
-      setResume(profileRecordToResume(userMaster));
-      setCoverLetter(EMPTY_COVER_LETTER);
-      setScreeningAnswers([]);
-      setInterviewQuestions([]);
-    }
+  // Reset all tailored content back to clean slate derived from user's Master Profile
+  const handleResetWorkspace = () => {
+    setSelectedJobId('');
+    setCustomJobText('');
+    setCustomUrl('');
+    setEvaluation(EMPTY_EVALUATION);
+    setResume(profileRecordToResume(getUserMasterProfile(userEmail, userName)));
+    setCoverLetter(EMPTY_COVER_LETTER);
+    setScreeningAnswers([]);
+    setInterviewQuestions([]);
   };
 
   // Remove a specific opportunity from active view
@@ -675,7 +733,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       setCustomJobText('');
       setCustomUrl('');
       setEvaluation(EMPTY_EVALUATION);
-      setResume(MASTER_BASE_RESUME);
+      setResume(profileRecordToResume(getUserMasterProfile(userEmail, userName)));
       setCoverLetter(EMPTY_COVER_LETTER);
       setScreeningAnswers([]);
       setInterviewQuestions([]);
@@ -689,56 +747,49 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     setCustomJobText('');
     setCustomUrl('');
     setEvaluation(EMPTY_EVALUATION);
-    setResume(MASTER_BASE_RESUME);
+    setResume(profileRecordToResume(getUserMasterProfile(userEmail, userName)));
     setCoverLetter(EMPTY_COVER_LETTER);
     setScreeningAnswers([]);
     setInterviewQuestions([]);
   };
 
-  // Call local AI backend to evaluate & tailor
-  const handleRunEvaluation = async (overrideJobText?: string, autoNavigateToResume: boolean = true) => {
+  // Call Gemini backend to evaluate & tailor
+  const handleRunEvaluation = async (overrideJobText?: string) => {
     let jobDescription = typeof overrideJobText === 'string' && overrideJobText.trim()
       ? overrideJobText.trim()
       : customJobText;
-
-    if (!jobDescription && selectedJobId) {
-      const foundOpp = opportunities.find((j) => j.id === selectedJobId);
-      if (foundOpp?.description) {
-        jobDescription = foundOpp.description;
-      }
-    }
-
-    if (!jobDescription && selectedJobId) {
+    if (!jobDescription) {
       const preset = PRESET_JOBS.find((j) => j.id === selectedJobId);
       jobDescription = preset?.description || '';
     }
 
     if (!jobDescription) {
-      alert('Please select a job opportunity or paste a job description.');
+      alert('Please select a preset job or paste a job description.');
       return;
     }
 
-    // Strict Free Tier Enforcement: Free users can only generate up to 2 tailored resumes
-    const effectiveTailoredCount = Math.max(tailoredCount, Object.keys(tailoredRoles).length);
-    if (!isProUser && effectiveTailoredCount >= 2) {
-      alert('You have reached the Free plan limit of 2 tailored resumes (0 of 2 left). Upgrade to Pro to generate unlimited tailored resumes.');
-      setActiveTab('pricing');
+    // Enforce monthly tailoring quotas across Free (2/mo), Plus (50/mo), Pro (Unlimited)
+    const planLimit = userPlan === 'plus' ? 50 : userPlan === 'pro' ? Infinity : 2;
+    if (tailoredCount >= planLimit) {
+      if (userPlan === 'plus') {
+        if (
+          confirm(
+            'You have reached your monthly limit of 50 tailored resumes on the Plus plan.\n\nUpgrade to Pro for $19.99/mo to unlock unlimited AI resume tailoring, full interview prep intelligence, and salary negotiation.\n\nWould you like to view plans?'
+          )
+        ) {
+          setActiveTab('pricing');
+        }
+      } else {
+        if (
+          confirm(
+            'You have reached your monthly limit of 2 free tailored resumes.\n\nUpgrade to Plus ($9.99/mo for 50 resumes) or Pro ($19.99/mo for unlimited tailoring) to continue.\n\nWould you like to view plans?'
+          )
+        ) {
+          setActiveTab('pricing');
+        }
+      }
       return;
     }
-
-    // Load authentic master profile data to ensure AI is always grounded in verified candidate history
-    const currentProfile = getUserMasterProfile(userEmail, userName);
-    const hasCorruptedPlaceholders = (text?: string) =>
-      !text ||
-      text.includes('[Job Title]') ||
-      text.includes('[Candidate Email]') ||
-      text.includes('[Company Name]') ||
-      text.includes('Software Engineer with 4+ years of experience specializing in full-stack development');
-    const effectiveProfileText =
-      !hasCorruptedPlaceholders(masterProfileText) && masterProfileText && masterProfileText.trim().length > 50
-        ? masterProfileText.trim()
-        : currentProfile?.masterProfileText ||
-          `### CANDIDATE: ${currentProfile.name}\n${currentProfile.summary}\n\n### EXPERIENCES:\n${JSON.stringify(currentProfile.experiences)}\n\n### SKILLS:\n${currentProfile.skills.join(', ')}`;
 
     setIsEvaluating(true);
     try {
@@ -748,7 +799,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobText: jobDescription,
-          masterProfile: effectiveProfileText,
+          masterProfile: masterProfileText,
           minScore: 70,
         }),
       });
@@ -758,8 +809,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       }
 
       const evalData: JobEvaluationData = await evalRes.json();
-      evalData.isEvaluated = true;
       setEvaluation(evalData);
+      setIsEvaluationComplete(true);
 
       // Immediately synchronize the evaluated score & summary back to the saved opportunity card
       if (selectedJobId) {
@@ -769,10 +820,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               ? {
                   ...opp,
                   matchScore: evalData.match_score,
-                  isEvaluated: true,
                   matchHighlight:
-                    evalData.executive_summary?.slice(0, 160) ||
-                    (evalData.key_matching_factors?.[0] ? `Assessment: ${evalData.key_matching_factors[0]}` : opp.matchHighlight),
+                    evalData.executive_summary?.trim() ||
+                    evalData.key_matching_factors?.[0] ||
+                    opp.matchHighlight,
                 }
               : opp
           )
@@ -780,18 +831,14 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       }
 
       // 2. Generate Tailored Resume and Materials
-      const effectiveCandidateInfo = (candidateInfo.email || candidateInfo.first_name)
-        ? candidateInfo
-        : profileRecordToCandidateInfo(currentProfile);
-
       const tailorRes = await fetch('/api/tailor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobText: jobDescription,
-          masterProfile: effectiveProfileText,
+          masterProfile: masterProfileText,
           recommendations: evalData.tailoring_recommendations,
-          candidateInfo: effectiveCandidateInfo,
+          candidateInfo: candidateInfo,
         }),
       });
 
@@ -801,61 +848,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
       const tailorData = await tailorRes.json();
 
-      const isBracketPlaceholder = (val?: string) => !val || val.includes('[') || val.includes(']');
-      const cleanCandidateEmail = isBracketPlaceholder(effectiveCandidateInfo.email) ? (currentProfile.email || userEmail) : effectiveCandidateInfo.email;
-      const cleanCandidatePhone = isBracketPlaceholder(effectiveCandidateInfo.phone) ? (currentProfile.phone || '') : effectiveCandidateInfo.phone;
-      const cleanCandidateLocation = isBracketPlaceholder(effectiveCandidateInfo.location) ? (currentProfile.location || '') : effectiveCandidateInfo.location;
-      const cleanCandidateLinkedin = isBracketPlaceholder(effectiveCandidateInfo.linkedin) ? (currentProfile.linkedin || '') : effectiveCandidateInfo.linkedin;
-
-      const rawCandidateName = (effectiveCandidateInfo.first_name || effectiveCandidateInfo.last_name)
-        ? `${effectiveCandidateInfo.first_name} ${effectiveCandidateInfo.last_name}`.trim()
-        : (currentProfile.name || userName || 'Candidate');
-      const candidateFullName = isBracketPlaceholder(rawCandidateName) ? (currentProfile.name || userName || 'Candidate') : rawCandidateName;
-
-      // Update resume state with tailored content directly mapped to the target role
-      const tailoredResumeData: TailoredResumeData = {
-        full_name: candidateFullName,
-        email: cleanCandidateEmail,
-        phone: cleanCandidatePhone,
-        location: cleanCandidateLocation,
-        linkedin: cleanCandidateLinkedin,
-        tailored_summary: tailorData.tailored_summary || currentProfile.summary,
-        skills: Array.isArray(tailorData.skills) && tailorData.skills.length > 0 ? tailorData.skills : currentProfile.skills,
-        experiences: Array.isArray(tailorData.experiences) && tailorData.experiences.length > 0 ? tailorData.experiences : currentProfile.experiences,
+      // Update resume state
+      setResume({
+        full_name: `${candidateInfo.first_name} ${candidateInfo.last_name}`,
+        email: candidateInfo.email,
+        phone: candidateInfo.phone,
+        location: '',
+        linkedin: candidateInfo.linkedin,
+        tailored_summary: tailorData.tailored_summary,
+        skills: tailorData.skills,
+        experiences: sortExperiencesReverseChronological(tailorData.experiences || []),
         projects: Array.isArray(tailorData.projects) ? tailorData.projects : [],
-        education: (Array.isArray(tailorData.education) && tailorData.education.length > 0)
-          ? tailorData.education
-          : (currentProfile.education && currentProfile.education.length > 0)
-            ? currentProfile.education
-            : [],
-        certifications:
-          Array.isArray(tailorData.certifications) && tailorData.certifications.length > 0
-            ? tailorData.certifications
-            : (currentProfile.certifications && currentProfile.certifications.length > 0 ? currentProfile.certifications : []),
-      };
-
-      setResume(tailoredResumeData);
-
-      // Save tailored resume into the per-role tailored roles collection
-      const roleId = selectedJobId || `role-${evalData.company_name.replace(/[^a-zA-Z0-9]/g, '_')}-${evalData.job_title.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const roleRecord: TailoredRoleItem = {
-        id: roleId,
-        jobTitle: evalData.job_title,
-        companyName: evalData.company_name,
-        resume: tailoredResumeData,
-        evaluation: evalData,
-        timestamp: Date.now(),
-      };
-
-      setTailoredRoles((prev) => {
-        const next = { ...prev, [roleId]: roleRecord };
-        if (typeof window !== 'undefined') {
-          try {
-            const email = (userEmail || '').toLowerCase().trim();
-            localStorage.setItem(`jobstudio_tailored_roles_${email}`, JSON.stringify(next));
-          } catch {}
-        }
-        return next;
+        education: getUserMasterProfile(userEmail, userName).education,
+        certifications: Array.isArray(tailorData.certifications)
+          ? tailorData.certifications.filter((credential: string) =>
+              getUserMasterProfile(userEmail, userName).certifications.includes(credential))
+          : getUserMasterProfile(userEmail, userName).certifications,
       });
 
       // Update cover letter
@@ -871,25 +879,24 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       // Concurrently fetch interview questions & portal intelligence for the evaluated role
       handleFetchInterviewPrep(evalData.company_name, evalData.job_title, jobDescription);
 
-      // Increment and persist tailored resume count for the current user
-      setTailoredCount((prev) => {
-        const next = Math.max(prev + 1, Object.keys(tailoredRoles).length + 1);
-        if (typeof window !== 'undefined') {
-          try {
-            const cleanEmail = (userEmail || '').toLowerCase().trim();
-            localStorage.setItem(getTailoredCountKey(cleanEmail), String(next));
-          } catch {}
-        }
-        return next;
-      });
-
-      // Open the Tailored Resume section where the tailored resume for this role is ready
-      if (autoNavigateToResume) {
-        setActiveTab('resume');
+      // Increment tailored resume count for users with quotas (Free and Plus)
+      if (userPlan !== 'pro') {
+        setTailoredCount((prev) => {
+          const next = prev + 1;
+          if (typeof window !== 'undefined' && userEmail) {
+            try {
+              localStorage.setItem(getTailoredCountKey(userEmail), next.toString());
+            } catch {}
+          }
+          return next;
+        });
       }
+
+      // Stay on the Job Evaluator after tailoring — the user opens the tailored resume
+      // themselves via "View Resume".
     } catch (err: any) {
       console.error('Error running evaluation:', err);
-      alert('Failed to evaluate with AI engine. Please ensure Ollama is running with Gemma 4 or check server logs.');
+      alert('Failed to evaluate with Gemini API. Please check server logs or API key.');
     } finally {
       setIsEvaluating(false);
     }
@@ -933,64 +940,114 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
   };
 
-  const currentPreset = PRESET_JOBS.find((j) => j.id === selectedJobId);
+  // Landing pages must never open workspace tabs for visitors without an
+  // account: send them to the sign-in screen instead (matches the search CTAs).
+  const handleLandingNavigate = (tab: string) => {
+    if (isLoggedIn && tab === 'auth') {
+      setActiveTab('evaluator');
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (!isLoggedIn && tab !== 'home' && tab !== 'auth') {
+      setActiveTab('auth');
+      window.scrollTo(0, 0);
+      return;
+    }
+    setActiveTab(tab);
+    window.scrollTo(0, 0);
+  };
+
+  const currentPreset = activeOpportunity || PRESET_JOBS.find((j) => j.id === selectedJobId);
+  const activeRoleTitle = evaluation.job_title || currentPreset?.title;
+  const activeCompanyName = evaluation.company_name || currentPreset?.company;
+  const activeRoleBadge = activeRoleTitle && activeCompanyName
+    ? `Active: ${activeRoleTitle} @ ${activeCompanyName}`
+    : activeRoleTitle
+      ? `Active: ${activeRoleTitle}`
+      : activeCompanyName
+        ? `Active: @ ${activeCompanyName}`
+        : undefined;
+
+  if (!sessionChecked) return <main className="min-h-screen bg-background p-6 flex items-center justify-center"><BusyIndicator label="Opening your workspace" /></main>;
 
   return (
     <div className={`min-h-screen text-foreground flex flex-col font-sans ${activeTab !== 'home' && activeTab !== 'auth' ? 'job-workspace' : ''}`}>
-      {/* Landing Navigation: Clean header with jump links and Sign In / Workspace CTAs */}
-      {activeTab === 'home' && (
-        <LandingHeader
-          isLoggedIn={isLoggedIn}
-          userName={userName}
-          onNavigateToTab={handleNavigateToTab}
-          onLogout={handleLogout}
-        />
-      )}
-
-      {/* Workspace Sidebar / Navigation: strictly for authenticated workspace tabs */}
-      {isLoggedIn && activeTab !== 'home' && activeTab !== 'auth' && (
-        <WorkspaceNavigation
+      {/* Top Bar Navigation: only on the auth screen; the signed-in landing page stays clean */}
+      {isLoggedIn && activeTab === 'auth' && (
+        <Header
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          appliedCount={appliedJobs.length}
-          userName={userName}
-          isProUser={isProUser}
-          tailoredCount={tailoredCount}
-          onLogout={handleLogout}
           onDownloadPdf={handleDownloadPdf}
           isDownloading={isDownloadingPdf}
           downloadSuccess={downloadSuccess}
+          score={evaluation.match_score}
+          appliedCount={appliedJobs.length}
+          isProUser={isProUser}
+          tailoredCount={tailoredCount}
+          isLoggedIn={isLoggedIn}
+          userName={userName}
+          onOpenAuthModal={() => setActiveTab('home')}
+          onLogout={handleLogout}
         />
       )}
+      {isLoggedIn && activeTab === 'home' && (
+        <div className="fixed top-4 right-4 z-50 no-print">
+          <button type="button" onClick={() => setActiveTab('evaluator')} aria-label="Back to workspace" className="rounded-full border border-border bg-card/80 backdrop-blur px-4 py-2 text-sm text-foreground hover:bg-card transition-colors">
+            Back to workspace
+          </button>
+        </div>
+      )}
+
+      {isLoggedIn && activeTab !== 'home' && activeTab !== 'auth' && activeTab !== 'onboarding' && <WorkspaceNavigation
+        onStartTour={startTour}
+        activeTab={activeTab} setActiveTab={setActiveTab} appliedCount={appliedJobs.length}
+        userName={userName} userPlan={userPlan} isProUser={isProUser} tailoredCount={tailoredCount}
+        onLogout={handleLogout}
+        activeRole={activeRoleBadge}
+        onReportBug={() => setIsReportBugOpen(true)}
+      />}
 
       {/* Main Content Area */}
       <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 ${activeTab !== 'home' && activeTab !== 'auth' ? 'workspace-main' : ''}`}>
-        {activeTab === 'auth' && (
+        {isLoggedIn && activeTab === 'onboarding' && (
+          <WelcomeScreen userName={userName} onStartTour={startTour} onSkip={skipWelcome} />
+        )}
+        {isLoggedIn && tourStep !== null && activeTab !== 'onboarding' && (
+          <ProductTour step={tourStep} onStep={goToTourStep} onClose={closeTour} />
+        )}
+        {isLoggedIn && tourStep === null && onboarding?.welcomed && !onboarding.checklistDismissed
+          && !['home', 'auth', 'onboarding'].includes(activeTab) && (() => {
+            const items = [
+              { id: 'profile', label: '1. Save your Master Profile', tab: 'profile', done: Boolean(masterProfileText.trim()) && !/No resume uploaded yet/i.test(masterProfileText) },
+              { id: 'assess', label: '2. Evaluate and tailor a job', tab: 'evaluator', done: tailoredCount > 0 || evaluation.match_score > 0 },
+              { id: 'docs', label: '3. Review tailored documents', tab: 'resume', done: Boolean(resume.tailored_summary && resume.tailored_summary.trim()) },
+              { id: 'prep', label: '4. Prepare interview answers', tab: 'screening', done: screeningAnswers.length > 0 || interviewQuestions.length > 0 },
+              { id: 'track', label: '5. Track an application', tab: 'applied', done: appliedJobs.length > 0 },
+            ];
+            if (items.every((i) => i.done)) return null;
+            return <GettingStartedChecklist items={items} onOpen={(tab) => { setActiveTab(tab); window.scrollTo(0, 0); }} onDismiss={() => updateOnboarding({ checklistDismissed: true })} />;
+          })()}
+        {activeTab === 'auth' && !isLoggedIn && (
           <>
             <button type="button" onClick={() => { setActiveTab('home'); window.scrollTo(0, 0); }} className="cine-link">Back to Job Studio</button>
-            <AuthView
-              initialMode={authMode}
-              onLogin={(name, email) => {
-                handleLogin(name, email);
-                setActiveTab('profile');
-              }}
-              onNavigateToTab={setActiveTab}
-            />
+            <AuthView onLogin={() => setActiveTab('auth')} onNavigateToTab={(tab) => setActiveTab(onboardingPendingRef.current ? 'onboarding' : tab)} />
           </>
         )}
 
         {activeTab === 'home' && (
           <>
-          <CinematicHome onNavigateToTab={handleNavigateToTab} />
+          <CinematicHome onNavigateToTab={handleLandingNavigate} />
           <HomeView
-            onNavigateToTab={handleNavigateToTab}
+            onNavigateToTab={handleLandingNavigate}
+            userPlan={userPlan}
             isProUser={isProUser}
+            onUpgradeToPlan={handleUpgradeToPlan}
             onUpgradeToPro={handleUpgradeToPro}
             tailoredCount={tailoredCount}
             isLoggedIn={isLoggedIn}
             userName={userName}
             userEmail={userEmail}
-            onLogin={() => handleNavigateToTab('auth', 'signin')}
+            onLogin={() => handleLandingNavigate('auth')}
             onLogout={handleLogout}
           />
           </>
@@ -1020,6 +1077,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <JobEvaluatorView
             masterProfileText={masterProfileText}
             evaluation={evaluation}
+            isEvaluationComplete={isEvaluationComplete}
             opportunities={opportunities}
             onAddOpportunities={(newJobs) => setOpportunities((prev) => [...newJobs, ...prev])}
             onSelectPreset={handleSelectPreset}
@@ -1031,10 +1089,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             onEvaluate={handleRunEvaluation}
             isLoading={isEvaluating}
             onProceedToResume={() => setActiveTab('resume')}
+            onOpenTab={(tab: string) => setActiveTab(tab)}
+            onResetWorkspace={handleResetWorkspace}
             onRemoveOpportunity={handleRemoveOpportunity}
             onClearOpportunities={handleClearAllOpportunities}
             onTrackApplication={handleTrackCurrentJob}
             isTracked={isCurrentJobTracked}
+            userPlan={userPlan}
             isProUser={isProUser}
             tailoredCount={tailoredCount}
             onNavigateToPricing={() => setActiveTab('pricing')}
@@ -1044,7 +1105,97 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 handleRunRecruiterReview();
               }
             }}
+            resume={resume}
+            setResume={setResume}
+            coverLetter={coverLetter}
+            interviewQuestions={interviewQuestions}
+            onFetchInterviewPrep={() => handleFetchInterviewPrep()}
+            isFetchingInterviewPrep={isFetchingInterviewPrep}
           />
+        )}
+
+        {(activeTab === 'resume' || activeTab === 'cover-letter' || activeTab === 'referral') && (
+          <div className="flex items-center justify-between gap-3 mb-6 border-b border-border pb-3 no-print flex-wrap">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('resume')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  activeTab === 'resume'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-surface text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Tailored Resume
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('cover-letter')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  activeTab === 'cover-letter'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-surface text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Cover Letter
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('referral')}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  activeTab === 'referral'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-surface text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Referral Message
+              </button>
+            </div>
+
+            {evaluation.job_title && (
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="text-xs text-muted-foreground">
+                  Target: <strong className="text-foreground">{evaluation.job_title}</strong> {evaluation.company_name ? `at ${evaluation.company_name}` : ''}
+                </span>
+
+                {effectiveApplyUrl && (
+                  <a
+                    href={effectiveApplyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                    title={`Open official job portal for ${evaluation.company_name || 'this role'} in a new tab`}
+                  >
+                    <span>Apply now</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleTrackCurrentJob()}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                    isCurrentJobTracked
+                      ? 'bg-success/10 text-success hover:bg-success/20 border border-success/30'
+                      : 'text-foreground bg-surface hover:bg-surface-2 border border-border'
+                  }`}
+                  title={isCurrentJobTracked ? 'Click to untrack and remove from applied jobs' : 'Mark as applied and track application'}
+                >
+                  <CheckCircle2 className={`w-3.5 h-3.5 ${isCurrentJobTracked ? 'text-success' : 'text-subtle'}`} />
+                  <span>{isCurrentJobTracked ? 'Tracked as Applied' : 'Mark as Applied'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('evaluator')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-brand hover:text-brand/80 bg-brand/10 hover:bg-brand/15 rounded-lg transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                  <span>Fit Analysis</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === 'resume' && (
@@ -1062,10 +1213,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               }
             }}
             isProUser={isProUser}
-            tailoredRoles={Object.values(tailoredRoles)}
-            selectedRoleId={selectedJobId}
-            onSelectTailoredRole={handleSelectTailoredRole}
-            onSelectMasterBaseline={handleSelectMasterBaseline}
           />
         )}
 
@@ -1078,11 +1225,25 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           />
         )}
 
+        {activeTab === 'referral' && (
+          <ReferralMessageView
+            candidateName={resume.full_name || userName}
+            companyName={evaluation.company_name}
+            jobTitle={evaluation.job_title}
+            candidateSkills={resume.skills}
+            candidateSummary={resume.tailored_summary}
+            keyFactors={evaluation.key_matching_factors}
+            masterProfileText={masterProfileText}
+            jobReqUrl={effectiveApplyUrl || customUrl || currentPreset?.applyUrl || ''}
+            onNavigateToEvaluator={() => setActiveTab('evaluator')}
+          />
+        )}
+
         {activeTab === 'screening' && (
           <ScreeningAnswersView
             screeningAnswers={screeningAnswers}
             candidateInfo={candidateInfo}
-            applyUrl={currentPreset?.applyUrl || customUrl}
+            applyUrl={effectiveApplyUrl || currentPreset?.applyUrl || customUrl}
             companyName={evaluation.company_name}
             jobTitle={evaluation.job_title}
             jobDescription={customJobText || currentPreset?.description || ''}
@@ -1136,7 +1297,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
         {activeTab === 'pricing' && (
           <PricingView
+            userPlan={userPlan}
             isProUser={isProUser}
+            onUpgradeToPlan={handleUpgradeToPlan}
             onUpgradeToPro={handleUpgradeToPro}
             onDowngradeToFree={handleDowngradeToFree}
             tailoredCount={tailoredCount}
@@ -1159,6 +1322,18 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             isLoggedIn={isLoggedIn}
             onLogin={() => setActiveTab('auth')}
             onNavigateToTab={setActiveTab}
+            isGeneratingMaterials={isEvaluating || isFetchingInterviewPrep || isLoadingRecruiterReview}
+            onProfileReset={() => {
+              setEvaluation(EMPTY_EVALUATION);
+              setCoverLetter(EMPTY_COVER_LETTER);
+              setScreeningAnswers([]);
+              setInterviewQuestions([]);
+              setRecruiterReviewData(null);
+              setIsRecruiterModalOpen(false);
+              setSelectedJobId('');
+              setCustomJobText('');
+              setCustomUrl('');
+            }}
           />
         )}
       </main>
@@ -1186,37 +1361,35 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         onNavigateToPricing={() => setActiveTab('pricing')}
       />
 
+      {/* Report Bug / Feedback Modal */}
+      <ReportBugModal
+        isOpen={isReportBugOpen}
+        onClose={() => setIsReportBugOpen(false)}
+        userEmail={userEmail}
+        activeTab={activeTab}
+        activeRole={evaluation.job_title || currentPreset?.title}
+      />
+
       {/* Footer */}
       <footer className="no-print bg-card border-t border-border mt-auto py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          {isLoggedIn && activeTab !== 'home' && (candidateInfo.first_name || userName) ? (
+          {activeTab !== 'home' && isLoggedIn && (candidateInfo.first_name || userName) ? (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="pill-pixel text-xs py-0.5 px-2">MASTER PROFILE</span>
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className="font-bold text-foreground hover:text-brand transition-colors cursor-pointer underline decoration-brand/40"
-                  title="Click to View or Edit Master Profile"
-                >
+                <span className="font-bold text-foreground">
                   {candidateInfo.first_name || userName.split(' ')[0]} {candidateInfo.last_name || userName.split(' ').slice(1).join(' ')}
-                </button>
+                </span>
                 <span>· {candidateInfo.location || 'Remote'} · {evaluation.job_title || 'Active Profile'}</span>
               </div>
 
               <div className="flex items-center gap-4 text-xs">
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className="hover:text-brand transition-colors cursor-pointer font-medium text-foreground"
-                >
-                  View / Edit Master Profile
-                </button>
-                <span aria-hidden="true" className="text-[#D4CDC0]">·</span>
                 <span className="font-display italic text-warning">Job Studio</span>
               </div>
             </>
           ) : (
             <>
-              <div className="flex items-center gap-2 text-xs text-subtle">
+              <div className="flex items-center gap-2 text-xs text-subtle flex-wrap">
                 <span className="font-semibold text-foreground">Job Studio</span>
                 <span>· Autonomous Career Workspace &amp; Ground-Truth ATS Optimization</span>
               </div>

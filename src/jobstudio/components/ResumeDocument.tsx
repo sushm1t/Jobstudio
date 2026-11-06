@@ -1,5 +1,6 @@
 // @ts-nocheck -- ported verbatim from the original project
 import React, { useState } from 'react';
+import { LoadingProgress } from './LoadingProgress';
 import {
   Download,
   Printer,
@@ -12,23 +13,13 @@ import {
   FileCheck,
   Maximize2,
   Minimize2,
-  Sliders,
   FileText,
-  UserCheck,
   Sparkles,
 } from 'lucide-react';
-import { TailoredResumeData, WorkExperience, VERIFIED_CREDENTIALS, VAULT_PROJECTS, JobEvaluationData } from '../data/defaultData';
+import { TailoredResumeData, WorkExperience } from '../data/defaultData';
+import { getUserMasterProfile } from '../data/candidateProfiles';
 import { downloadResumeAsPdf, printResumeVector, generatePlainTextResume } from '../utils/pdfExport';
 import { downloadResumeAsDocx, downloadResumeAsPlainText } from '../utils/docxExport';
-
-export interface TailoredRoleItem {
-  id: string;
-  jobTitle: string;
-  companyName: string;
-  resume: TailoredResumeData;
-  evaluation?: JobEvaluationData;
-  timestamp?: number;
-}
 
 interface ResumeDocumentProps {
   resume: TailoredResumeData;
@@ -39,10 +30,6 @@ interface ResumeDocumentProps {
   isAiGenerating?: boolean;
   onOpenRecruiterReview?: () => void;
   isProUser?: boolean;
-  tailoredRoles?: TailoredRoleItem[];
-  selectedRoleId?: string;
-  onSelectTailoredRole?: (role: TailoredRoleItem) => void;
-  onSelectMasterBaseline?: () => void;
 }
 
 /**
@@ -75,10 +62,6 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
   isAiGenerating,
   onOpenRecruiterReview,
   isProUser = false,
-  tailoredRoles = [],
-  selectedRoleId = '',
-  onSelectTailoredRole,
-  onSelectMasterBaseline,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -91,7 +74,6 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
   // Page layout & density controls
   const [fitSinglePage, setFitSinglePage] = useState(true);
-  const [spacingDensity, setSpacingDensity] = useState<'compact' | 'standard' | 'roomy'>('compact');
 
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
@@ -233,7 +215,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
     } else {
       setResume((prev) => ({
         ...prev,
-        projects: [...VAULT_PROJECTS],
+        projects: [{ name: '', description: '', bullets: [] }],
       }));
     }
   };
@@ -245,54 +227,22 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
     }));
   };
 
-  // Density-specific layout classes
+  // Layout styles calibrated for 1-Page ATS Fit
   const densityStyles = {
-    compact: {
-      containerPadding: 'p-6 sm:px-10 sm:py-7',
-      headerMargin: 'pb-2 mb-3',
-      sectionMargin: 'mb-3',
-      sectionHeadingMargin: 'pb-1 mb-1.5',
-      summaryText: 'text-[12px] sm:text-[12.5px] leading-snug',
-      skillsText: 'text-[11.5px] sm:text-[12px] leading-snug',
-      expTitle: 'text-[12.5px] sm:text-[13px]',
-      expMeta: 'text-[11px] sm:text-[11.5px]',
-      expSpacing: 'space-y-2.5',
-      bulletSpacing: 'space-y-0.5',
-      bulletText: 'text-[11.5px] sm:text-[12px] leading-tight',
-      eduSpacing: 'space-y-1',
-      eduText: 'text-[11.5px] sm:text-[12px]',
-    },
-    standard: {
-      containerPadding: 'p-8 sm:px-11 sm:py-9',
-      headerMargin: 'pb-2.5 mb-4',
-      sectionMargin: 'mb-4',
-      sectionHeadingMargin: 'pb-1 mb-2',
-      summaryText: 'text-xs sm:text-sm leading-relaxed',
-      skillsText: 'text-xs sm:text-[13px] leading-relaxed',
-      expTitle: 'text-xs sm:text-sm',
-      expMeta: 'text-xs',
-      expSpacing: 'space-y-3.5',
-      bulletSpacing: 'space-y-1',
-      bulletText: 'text-xs sm:text-[13px] leading-snug',
-      eduSpacing: 'space-y-1.5',
-      eduText: 'text-xs sm:text-[13px]',
-    },
-    roomy: {
-      containerPadding: 'p-8 sm:p-12',
-      headerMargin: 'pb-3 mb-5',
-      sectionMargin: 'mb-5',
-      sectionHeadingMargin: 'pb-1 mb-2.5',
-      summaryText: 'text-sm leading-relaxed',
-      skillsText: 'text-sm leading-relaxed',
-      expTitle: 'text-sm',
-      expMeta: 'text-xs',
-      expSpacing: 'space-y-4',
-      bulletSpacing: 'space-y-1.5',
-      bulletText: 'text-sm leading-relaxed',
-      eduSpacing: 'space-y-2',
-      eduText: 'text-sm',
-    },
-  }[spacingDensity];
+    containerPadding: 'p-6 sm:px-10 sm:py-7',
+    headerMargin: 'pb-2 mb-3',
+    sectionMargin: 'mb-3',
+    sectionHeadingMargin: 'pb-1 mb-1.5',
+    summaryText: 'text-[12px] sm:text-[12.5px] leading-snug',
+    skillsText: 'text-[11.5px] sm:text-[12px] leading-snug',
+    expTitle: 'text-[12.5px] sm:text-[13px]',
+    expMeta: 'text-[11px] sm:text-[11.5px]',
+    expSpacing: 'space-y-2.5',
+    bulletSpacing: 'space-y-0.5',
+    bulletText: 'text-[11.5px] sm:text-[12px] leading-tight',
+    eduSpacing: 'space-y-1',
+    eduText: 'text-[11.5px] sm:text-[12px]',
+  };
 
   return (
     <div className="workspace-resume space-y-5 max-w-5xl mx-auto">
@@ -327,30 +277,6 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
         {/* Controls Toolbar */}
         <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto justify-start md:justify-end text-xs">
-          {/* Apple-style Segmented Density Switcher */}
-          <div className="inline-flex items-center rounded-full bg-surface border border-border p-1 text-xs font-medium text-muted-foreground">
-            <button
-              onClick={() => setSpacingDensity('compact')}
-              className={`px-3 py-1 rounded-full transition-all duration-200 cursor-pointer ${
-                spacingDensity === 'compact'
-                  ? 'bg-card text-foreground font-semibold shadow-elevated'
-                  : 'hover:text-foreground'
-              }`}
-            >
-              1-Page Fit
-            </button>
-            <button
-              onClick={() => setSpacingDensity('standard')}
-              className={`px-3 py-1 rounded-full transition-all duration-200 cursor-pointer ${
-                spacingDensity === 'standard'
-                  ? 'bg-card text-foreground font-semibold shadow-elevated'
-                  : 'hover:text-foreground'
-              }`}
-            >
-              Standard
-            </button>
-          </div>
-
           {/* Edit Toggle */}
           <button
             onClick={() => setIsEditing(!isEditing)}
@@ -363,32 +289,6 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             {isEditing ? <Eye className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
             <span>{isEditing ? 'Preview' : 'Edit Bullets'}</span>
           </button>
-
-          {/* PM Projects Toggle */}
-          <button
-            onClick={toggleProductProjects}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border transition-all duration-200 cursor-pointer ${
-              hasProjects
-                ? 'bg-primary text-primary-foreground border-brand font-semibold'
-                : 'bg-surface border-border text-muted-foreground hover:text-foreground hover:bg-surface-2'
-            }`}
-            title="Toggle Product Projects (Credit Pilot & LazyTrip)"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>{hasProjects ? 'Projects: ON' : '+ Add Projects'}</span>
-          </button>
-
-          {/* Recruiter Panel Multi-Persona Review */}
-          {onOpenRecruiterReview && (
-            <button
-              onClick={onOpenRecruiterReview}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-info/10 hover:bg-info/10 border border-info/25 text-info font-semibold text-xs transition-all duration-200 cursor-pointer shadow-xs"
-              title="Simulate 3-Person Hiring Panel Review (Senior Recruiter, Hiring Manager, Technical Lead)"
-            >
-              <UserCheck className="w-3.5 h-3.5 text-info" />
-              <span>Recruiter Panel Review</span>
-            </button>
-          )}
 
           {/* Copy Plaintext */}
           <button
@@ -427,7 +327,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             ) : (
               <>
                 <FileText className="w-3.5 h-3.5 text-brand" />
-                <span>{isDocxDownloading ? 'Generating...' : 'Export DOCX'}</span>
+                <LoadingProgress inline active={isDocxDownloading} label="Exporting DOCX" idleLabel="Export DOCX" expectedSeconds={3} resultToken={docxSuccess} />
               </>
             )}
           </button>
@@ -461,52 +361,11 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             ) : (
               <>
                 <Download className="w-3.5 h-3.5 text-primary-foreground" />
-                <span>{isDownloading ? 'Generating...' : 'Download ATS PDF'}</span>
+                <LoadingProgress inline active={isDownloading} label="Exporting PDF" idleLabel="Download ATS PDF" expectedSeconds={10} resultToken={downloadSuccess} />
               </>
             )}
           </button>
         </div>
-
-        {/* Tailored Roles Switcher (Switch between tailored resumes for each role) */}
-        {tailoredRoles && tailoredRoles.length > 0 && (
-          <div className="w-full pt-3.5 border-t border-border flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0 mr-1 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-brand" />
-              <span>Tailored Roles ({tailoredRoles.length}):</span>
-            </span>
-            {tailoredRoles.map((tr) => {
-              const isSelected = tr.id === selectedRoleId || (tr.jobTitle === jobTitle && tr.companyName === companyName);
-              return (
-                <button
-                  key={tr.id}
-                  type="button"
-                  onClick={() => onSelectTailoredRole?.(tr)}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all text-xs font-semibold shrink-0 cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-surface text-foreground hover:bg-surface-2 border border-border'
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-                  <span>{tr.companyName} · {tr.jobTitle}</span>
-                </button>
-              );
-            })}
-            {onSelectMasterBaseline && (
-              <button
-                type="button"
-                onClick={onSelectMasterBaseline}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full transition-all text-xs font-semibold shrink-0 cursor-pointer ${
-                  !jobTitle
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
-                }`}
-              >
-                <span>Master Baseline</span>
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Printable / Renderable ATS Document Container */}
@@ -738,11 +597,6 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {proj.target_alignment && (
-                          <div className={`text-[#0071E3] font-medium ${densityStyles.expMeta}`}>
-                            {proj.target_alignment}
-                          </div>
-                        )}
                         {isEditing && (
                           <button
                             type="button"
@@ -790,7 +644,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                   onClick={toggleProductProjects}
                   className="px-3.5 py-1.5 bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-full font-medium cursor-pointer shrink-0 transition-all duration-200"
                 >
-                  + Include Credit Pilot & LazyTrip (PM Roles)
+                  + Add project
                 </button>
               </div>
             )
@@ -826,7 +680,7 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-[#1D1D1F]">
-                        Verified Professional Credentials (Toggle Top 3 for Resume):
+                        Saved Profile Credentials (Select for Resume):
                       </span>
                       <span className="text-[11px] text-[#0071E3] font-semibold font-mono">
                         {Math.min(resume.certifications.length, 3)} of 3 displayed
@@ -835,7 +689,8 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
                     {/* Quick-toggle from Master Vault 5 verified credentials */}
                     <div className="grid grid-cols-1 gap-1.5">
-                      {VERIFIED_CREDENTIALS.map((cred, cIdx) => {
+                      {getUserMasterProfile().certifications.map((badge, cIdx) => {
+                        const cred = { fullBadge: badge, coreCompetency: '' };
                         const isSelected = resume.certifications.some(
                           (c) => c.toLowerCase() === cred.fullBadge.toLowerCase()
                         );

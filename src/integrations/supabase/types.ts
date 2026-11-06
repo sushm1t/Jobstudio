@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_usage: {
+        Row: {
+          count: number
+          feature: string
+          period: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          feature: string
+          period: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          feature?: string
+          period?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_data: {
         Row: {
           key: string
@@ -32,6 +56,24 @@ export type Database = {
           updated_at?: string
           user_id?: string
           value?: string | null
+        }
+        Relationships: []
+      }
+      user_entitlements: {
+        Row: {
+          is_pro: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          is_pro?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          is_pro?: boolean
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "sdk_version": "3.4.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://suvjnlyivvyakrouysjt.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "futureprep",
+      "version": "0.1.0",
+      "title": "Futureprep"
+    },
+    "tools": [
+      {
+        "name": "get_master_profile",
+        "title": "Read my Master Profile",
+        "description": "Read your saved career headline, summary, skills, experience, education and certifications; excludes contact information.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_applications",
+        "title": "List my saved applications",
+        "description": "List up to 50 of your saved applications, optionally filtered by status; returns stable IDs for reading application history.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "Applied",
+                "Under Review",
+                "Interviewing",
+                "Offer Received",
+                "Rejected",
+                "Archived"
+              ],
+              "description": "Only show applications in this status; omit for all statuses."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Maximum number of applications to return, from 1 to 50."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_application_history",
+        "title": "Read my application history",
+        "description": "Read the latest 100 audit events and saved resume version labels for one of your applications, using its ID from list_applications.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Stable application ID returned by list_applications."
+            }
+          },
+          "required": [
+            "application_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

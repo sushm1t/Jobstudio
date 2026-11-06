@@ -1,4 +1,21 @@
 # Roadmap
+- [x] Move generation percentages into each action's existing loading location; remove floating/page-wide feedback and verify inline behavior
+- [x] Audit and fix mobile clipping across all pages, detailed views, and dialogs; preserve feature behavior
+- [x] Keep the current dashboard page open after refresh; verify account restoration and navigation
+- [x] Add estimated percentage and wait-time feedback for loading/generation actions; verify success and failure states
+- [ ] Add OAuth-protected career record MCP tools and browser-local application reading
+- [ ] Verify consent, login returns, tool catalog, and permissions
+- [x] Remove hard-coded personal candidate data and fabricated fallback achievements throughout the app
+- [x] Replace company packs with sourced guidance and role/saved-profile-specific practice questions
+- [x] Verify multi-profile behavior and existing profile/navigation flows
+- [x] Replace preliminary fit percentages with tentative labels; show numeric match only after full assessment
 
 - [x] Job Evaluator: after fetching live roles, show only roles matching the Master Profile
-- [x] Real sign-up/login with Supabase; save each user's data across visits
+- [x] Real sign-up/login with Lovable Cloud; save each user's data across visits
+- [x] Landing scene buttons ("Open the Job Evaluator", "Score a job now", "Tailor my resume", "Practise interviews", "Open my applications") dead when signed out — route them to sign-in
+- [x] After Google sign-in succeeds, land in the workspace instead of the landing page
+- [x] Fix Master Profile saving and show confirmation beside the clicked button
+- [x] Check why a travel/tourism operations profile receives engineering roles; correct inappropriate defaults or matching
+- [x] Fix View Resume showing the master resume instead of the selected role's tailored resume
+- [x] Check advice-like wording in generated resume and correct the content format
+- [x] Add Master Profile edit and confirmed delete/start-from-scratch controls, with persistent reset

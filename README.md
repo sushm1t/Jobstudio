@@ -1,28 +1,29 @@
-# Job Studio — Autonomous Career Workspace & ATS Optimization
+# Welcome to your Lovable project
 
-AI-powered career suite connecting to corporate ATS backends, tailoring metric-backed resumes, generating personalized cover letters, and preparing you for interviews with structured STAR guidance.
+This project was built with [Lovable](https://lovable.dev).
+
+## Build with Lovable
+
+Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+
+- **Ship faster**: describe what you want to build and Lovable handles the code.
+- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
+- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
+Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+
 ```sh
-npm install
+git clone <this-repository-url>
+cd <repository-name>
+npm i
 npm run dev
 ```
 
-The application runs on `http://localhost:8080`.
+## Built with
 
-## Testing & Build
-
-```sh
-npm test       # Run vitest test suite
-npm run build  # Compile client & SSR bundles
-```
-
-## Tech Stack
-
-- **Framework**: TanStack Start / React 19 / TypeScript
-- **Styling**: Tailwind CSS / Lucide React
-- **Backend / API**: Nitro / Express handlers / Local Ollama (`gemma4:latest`) — 100% on-device & zero API costs
-- **Database & Auth**: Supabase (with client-first localStorage offline fallback)
-- **Animation**: GSAP ScrollTrigger & Lenis
-
+- TanStack Start
+- TypeScript
+- React
+- Tailwind CSS

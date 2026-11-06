@@ -1,5 +1,6 @@
 // @ts-nocheck -- ported verbatim from the original project
 import { EXPANDED_ROADMAPS } from './expandedRoadmaps';
+import { MORE_ROADMAPS } from './moreRoadmaps';
 
 export interface ResourceLink {
   type: 'COURSE' | 'DOCS' | 'PRACTICE' | 'VIDEO' | 'PROJECT';
@@ -31,7 +32,7 @@ export interface CareerRoadmap {
   id: string;
   slug: string;
   title: string;
-  category: 'Engineering' | 'Operations' | 'AI & Data' | 'Cloud & DevOps' | 'Product & Project' | 'Solutions & GTM';
+  category: 'Engineering' | 'Operations' | 'AI & Data' | 'Cloud & DevOps' | 'Product & Project' | 'Solutions & GTM' | 'Business & Finance' | 'Travel & Hospitality' | 'Creative & Design';
   badge?: string;
   subtitle: string;
   description: string;
@@ -1977,4 +1978,5 @@ export const CAREER_ROADMAPS: CareerRoadmap[] = [
     ],
   },
   ...EXPANDED_ROADMAPS,
+  ...MORE_ROADMAPS,
 ];

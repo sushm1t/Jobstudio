@@ -1,5 +1,8 @@
 // @ts-nocheck -- ported verbatim from the original project
 import React, { useState } from 'react';
+import { CompanyFocusPacks } from './CompanyFocusPacks';
+import { LoadingProgress } from './LoadingProgress';
+import { deriveLeveragePoints } from '../utils/leveragePoints';
 import {
   Copy,
   CheckCircle2,
@@ -50,104 +53,8 @@ interface ScreeningAnswersViewProps {
   onRemoveScreeningAnswer?: (index: number) => void;
   isProUser?: boolean;
   onNavigateToPricing?: () => void;
+  initialTab?: 'screening' | 'portal' | 'company_packs' | 'behavioral' | 'negotiation';
 }
-
-// Preset Company Focus Packs
-const COMPANY_FOCUS_PACKS = [
-  {
-    id: 'revolut',
-    name: 'Revolut',
-    tagline: 'High-Velocity Fintech Scaling',
-    culture_pillars: ['Get It Done (Autonomy)', 'Never Settle (High Standards)', 'Deliver WOW', 'Radical Transparency'],
-    interview_focus: 'Data-driven problem solving, real-time crisis triage, SQL analytics, SQL logic, operational velocity.',
-    top_questions: [
-      {
-        q: 'Walk me through an operational incident where you had to make a high-stakes decision with incomplete data.',
-        strategy: 'Highlight real-time root cause analysis, cross-functional coordination, and restoring SLA under 30 minutes.',
-      },
-      {
-        q: 'How do you handle a sudden 50% spike in customer chat volume without dropping resolution quality?',
-        strategy: 'Explain dynamic shift reallocation, routing rule adjustment, and temporary automation fixes.',
-      },
-      {
-        q: 'Describe a project where you used SQL or data modeling to prove a conventional process was wrong.',
-        strategy: 'Cite specific dashboard KPIs, cohort metrics, and dollar/time savings achieved.',
-      },
-    ],
-  },
-  {
-    id: 'amazon',
-    name: 'Amazon',
-    tagline: 'Customer Obsession & Operational Depth',
-    culture_pillars: ['Customer Obsession', 'Ownership', 'Bias for Action', 'Dive Deep', 'Have Backbone; Disagree & Commit'],
-    interview_focus: 'Strict STAR methodology. Every single answer must have quantified metrics and demonstrate individual ownership.',
-    top_questions: [
-      {
-        q: 'Tell me about a time you had a significant disagreement with your manager or peer. How did you handle it?',
-        strategy: 'Focus on "Have Backbone; Disagree and Commit": use data to make your case respectfully, then commit 100% to the chosen path.',
-      },
-      {
-        q: 'Tell me about a time you simplified a complex process or automated a repetitive task.',
-        strategy: 'Focus on "Invent and Simplify": quantify hours saved per week and operational failure rate drop.',
-      },
-      {
-        q: 'Describe a situation where you had to make a critical operational decision without waiting for approval.',
-        strategy: 'Focus on "Bias for Action": explain calculated risk, two-way door decision-making, and rapid mitigation.',
-      },
-    ],
-  },
-  {
-    id: 'google',
-    name: 'Google',
-    tagline: 'General Cognitive Ability & Googliness',
-    culture_pillars: ['Googliness (Navigating Ambiguity)', 'General Cognitive Ability (GCA)', 'Role-Related Knowledge (RRK)', 'Collaborative Leadership'],
-    interview_focus: 'Structured framework thinking, intellectual humility, ethical considerations, and systemic scalability.',
-    top_questions: [
-      {
-        q: 'How would you measure the success of an operational overhaul across international regions?',
-        strategy: 'Define primary KPI (e.g. cycle time), counter-metrics (error rate, agent burnout), and global rollout phases.',
-      },
-      {
-        q: 'Tell me about a time a project failed or missed its milestone. What did you learn?',
-        strategy: 'Exhibit intellectual humility, blameless post-mortem methodology, and systemic process guardrails created.',
-      },
-      {
-        q: 'How do you navigate ambiguous requests from executive stakeholders when priorities shift weekly?',
-        strategy: 'Structure a prioritization matrix (Impact vs Effort) and transparent asynchronous communication cadences.',
-      },
-    ],
-  },
-  {
-    id: 'stripe',
-    name: 'Stripe',
-    tagline: 'Macro-Optimism & Deep Craftsmanship',
-    culture_pillars: ['Users First', 'Operating with Urgency', 'Macro-Optimism', 'Rigor & Craftsmanship'],
-    interview_focus: 'Meticulous attention to detail, clear written communication, and relentless customer advocacy.',
-    top_questions: [
-      {
-        q: 'Describe the most rigorous workflow or standard operating procedure you ever documented.',
-        strategy: 'Detail how you identified edge cases, codified runbooks, and reduced onboarding ramp from weeks to days.',
-      },
-      {
-        q: 'Tell me about a time you noticed a subtle discrepancy in operational metrics that everyone else overlooked.',
-        strategy: 'Demonstrate deep analytical curiosity, data reconciliation, and proactive error elimination.',
-      },
-    ],
-  },
-  {
-    id: 'figma',
-    name: 'Figma',
-    tagline: 'Maker Empathy & Collaborative Execution',
-    culture_pillars: ['Run with Empathy', 'Grow as We Build', 'Make it Fun', 'Craftsmanship'],
-    interview_focus: 'High emotional intelligence, community feedback integration, cross-functional collaboration.',
-    top_questions: [
-      {
-        q: 'Tell me about a time you partnered with engineering or product to resolve an operational bottleneck.',
-        strategy: 'Focus on cross-functional alignment, clear ticket escalation, and mutual respect for technical constraints.',
-      },
-    ],
-  },
-];
 
 export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
   screeningAnswers,
@@ -166,9 +73,20 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
   onRemoveScreeningAnswer,
   isProUser = false,
   onNavigateToPricing,
+  initialTab = 'screening',
 }) => {
-  // Main Sub-Navigation Tab State
-  const [activeTab, setActiveTab] = useState<'portal' | 'behavioral' | 'negotiation' | 'company_packs'>('portal');
+  // Stage 1 (Immediate / Application Stage): Screening Question Answers & Company Focus Guidance
+  const [stage1Tab, setStage1Tab] = useState<'screening' | 'company_packs'>(
+    initialTab === 'company_packs' ? 'company_packs' : 'screening'
+  );
+
+  // Stage 2 (Late Stage / Interview Call Stage): Expandable Round 2 & Offer Prep module
+  const [isRound2Expanded, setIsRound2Expanded] = useState<boolean>(
+    initialTab === 'behavioral' || initialTab === 'negotiation'
+  );
+  const [stage2Tab, setStage2Tab] = useState<'behavioral' | 'negotiation'>(
+    initialTab === 'negotiation' ? 'negotiation' : 'behavioral'
+  );
 
   // Copy states
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -195,7 +113,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
 
   // Behavioral Practice Coach State
   const [practiceQuestion, setPracticeQuestion] = useState<string>(
-    'Describe a time you handled a critical operational failure or incident under high pressure.'
+    'Describe a relevant challenge, your actions, and what you learned.'
   );
   const [practiceAnswerInput, setPracticeAnswerInput] = useState<string>('');
   const [isGradingPractice, setIsGradingPractice] = useState<boolean>(false);
@@ -216,13 +134,15 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
   const [copiedGoldStandard, setCopiedGoldStandard] = useState<boolean>(false);
 
   // Offer Negotiation Copilot State
-  const [offeredBase, setOfferedBase] = useState<string>('$95,000');
-  const [targetBase, setTargetBase] = useState<string>('$115,000');
-  const [benefitsInput, setBenefitsInput] = useState<string>('Standard healthcare, 15 days PTO, 401(k) match');
+  const [offeredBase, setOfferedBase] = useState<string>('');
+  const [targetBase, setTargetBase] = useState<string>('');
+  const [benefitsInput, setBenefitsInput] = useState<string>('');
   const [competingOfferInput, setCompetingOfferInput] = useState<string>('');
-  const [leverageInput, setLeverageInput] = useState<string>(
-    'Industry benchmark for high-volume operations, certified SC-900 compliance, proven track record of reducing SLA downtime by 35%'
-  );
+  const [leverageInput, setLeverageInput] = useState<string>(() => deriveLeveragePoints(masterProfileText));
+  const leverageEditedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!leverageEditedRef.current) setLeverageInput(deriveLeveragePoints(masterProfileText));
+  }, [masterProfileText]);
   const [isGeneratingOfferPrep, setIsGeneratingOfferPrep] = useState<boolean>(false);
   const [offerPrepResult, setOfferPrepResult] = useState<{
     counter_offer_email: string;
@@ -233,9 +153,6 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
   } | null>(null);
   const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
-
-  // Selected Company Focus Pack
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('google');
 
   const copyAnswer = (index: number, text: string) => {
     navigator.clipboard.writeText(text);
@@ -284,7 +201,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         body: JSON.stringify({
           question: q,
           companyName: companyName || 'Target Employer',
-          jobTitle: jobTitle || 'Operations Specialist',
+          jobTitle: jobTitle || 'Target Role',
           jobDescription,
           masterProfile: masterProfileText,
           style: selectedStyle,
@@ -298,11 +215,11 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
 
       setGeneratedAnswerResult({
         question: q,
-        answer: data.suggested_answer,
+        answer: data.answer,
         key_points: data.key_points || [],
         keywords: data.keywords || [],
         category: data.category || 'General',
-        word_count: data.word_count || data.suggested_answer.split(/\s+/).length,
+        word_count: data.word_count || data.answer.split(/\s+/).length,
       });
     } catch (err: any) {
       console.error('Answer generation error:', err);
@@ -324,7 +241,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         body: JSON.stringify({
           question: practiceQuestion,
           candidateAnswer: practiceAnswerInput,
-          jobTitle: jobTitle || 'Operations Specialist',
+          jobTitle: jobTitle || 'Target Role',
           companyName: companyName || 'Target Employer',
         }),
       });
@@ -349,7 +266,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         body: JSON.stringify({
           candidateName: `${candidateInfo.first_name} ${candidateInfo.last_name}`.trim() || 'Candidate',
           companyName: companyName || 'Target Employer',
-          jobTitle: jobTitle || 'Senior Operations Specialist',
+          jobTitle: jobTitle || 'Target Role',
           offeredBase,
           targetBase,
           benefitsSummary: benefitsInput,
@@ -415,7 +332,6 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
     return true;
   });
 
-  const activeCompany = COMPANY_FOCUS_PACKS.find((c) => c.id === selectedCompanyId) || COMPANY_FOCUS_PACKS[0];
 
   return (
     <div className="workspace-screening space-y-6 max-w-5xl mx-auto">
@@ -439,100 +355,83 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap sm:flex-nowrap">
-          {onTrackApplication && (
-            <button
-              onClick={onTrackApplication}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap justify-center ${
-                isTracked
-                  ? 'bg-success/10 text-success hover:bg-success/10 border border-success/30'
-                  : 'text-muted-foreground bg-surface hover:bg-surface-2'
-              }`}
-            >
-              <CheckCircle2 className={`w-3.5 h-3.5 ${isTracked ? 'text-success' : 'text-subtle'}`} />
-              <span>{isTracked ? 'Tracked as Applied' : 'Mark as Applied'}</span>
-            </button>
-          )}
-
           {applyUrl && (
             <a
               href={applyUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-colors cursor-pointer whitespace-nowrap justify-center shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-colors cursor-pointer whitespace-nowrap justify-center shadow-xs"
+              title={`Open official job portal for ${companyName || 'this role'} in a new tab`}
             >
-              <span>Open {companyName || 'Job'} Portal</span>
+              <span>Apply now</span>
               <ExternalLink className="w-3.5 h-3.5 text-primary-foreground/80" />
             </a>
+          )}
+
+          {onTrackApplication && (
+            <button
+              onClick={onTrackApplication}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap justify-center ${
+                isTracked
+                  ? 'bg-success/10 text-success hover:bg-success/20 border border-success/30'
+                  : 'text-foreground bg-surface hover:bg-surface-2 border border-border'
+              }`}
+              title={isTracked ? 'Click to untrack and remove from applied jobs' : 'Mark as applied and track application'}
+            >
+              <CheckCircle2 className={`w-3.5 h-3.5 ${isTracked ? 'text-success' : 'text-subtle'}`} />
+              <span>{isTracked ? 'Tracked as Applied' : 'Mark as Applied'}</span>
+            </button>
           )}
         </div>
       </div>
 
-      {/* Sub-Navigation Tabs */}
-      <div className="workspace-section-tabs flex items-center border-b border-border gap-1 sm:gap-4 overflow-x-auto pb-px">
-        <button
-          onClick={() => setActiveTab('portal')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border-b-2 cursor-pointer ${
-            activeTab === 'portal'
-              ? 'border-brand text-brand'
-              : 'border-transparent text-subtle hover:text-foreground'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>ATS Application &amp; Autofill</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('behavioral')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border-b-2 cursor-pointer ${
-            activeTab === 'behavioral'
-              ? 'border-brand text-brand'
-              : 'border-transparent text-subtle hover:text-foreground'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>Behavioral Practice &amp; STAR Coach</span>
-          {!isProUser && (
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-info/10 text-info">
-              PRO
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('negotiation')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border-b-2 cursor-pointer ${
-            activeTab === 'negotiation'
-              ? 'border-brand text-brand'
-              : 'border-transparent text-subtle hover:text-foreground'
-          }`}
-        >
-          <DollarSign className="w-4 h-4" />
-          <span>Offer &amp; Salary Negotiation</span>
-          {!isProUser && (
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-info/10 text-info">
-              PRO
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('company_packs')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border-b-2 cursor-pointer ${
-            activeTab === 'company_packs'
-              ? 'border-brand text-brand'
-              : 'border-transparent text-subtle hover:text-foreground'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Company Focus Packs</span>
-        </button>
-      </div>
-
       {/* ========================================================================= */}
-      {/* TAB 1: ATS PORTAL & SCREENING ANSWERS                                      */}
+      {/* STAGE 1: IMMEDIATE / APPLICATION STAGE                                     */}
       {/* ========================================================================= */}
-      {activeTab === 'portal' && (
-        <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-brand/10 text-brand border border-brand/20 font-mono">
+              STAGE 1 · APPLICATION STAGE
+            </span>
+            <span className="text-xs text-subtle font-medium">
+              Tools needed right now while submitting your job application
+            </span>
+          </div>
+        </div>
+
+        {/* Stage 1 Sub-Navigation Tabs */}
+        <div className="workspace-section-tabs flex items-center border-b border-border gap-2 sm:gap-4 overflow-x-auto pb-px">
+          <button
+            type="button"
+            onClick={() => setStage1Tab('screening')}
+            className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border-b-2 cursor-pointer ${
+              stage1Tab === 'screening'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-subtle hover:text-foreground'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Screening Question Answers</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStage1Tab('company_packs')}
+            className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap border-b-2 cursor-pointer ${
+              stage1Tab === 'company_packs'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-subtle hover:text-foreground'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Company Focus Guidance</span>
+          </button>
+        </div>
+
+        {/* Stage 1 Content: Screening Question Answers */}
+        {stage1Tab === 'screening' && (
+          <div className="space-y-6 pt-1">
           {/* Quick-Copy Applicant Details Grid */}
           <div className="bg-card rounded-2xl border border-border/80 p-6 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-border pb-3">
@@ -721,14 +620,13 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
                   {isGeneratingAnswer ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-primary-foreground" />
-                      <span>Generating...</span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Generate Answer</span>
                     </>
                   )}
+                  <LoadingProgress inline active={isGeneratingAnswer} label="Generating" idleLabel="Generate Answer" expectedSeconds={30} resultToken={generatedAnswerResult} />
                 </button>
               </div>
             </div>
@@ -925,13 +823,117 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
             ))}
           </div>
         </div>
-      )}
+        )}
+
+        {/* Stage 1 Content: Company Focus Guidance */}
+        {stage1Tab === 'company_packs' && (
+          <div className="pt-1">
+            <CompanyFocusPacks
+              companyName={companyName}
+              jobTitle={jobTitle}
+              jobDescription={jobDescription}
+              masterProfileText={masterProfileText}
+              applyUrl={applyUrl}
+            />
+          </div>
+        )}
+      </div>
 
       {/* ========================================================================= */}
-      {/* TAB 2: BEHAVIORAL INTERVIEW PRACTICE & STAR COACH                          */}
+      {/* STAGE 2: LATE STAGE / INTERVIEW CALL STAGE (EXPANDABLE MODULE)            */}
       {/* ========================================================================= */}
-      {activeTab === 'behavioral' && (
+      <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4 shadow-xs" data-testid="round-2-module">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-info/10 text-info border border-info/20 font-mono">
+                STAGE 2 · LATE STAGE
+              </span>
+              <span className="text-xs text-subtle font-medium">
+                Interview Call Stage
+              </span>
+            </div>
+            <h3 className="font-display font-semibold text-base sm:text-lg text-foreground">
+              Round 2 &amp; Offer Prep
+            </h3>
+            <p className="text-xs text-subtle max-w-xl leading-relaxed">
+              Behavioral STAR mock interview scoring and salary negotiation battlecards. Kept distinct so first-round applicants aren't overwhelmed by salary tactics before submitting their resume.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsRound2Expanded((prev) => !prev)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-surface hover:bg-surface-2 border border-border text-foreground transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+          >
+            <span>{isRound2Expanded ? 'Collapse Round 2 & Offer Prep' : 'Expand Round 2 & Offer Prep'}</span>
+            {isRound2Expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Collapsed State Guidance Note */}
+        {!isRound2Expanded && (
+          <div className="p-3.5 rounded-xl bg-surface/70 border border-border/80 text-xs text-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-info shrink-0" />
+              <span>First-round applicant? Focus on Stage 1 above. Expand this module when scheduling your interview or negotiating an offer.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsRound2Expanded(true)}
+              className="text-xs font-semibold text-brand hover:underline self-start sm:self-auto cursor-pointer"
+            >
+              Open Late-Stage Tools →
+            </button>
+          </div>
+        )}
+
+        {/* Expanded State Content */}
+        {isRound2Expanded && (
+          <div className="pt-4 border-t border-border space-y-6">
+            {/* Stage 2 Sub-Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-border pb-2 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setStage2Tab('behavioral')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  stage2Tab === 'behavioral'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Behavioral STAR Mock Interview Coach</span>
+                {!isProUser && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-info/20 text-info">
+                    PRO
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStage2Tab('negotiation')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  stage2Tab === 'negotiation'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Salary Negotiation Battlecards</span>
+                {!isProUser && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-bold rounded bg-info/20 text-info">
+                    PRO
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Behavioral STAR Mock Interview Coach */}
+            {stage2Tab === 'behavioral' && (
         <div className="space-y-6">
+          <LoadingProgress active={isFetchingInterviewPrep} label="Preparing interview questions" expectedSeconds={40} resultToken={interviewQuestions} />
           <div className="bg-card rounded-2xl border border-border/80 p-6 space-y-5 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
               <div>
@@ -957,10 +959,10 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
               </label>
               <div className="flex flex-wrap gap-2 mb-2">
                 {[
-                  'Describe a time you handled a critical operational failure or incident under high pressure.',
+                  'Describe a relevant challenge, your actions, and what you learned.',
                   'Tell me about a time you had a serious disagreement with a stakeholder. How did you resolve it?',
                   'Describe a situation where you had to prioritize competing high-severity deadlines.',
-                  'Give an example of an operational process you improved that delivered measurable ROI.',
+                  'Give an example of work you improved and explain the outcome.',
                 ].map((q, idx) => (
                   <button
                     key={idx}
@@ -995,7 +997,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
                 rows={5}
                 value={practiceAnswerInput}
                 onChange={(e) => setPracticeAnswerInput(e.target.value)}
-                placeholder="e.g. In my previous role as an operations analyst, we faced an unexpected queue surge during a peak product launch. I analyzed telemetry logs in real time to locate the processing bottleneck, collaborated with the engineering leads to deploy an optimized routing rule, and restored our customer response SLA to 99.5% within 30 minutes, preventing service disruptions for over 10,000 active users..."
+                placeholder="Describe a real situation, your own actions, and the outcome. Include numbers only if you can verify them."
                 className="w-full p-4 text-xs sm:text-sm bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-info/25 transition-all font-sans leading-relaxed"
               />
             </div>
@@ -1008,14 +1010,13 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
               {isGradingPractice ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-primary-foreground" />
-                  <span>Bar Raiser is Grading Your Answer...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>Grade Answer &amp; Generate Gold Standard Rewrite</span>
                 </>
               )}
+              <LoadingProgress inline active={isGradingPractice} label="Grading answer" idleLabel="Grade Answer & Generate Gold Standard Rewrite" expectedSeconds={30} resultToken={practiceResult} />
             </button>
 
             {/* Results Display */}
@@ -1116,10 +1117,8 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 3: OFFER & SALARY NEGOTIATION COPILOT                                  */}
-      {/* ========================================================================= */}
-      {activeTab === 'negotiation' && (
+            {/* Salary Negotiation Battlecards */}
+            {stage2Tab === 'negotiation' && (
         <div className="space-y-6">
           <div className="bg-card rounded-2xl border border-border/80 p-6 space-y-5 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
@@ -1177,14 +1176,25 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Key Leverage Points / Unique Value:
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Key Leverage Points / Unique Value:
+                  </label>
+                  {masterProfileText && (
+                    <button
+                      type="button"
+                      onClick={() => { leverageEditedRef.current = false; setLeverageInput(deriveLeveragePoints(masterProfileText)); }}
+                      className="text-xs font-medium text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    >
+                      Use my profile
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={leverageInput}
-                  onChange={(e) => setLeverageInput(e.target.value)}
-                  placeholder="e.g. Market benchmark for high-volume operations, certified SC-900 compliance, proven record of reducing SLA downtime by 35%"
+                  onChange={(e) => { leverageEditedRef.current = true; setLeverageInput(e.target.value); }}
+                  placeholder="Your strongest achievements, certifications, or results from your Master Profile"
                   className="w-full px-3.5 py-2 text-xs sm:text-sm bg-surface border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-success/20 focus:border-success/30"
                 />
               </div>
@@ -1198,14 +1208,13 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
               {isGeneratingOfferPrep ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-primary-foreground" />
-                  <span>Crafting Compensation Package...</span>
                 </>
               ) : (
                 <>
                   <DollarSign className="w-4 h-4" />
-                  <span>Generate Counter Email &amp; Phone Battlecards</span>
                 </>
               )}
+              <LoadingProgress inline active={isGeneratingOfferPrep} label="Preparing negotiation" idleLabel="Generate Counter Email & Phone Battlecards" expectedSeconds={40} resultToken={offerPrepResult} />
             </button>
 
             {/* Negotiation Output */}
@@ -1325,99 +1334,9 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* ========================================================================= */}
-      {/* TAB 4: COMPANY FOCUS INTERVIEW PACKS                                       */}
-      {/* ========================================================================= */}
-      {activeTab === 'company_packs' && (
-        <div className="space-y-6">
-          <div className="bg-card rounded-2xl border border-border/80 p-6 space-y-5 shadow-sm">
-            <div className="border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <span className="bg-brand/10 text-brand text-[11px] font-semibold rounded-md px-2 py-0.5 uppercase tracking-wider border border-brand/25 flex items-center gap-1">
-                  <Building2 className="w-3 h-3 text-brand" />
-                  COMPANY FOCUS PACKS
-                </span>
-                <h3 className="font-display font-bold text-base text-foreground">
-                  Target Company Cultural Pillars &amp; Questions
-                </h3>
-              </div>
-              <p className="text-xs text-subtle mt-0.5">
-                Understand how top tier companies evaluate candidates against their specific cultural principles and question formats.
-              </p>
-            </div>
-
-            {/* Company Selector Buttons */}
-            <div className="flex flex-wrap gap-2">
-              {COMPANY_FOCUS_PACKS.map((comp) => (
-                <button
-                  key={comp.id}
-                  onClick={() => setSelectedCompanyId(comp.id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                    selectedCompanyId === comp.id
-                      ? 'bg-foreground text-primary-foreground shadow-sm'
-                      : 'bg-surface text-muted-foreground hover:bg-surface-2'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>{comp.name}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Active Company Details */}
-            <div className="p-5 rounded-2xl bg-surface border border-border/80 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
-                <div>
-                  <h4 className="text-base font-bold text-foreground">{activeCompany.name} Focus Pack</h4>
-                  <p className="text-xs text-subtle">{activeCompany.tagline}</p>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {activeCompany.culture_pillars.map((pillar, i) => (
-                    <span
-                      key={i}
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-card border border-border text-muted-foreground"
-                    >
-                      {pillar}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-brand/10/60 border border-brand/25 text-xs text-brand">
-                <strong className="block mb-0.5 text-brand">Interview Bar &amp; Focus:</strong>
-                {activeCompany.interview_focus}
-              </div>
-
-              {/* Questions */}
-              <div className="space-y-3 pt-1">
-                <h5 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Top Asked Questions &amp; Tailoring Strategy:
-                </h5>
-                <div className="space-y-3">
-                  {activeCompany.top_questions.map((qItem, idx) => (
-                    <div key={idx} className="p-4 rounded-xl bg-card border border-border space-y-2">
-                      <div className="text-xs font-bold text-foreground flex items-start gap-2">
-                        <span className="w-5 h-5 rounded-full bg-surface text-muted-foreground flex items-center justify-center shrink-0 text-[11px]">
-                          {idx + 1}
-                        </span>
-                        <span>{qItem.q}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground bg-surface p-2.5 rounded-lg border border-border flex items-start gap-2">
-                        <Lightbulb className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="text-foreground">Winning Strategy: </strong>
-                          {qItem.strategy}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

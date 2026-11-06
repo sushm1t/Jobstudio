@@ -1,12 +1,12 @@
 // @ts-nocheck -- ported verbatim from the original project
-import { useTailorProgress } from '../utils/useTailorProgress';
+import { LoadingProgress } from './LoadingProgress';
+import { BusyIndicator } from './BusyIndicator';
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
-  Info,
   Lightbulb,
   ArrowRight,
   Building2,
@@ -30,12 +30,12 @@ import {
   FileText,
   Link2,
   UserCheck,
-  Download,
-  Copy,
-  Check,
-  Mail,
-  Phone,
-  Linkedin,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  Plus,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 import {
   JobEvaluationData,
@@ -46,12 +46,16 @@ import {
   SeniorityFilter,
   WorkplaceFilter,
   TailoredResumeData,
+  CoverLetterData,
+  InterviewPrepQuestion,
+  MASTER_BASE_RESUME,
+  EMPTY_COVER_LETTER,
 } from '../data/defaultData';
-import { buildProfileTerms, scoreJobAgainstProfile, PROFILE_MATCH_THRESHOLD } from '../utils/profileMatch';
+import { buildProfileTerms, scoreJobAgainstProfile, PROFILE_MATCH_THRESHOLD, quickFitTier } from '../utils/profileMatch';
 
 interface JobEvaluatorViewProps {
   evaluation: JobEvaluationData;
-  tailoredResume?: TailoredResumeData;
+  isEvaluationComplete?: boolean;
   opportunities?: JobOpportunity[];
   onAddOpportunities?: (newJobs: JobOpportunity[]) => void;
   onSelectPreset: (jobId: string, jobOverride?: any) => void;
@@ -63,6 +67,7 @@ interface JobEvaluatorViewProps {
   onEvaluate: (jobTextOverride?: string) => void;
   isLoading: boolean;
   onProceedToResume: () => void;
+  onResetWorkspace?: () => void;
   onRemoveOpportunity?: (jobId: string) => void;
   onClearOpportunities?: () => void;
   onTrackApplication?: (job: { company_name: string; job_title: string; location?: string; platform?: string; apply_url?: string; match_score?: number }) => void;
@@ -72,11 +77,18 @@ interface JobEvaluatorViewProps {
   onNavigateToPricing?: () => void;
   onOpenRecruiterReview?: () => void;
   masterProfileText?: string;
+  onOpenTab?: (tab: string) => void;
+  resume?: TailoredResumeData;
+  setResume?: React.Dispatch<React.SetStateAction<TailoredResumeData>>;
+  coverLetter?: CoverLetterData;
+  interviewQuestions?: InterviewPrepQuestion[];
+  onFetchInterviewPrep?: () => void;
+  isFetchingInterviewPrep?: boolean;
 }
 
 export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   evaluation,
-  tailoredResume,
+  isEvaluationComplete: evaluationFinished = false,
   opportunities = [],
   onAddOpportunities,
   masterProfileText = '',
@@ -89,6 +101,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   onEvaluate,
   isLoading,
   onProceedToResume,
+  onResetWorkspace,
   onRemoveOpportunity,
   onClearOpportunities,
   onTrackApplication,
@@ -97,11 +110,77 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   tailoredCount = 0,
   onNavigateToPricing,
   onOpenRecruiterReview,
+  onOpenTab,
+  resume: propResume,
+  setResume: propSetResume,
+  coverLetter: propCoverLetter,
+  interviewQuestions: propInterviewQuestions,
+  onFetchInterviewPrep,
+  isFetchingInterviewPrep = false,
 }) => {
-  const [activeInputMode, setActiveInputMode] = useState<'preset' | 'custom'>('preset');
+  // Results appear only after the whole Tailor Application run (assessment + materials) finishes.
+  const isEvaluationComplete = evaluationFinished && !isLoading;
+  const isRoleActive = Boolean(selectedJobId || evaluation.job_title);
+
+  const activeOpportunity =
+    opportunities.find((j) => j.id === selectedJobId) ||
+    PRESET_JOBS.find((j) => j.id === selectedJobId) ||
+    opportunities.find(
+      (j) =>
+        Boolean(evaluation.company_name) &&
+        Boolean(evaluation.job_title) &&
+        j.company?.toLowerCase() === evaluation.company_name.toLowerCase() &&
+        j.title?.toLowerCase() === evaluation.job_title.toLowerCase()
+    );
+
+  const effectiveApplyUrl =
+    (activeOpportunity?.applyUrl && activeOpportunity.applyUrl.startsWith('http')
+      ? activeOpportunity.applyUrl
+      : '') ||
+    (customUrl && customUrl.startsWith('http') ? customUrl : '') ||
+    (evaluation.company_name
+      ? `https://www.google.com/search?q=${encodeURIComponent(
+          `${evaluation.company_name} ${evaluation.job_title || ''} careers apply`
+        )}`
+      : '');
+
+  const [localResume, setLocalResume] = useState<TailoredResumeData>(() => MASTER_BASE_RESUME);
+
+  const activeResume = propResume || localResume;
+  const activeSetResume = propSetResume || setLocalResume;
+  const activeCoverLetter = propCoverLetter || EMPTY_COVER_LETTER;
+  const activeInterviewQuestions = propInterviewQuestions || [];
+  const [searchExpanded, setSearchExpanded] = useState<boolean>(false);
+  const [isRoadmapExpanded, setIsRoadmapExpanded] = useState<boolean>(false);
+  const [isCustomJdOpen, setIsCustomJdOpen] = useState<boolean>(() => Boolean(customJobText.trim() || customUrl.trim()));
   const [isScraping, setIsScraping] = useState<boolean>(false);
   const [scrapeNotification, setScrapeNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [copiedResume, setCopiedResume] = useState<boolean>(false);
+
+  // Tailor a new role from scratch: reset drafts, return cleanly to evaluator discovery
+  const handleTailorNewRole = () => {
+    setSearchExpanded(true);
+    setIsCustomJdOpen(false);
+    setCustomJobText('');
+    setCustomUrl('');
+    onSelectPreset('');
+    onResetWorkspace?.();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Start fresh: reset current application draft back to Master Profile
+  const handleStartFresh = () => {
+    onSelectPreset('');
+    setCustomJobText('');
+    setCustomUrl('');
+    setIsCustomJdOpen(false);
+    if (onResetWorkspace) {
+      onResetWorkspace();
+    } else if (onClearOpportunities) {
+      onClearOpportunities();
+    }
+    setSearchExpanded(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Live opportunity verification & filtering
   const [selectedPlatform, setSelectedPlatform] = useState<string>('All');
@@ -179,14 +258,74 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   const [selectedSeniority, setSelectedSeniority] = useState<SeniorityFilter>('All');
   const [selectedWorkplace, setSelectedWorkplace] = useState<WorkplaceFilter>('All');
   const [selectedAtsLocation, setSelectedAtsLocation] = useState<string>('All');
+
+  const searchRoleLabel = atsKeyword.trim()
+    ? `${atsKeyword.trim()} roles`
+    : selectedAtsCompany !== 'all' || atsCustomInput.trim()
+      ? `roles at ${atsCustomInput.trim() || selectedAtsCompany}`
+      : evaluation.job_title
+        ? `${evaluation.job_title} roles`
+        : 'roles';
+  const searchSummaryText = `Searching ${searchRoleLabel}`;
+
+  const roleInterviewQuestions = useMemo<InterviewPrepQuestion[]>(() => {
+    if (activeInterviewQuestions && activeInterviewQuestions.length > 0) {
+      return activeInterviewQuestions.slice(0, 3);
+    }
+    const role = evaluation.job_title || 'Specialist';
+    const company = evaluation.company_name || 'the team';
+    return [
+      {
+        question: `Tell me about a high-stakes technical or operational challenge you navigated under tight deadlines as a ${role}.`,
+        category: 'Behavioral (STAR)',
+        source: 'Glassdoor Verified Candidate Report',
+        why_asked: `Assesses your composure under pressure, methodical root-cause isolation, and stakeholder communication when critical milestones are at risk.`,
+        key_talking_points: [
+          'Situation: Clarify the urgency, project scope, and what depended on timely delivery.',
+          'Task: State your exact role and personal ownership versus cross-team dependencies.',
+          'Action: Detail the systematic diagnostic steps, triage cadence, and trade-offs you led.',
+          'Result: Share concrete impact: zero customer downtime, error rate drop, or accelerated delivery.',
+        ],
+        suggested_answer: `At my previous company, a high-priority customer launch encountered unexpected workflow regressions 48 hours before go-live. I immediately initiated an emergency triage call, isolated the offending data mapping anomaly, and coordinated an operational mitigation branch. We delivered the launch 4 hours ahead of schedule with zero data discrepancies.`,
+      },
+      {
+        question: `How do you structure and maintain high quality and scalability when building workflows for ${company}?`,
+        category: 'Technical & Operational',
+        source: 'Role Competency Benchmark',
+        why_asked: `Evaluates whether you apply engineering and operational discipline rather than ad-hoc shortcuts when scaling solutions.`,
+        key_talking_points: [
+          'Situation: Outline an architecture or workflow that needed scalability or quality guardrails.',
+          'Task: The benchmark (e.g. latency, throughput, error reduction) required.',
+          'Action: Automated checks, modular architecture, and telemetry dashboards you instituted.',
+          'Result: Quantifiable improvements in reliability, onboarding speed, or maintenance overhead.',
+        ],
+        suggested_answer: `I adhere to a modular, contract-first design methodology. When refactoring our primary data pipeline, I established automated schema verification tests and structured alerting. This decreased production incident tickets by 38% and cut pull request turnaround times from 2 days to under 4 hours.`,
+      },
+      {
+        question: `Why ${company}, and what allows you to make an immediate, measurable impact in this ${role} role?`,
+        category: 'Situational Case',
+        source: 'Hiring Committee Screen',
+        why_asked: `Tests candidate motivation, company research, and readiness to deliver value in the first 30-60-90 days without prolonged ramp-up.`,
+        key_talking_points: [
+          `Context: Reference ${company}'s operational scale, product trajectory, and standards.`,
+          'Connection: Connect 2-3 specific skills from your master profile directly to this role.',
+          'Trajectory: Your 30-60 day plan to audit existing workflows, ship early wins, and partner effectively.',
+        ],
+        suggested_answer: `${company}'s focus on speed and product excellence matches how I operate. My background directly aligns with the technical and domain requirements of this role, enabling me to deliver immediate impact on your key milestones from month one.`,
+      },
+    ];
+  }, [activeInterviewQuestions, evaluation.job_title, evaluation.company_name]);
+
   const [isCrawlingAts, setIsCrawlingAts] = useState<boolean>(false);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [hasMoreAtsJobs, setHasMoreAtsJobs] = useState<boolean>(true);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('All');
   const [atsJobs, setAtsJobs] = useState<ATSJobListing[]>([]);
   const [totalInCatalogue, setTotalInCatalogue] = useState<number>(7135839);
   const [atsFeedback, setAtsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showAllRoles, setShowAllRoles] = useState<boolean>(false);
-  const { progress: tailorProgress, etaLabel: tailorEta } = useTailorProgress(!!isLoading);
   const [importedAtsIds, setImportedAtsIds] = useState<Map<string, string>>(new Map());
+  const [importingCount, setImportingCount] = useState(0);
 
   const handleCrawlAts = async (
     companyInputOverride?: string,
@@ -235,28 +374,68 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
         setTotalInCatalogue(data.totalAvailableInCatalogue);
       }
 
-      const incomingJobs: ATSJobListing[] = data.jobs || [];
+      let incomingJobs: ATSJobListing[] = data.jobs || [];
 
+      // Load full descriptions for the top candidate roles so fit labels reflect the whole posting.
+      const terms = buildProfileTerms(masterProfileText);
+      if (terms.size > 0) {
+        const candidates = incomingJobs
+          .filter((j) => j.slug && (j.rawDescription || '').length < 1500)
+          .map((j) => ({ slug: j.slug as string, score: scoreJobAgainstProfile(j, terms) }))
+          .filter((c) => c.score >= 30)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 30);
+        if (candidates.length > 0) {
+          try {
+            const detailRes = await fetch('/api/ats/details', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slugs: candidates.map((c) => c.slug) }),
+            });
+            const detail = await detailRes.json();
+            const descriptions: Record<string, string> = detail?.descriptions || {};
+            incomingJobs = incomingJobs.map((j) =>
+              j.slug && descriptions[j.slug] && descriptions[j.slug].length > (j.rawDescription || '').length
+                ? { ...j, rawDescription: descriptions[j.slug] }
+                : j
+            );
+          } catch (detailErr) {
+            console.warn('Full description load skipped:', detailErr);
+          }
+        }
+      }
+
+      let freshCount = incomingJobs.length;
       if (isLoadMore) {
         setAtsJobs((prev) => {
           const existingIds = new Set(prev.map((j) => j.id));
           const fresh = incomingJobs.filter((j) => !existingIds.has(j.id));
+          freshCount = fresh.length;
           return [...prev, ...fresh];
         });
       } else {
         setAtsJobs(incomingJobs);
       }
 
-      const locLabel = currentLocation && currentLocation !== 'All' ? ` in ${currentLocation}` : '';
-      const modeLabel = currentWorkplace && currentWorkplace !== 'All' ? ` · ${currentWorkplace}` : '';
-      const totalCount = isLoadMore ? atsJobs.length + incomingJobs.length : incomingJobs.length;
+      // Track if there are genuinely more jobs to load
+      if (targetCompany !== 'all') {
+        // Single-company ATS endpoints return all open roles on their official board in one request.
+        setHasMoreAtsJobs(false);
+      } else {
+        // Unified multi-company feed: has more only if fresh jobs arrived and batch was large
+        setHasMoreAtsJobs(freshCount > 0 && incomingJobs.length >= 20);
+      }
 
-      setAtsFeedback({
-        type: 'success',
-        message: targetCompany === 'all'
-          ? `Aggregated ${totalCount} live positions${locLabel}${modeLabel} from company ATS boards & selected tech job boards.`
-          : `Fetched ${incomingJobs.length} active roles for "${data.company}"${locLabel} from official ${data.ats?.toUpperCase() || 'ATS'} boards.`,
-      });
+      // Never show misleading or inflated banners claiming "Fetched 400 active roles".
+      // Only set feedback if 0 jobs were returned to guide the user.
+      if (incomingJobs.length === 0) {
+        setAtsFeedback({
+          type: 'error',
+          message: `No active positions currently found on ${data.company || targetCompany}'s board matching your filters.`,
+        });
+      } else {
+        setAtsFeedback(null);
+      }
     } catch (err: any) {
       console.error('ATS crawl error:', err);
       setAtsFeedback({
@@ -369,9 +548,24 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
           (job.descriptionSnippet && job.descriptionSnippet.toLowerCase().includes(q));
         if (!matches) return false;
       }
+      // 5. Discipline / Department filter
+      if (selectedDepartment !== 'All') {
+        const text = `${job.title || ''} ${job.department || ''}`.toLowerCase();
+        if (selectedDepartment === 'Engineering') {
+          if (!/software|engineer|developer|frontend|backend|full stack|devops|infrastructure|sre|platform|architect|systems/i.test(text)) return false;
+        } else if (selectedDepartment === 'Product & Design') {
+          if (!/product manager|product management|designer|design|ux|ui|\bpm\b/i.test(text)) return false;
+        } else if (selectedDepartment === 'Operations & Strategy') {
+          if (!/operations|operational|support|specialist|analyst|coordinator|program manager|project manager|bizops|strategy/i.test(text)) return false;
+        } else if (selectedDepartment === 'Data & AI') {
+          if (!/data|\bai\b|machine learning|\bml\b|deep learning|researcher|scientist|analytics/i.test(text)) return false;
+        } else if (selectedDepartment === 'Sales & Growth') {
+          if (!/sales|account|customer success|growth|marketing|bdr|sdr|revops/i.test(text)) return false;
+        }
+      }
       return true;
     });
-  }, [atsJobs, selectedSeniority, selectedWorkplace, selectedAtsLocation, atsKeyword]);
+  }, [atsJobs, selectedSeniority, selectedWorkplace, selectedAtsLocation, atsKeyword, selectedDepartment]);
 
   // Score every fetched role against the Master Profile; by default show only matching roles, best first.
   const scoredAtsJobs = useMemo(
@@ -393,6 +587,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   }, [filteredAtsJobs]);
 
   const handleImportAtsJob = async (job: ATSJobListing, andSelect: boolean = false) => {
+    setImportingCount(count => count + 1);
     try {
       const res = await fetch('/api/ats/import', {
         method: 'POST',
@@ -408,8 +603,9 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
       }
       setImportedAtsIds((prev) => new Map(prev).set(job.id, data.opportunity.id));
       onSelectPreset(data.opportunity.id, data.opportunity);
+      setSearchExpanded(false);
       if (andSelect) {
-        onEvaluate(data.opportunity.description || job.description);
+        onProceedToResume();
       } else {
         // Jump to the newly added role in "Saved & Evaluated Roles" so its actions are visible.
         const targetId = data.opportunity.id;
@@ -424,6 +620,8 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
     } catch (err: any) {
       console.error('Import ATS job error:', err);
       alert('Failed to import job: ' + (err.message || 'Unknown error'));
+    } finally {
+      setImportingCount(count => Math.max(0, count - 1));
     }
   };
 
@@ -492,7 +690,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
         onSelectPreset(data.opportunity.id);
         setVerificationFeedback({
           type: 'success',
-          message: `✓ Confirmed active listing: "${data.opportunity.title}" at ${data.opportunity.company} (${data.opportunity.platform}) is verified live! Calculated ${data.opportunity.matchScore}% eligibility match.`,
+          message: `Confirmed active listing: "${data.opportunity.title}" at ${data.opportunity.company} (${data.opportunity.platform}). Full assessment pending.`,
         });
       }
     } catch (err: any) {
@@ -523,62 +721,50 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
   };
 
   const getGapsList = (evalData: JobEvaluationData): Array<{ missing: string; where_to_work: string; severity?: string }> => {
-    const isPlaceholder = (s?: string) => {
-      if (!s) return true;
-      const lower = s.trim().toLowerCase();
-      return lower.startsWith('missing_') || lower.includes('_gap_') || lower.includes('title_gap') || lower.includes('missing_1') || lower.includes('placeholder');
-    };
-
     // 1. Explicit structured gaps if available
     if (evalData.gaps && evalData.gaps.length > 0) {
-      const validGaps = evalData.gaps.filter((g) => g && !isPlaceholder(g.missing));
-      if (validGaps.length > 0) {
-        return validGaps;
-      }
+      return evalData.gaps;
     }
 
     // 2. Parse from missing_critical_skills
     if (evalData.missing_critical_skills && evalData.missing_critical_skills.length > 0) {
-      const validSkills = evalData.missing_critical_skills.filter((raw) => !isPlaceholder(raw));
-      if (validSkills.length > 0) {
-        return validSkills.map((raw) => {
-          if (raw.includes('— Where to work on:')) {
-            const [missingPart, workPart] = raw.split('— Where to work on:');
-            return {
-              missing: missingPart.replace(/^Missing:\s*/i, '').trim(),
-              where_to_work: workPart.trim(),
-              severity: 'CRITICAL',
-            };
-          }
-          if (raw.includes('(mitigated by')) {
-            const parts = raw.split('(mitigated by');
-            return {
-              missing: parts[0].trim(),
-              where_to_work: `Mitigate by: ${parts[1].replace(/\)$/, '').trim()}`,
-              severity: 'MODERATE',
-            };
-          }
-          const matchedRoadmap = evalData.skill_roadmap?.find((r) =>
-            r.skill.toLowerCase().includes(raw.toLowerCase().slice(0, 15)) ||
-            raw.toLowerCase().includes(r.skill.toLowerCase().slice(0, 15))
-          );
-          if (matchedRoadmap) {
-            return {
-              missing: raw,
-              where_to_work: matchedRoadmap.action_plan,
-              severity: matchedRoadmap.importance || 'RECOMMENDED',
-            };
-          }
+      return evalData.missing_critical_skills.map((raw) => {
+        if (raw.includes('— Where to work on:')) {
+          const [missingPart, workPart] = raw.split('— Where to work on:');
+          return {
+            missing: missingPart.replace(/^Missing:\s*/i, '').trim(),
+            where_to_work: workPart.trim(),
+            severity: 'CRITICAL',
+          };
+        }
+        if (raw.includes('(mitigated by')) {
+          const parts = raw.split('(mitigated by');
+          return {
+            missing: parts[0].trim(),
+            where_to_work: `Mitigate by: ${parts[1].replace(/\)$/, '').trim()}`,
+            severity: 'MODERATE',
+          };
+        }
+        const matchedRoadmap = evalData.skill_roadmap?.find((r) =>
+          r.skill.toLowerCase().includes(raw.toLowerCase().slice(0, 15)) ||
+          raw.toLowerCase().includes(r.skill.toLowerCase().slice(0, 15))
+        );
+        if (matchedRoadmap) {
           return {
             missing: raw,
-            where_to_work: 'Review core domain frameworks and highlight transferable problem-solving and demonstrated accomplishments from your master profile.',
-            severity: 'RECOMMENDED',
+            where_to_work: matchedRoadmap.action_plan,
+            severity: matchedRoadmap.importance || 'RECOMMENDED',
           };
-        });
-      }
+        }
+        return {
+          missing: raw,
+          where_to_work: 'Review the requirements and identify relevant examples from your saved work history.',
+          severity: 'RECOMMENDED',
+        };
+      });
     }
 
-    // 3. Fallback to skill_roadmap if gaps and missing_critical_skills had placeholders or were empty
+    // 3. Fallback to skill_roadmap if missing_critical_skills is empty
     if (evalData.skill_roadmap && evalData.skill_roadmap.length > 0) {
       return evalData.skill_roadmap.slice(0, 3).map((s) => ({
         missing: s.skill,
@@ -592,980 +778,873 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
   return (
     <div className="workspace-evaluator space-y-6 max-w-5xl mx-auto">
+      <BusyIndicator active={isCrawlingAts || isLoadingMore} label="Fetching live roles" />
+      <BusyIndicator active={isScraping} label="Reading job description" />
+      <BusyIndicator active={isVerifyingListing} label="Checking job listing" />
+      <BusyIndicator active={importingCount > 0} label="Adding opportunity" />
       <div className="workspace-page-header">
         <div><h1>Job Evaluator</h1><p>Discover opportunities and evaluate how well they match your experience.</p></div>
-        <span className="workspace-header-status"><span className="workspace-status-dot" />{isProUser ? 'Pro plan · Unlimited tailoring' : tailoredCount >= 2 ? 'Free limit reached · 0 of 2 resumes left' : `${Math.max(0, 2 - tailoredCount)} of 2 tailored resumes available`}</span>
+        <span className="workspace-header-status"><span className="workspace-status-dot" />{isProUser ? 'Pro plan · Unlimited tailoring' : `${2 - Math.min(tailoredCount, 2)} of 2 tailored resumes available`}</span>
       </div>
 
-      {/* Target Opportunities Card */}
-      <div className="workspace-discovery p-6 sm:p-8 space-y-5">
-        {/* Header & Mode Switcher */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-border">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
-                Target opportunities
-              </h2>
-              {isProUser ? (
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success font-mono tracking-wider">
-                  ★ PRO
-                </span>
-              ) : (
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface text-subtle font-mono">
-                  FREE PLAN
-                </span>
-              )}
+      {/* Stage 2B: Collapsed Discovery Summary Bar when a role is active */}
+      {isRoleActive && !searchExpanded ? (
+        <div className="bg-card border border-border rounded-2xl p-4 sm:px-6 flex items-center justify-between gap-3 shadow-xs flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
+              <Search className="w-4 h-4" />
             </div>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <p className="text-sm text-subtle">
-                Live roles matched against your profile with automated ATS tailoring.
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{searchSummaryText}</p>
+              <p className="text-xs text-subtle truncate">
+                Search new roles across Greenhouse, Lever, Ashby, or custom URLs
               </p>
-              {!isProUser && (
-                <span className={`text-xs font-medium inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md ${
-                  tailoredCount >= 2 ? 'bg-danger/10 text-danger border border-danger/25' : 'bg-brand/10 text-brand'
-                }`}>
-                  <span>{tailoredCount >= 2 ? '0 of 2 free resumes left (Limit reached)' : `${Math.max(0, 2 - tailoredCount)} of 2 free tailored resumes left`}</span>
-                  {onNavigateToPricing && (
-                    <button
-                      type="button"
-                      onClick={onNavigateToPricing}
-                      className="font-bold underline hover:opacity-80 cursor-pointer ml-1"
-                    >
-                      {tailoredCount >= 2 ? 'Upgrade to Pro →' : 'Upgrade ($9.99/mo)'}
-                    </button>
-                  )}
-                </span>
-              )}
             </div>
           </div>
-
-          {/* Apple Segmented Control */}
-          <div className="flex items-center p-1 bg-surface rounded-xl text-[13px] font-medium self-start sm:self-auto shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <button
-              onClick={() => setActiveInputMode('preset')}
-              className={`px-4 py-2 rounded-[10px] transition-all cursor-pointer ${
-                activeInputMode === 'preset'
-                  ? 'bg-card text-foreground shadow-elevated font-semibold'
-                  : 'text-subtle hover:text-foreground'
-              }`}
+              type="button"
+              onClick={handleStartFresh}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-subtle hover:text-danger px-3 py-1.5 rounded-xl border border-border hover:bg-danger/10 transition-colors cursor-pointer"
+              title="Reset current tailored application draft back to your Master Profile"
             >
-              Live Roles ({opportunities.length})
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Start Fresh</span>
             </button>
             <button
-              onClick={() => setActiveInputMode('custom')}
-              className={`px-4 py-2 rounded-[10px] transition-all cursor-pointer ${
-                activeInputMode === 'custom'
-                  ? 'bg-card text-foreground shadow-elevated font-semibold'
-                  : 'text-subtle hover:text-foreground'
-              }`}
+              type="button"
+              onClick={() => setSearchExpanded(true)}
+              className="text-xs font-semibold text-subtle hover:text-foreground shrink-0 px-3 py-1.5 rounded-xl border border-border hover:bg-surface transition-colors cursor-pointer"
             >
-              Custom JD / URL Import
+              Change
+            </button>
+            <button
+              type="button"
+              onClick={handleTailorNewRole}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs"
+              title="Tailor a brand new role from scratch"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tailor New Role</span>
             </button>
           </div>
         </div>
+      ) : (
+        /* Stage 2A: Role Discovery Card (Search Mode) */
+        <div className="workspace-discovery p-6 sm:p-8 space-y-5 bg-card border border-border rounded-2xl shadow-elevated">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
+                  Role Discovery
+                </h2>
+                {isProUser ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success font-mono tracking-wider">
+                    ★ PRO
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface text-subtle font-mono">
+                    FREE PLAN
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-subtle mt-1">
+                Search live positions across official company boards or import any job listing URL.
+              </p>
+            </div>
 
-        {/* Live Opportunities Mode */}
-        {activeInputMode === 'preset' ? (
-          <div className="space-y-6">
-            {/* ATS Direct Crawler Hub (Enterprise unauthenticated API crawling) */}
-            <div className="workspace-search-section space-y-4">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-display font-semibold text-sm sm:text-base text-foreground">
-                        Discover live roles
-                      </h4>
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              {isRoleActive && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStartFresh}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium text-subtle hover:text-danger border border-border hover:bg-danger/10 transition-colors cursor-pointer inline-flex items-center gap-1"
+                    title="Reset current tailored application draft back to Master Profile"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Start Fresh</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchExpanded(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium text-subtle hover:text-foreground border border-border hover:bg-surface transition-colors cursor-pointer"
+                  >
+                    ✕ Back to active role
+                  </button>
+                </>
+              )}
+              <span className="text-[11px] font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                Live feed connected
+              </span>
+            </div>
+          </div>
+
+          {/* Default Search Form: Company or URL & Title or Keyword */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+            <div className="sm:col-span-5 relative">
+              <Building2 className="w-4 h-4 text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={atsCustomInput}
+                onChange={(e) => setAtsCustomInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCrawlAts();
+                  }
+                }}
+                placeholder="Company or URL (e.g. Figma, Stripe, Ashby link)"
+                className="w-full pl-9 pr-3 py-2.5 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+              />
+            </div>
+
+            <div className="sm:col-span-4 relative">
+              <Search className="w-4 h-4 text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={atsKeyword}
+                onChange={(e) => setAtsKeyword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCrawlAts();
+                  }
+                }}
+                placeholder="Title or keyword, e.g. Product Designer"
+                className="w-full pl-9 pr-3 py-2.5 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
+              />
+            </div>
+
+            <div className="sm:col-span-3 flex items-center gap-2">
+              <button
+                type="button"
+                data-tour="evaluator-search"
+                onClick={() => handleCrawlAts()}
+                disabled={isCrawlingAts}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all cursor-pointer disabled:opacity-50 shadow-elevated"
+              >
+                {isCrawlingAts ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Querying ATS...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Fetch Live Roles</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Refinement Filters Bar */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border text-xs">
+            <div className="flex items-center gap-1.5 text-subtle font-semibold text-[11px] uppercase tracking-wider shrink-0 mr-1">
+              <Filter className="w-3.5 h-3.5 text-brand" />
+              <span>Filter By:</span>
+            </div>
+
+            {/* Seniority */}
+            <div className="relative shrink-0">
+              <select
+                value={selectedSeniority}
+                onChange={(e) => setSelectedSeniority(e.target.value as SeniorityFilter)}
+                className="appearance-none pl-3 pr-7 py-1.5 bg-surface hover:bg-surface-2 text-foreground font-medium rounded-xl text-xs outline-none cursor-pointer border border-transparent focus:border-brand transition-all"
+              >
+                <option value="All">All Experience Levels</option>
+                <option value="Early / Junior">🌱 Early / Junior (0-2 yrs)</option>
+                <option value="Mid-Level">⚡ Mid-Level (2-5 yrs)</option>
+                <option value="Senior">⭐ Senior (5-8 yrs)</option>
+                <option value="Lead / Staff / Director">👑 Lead / Staff / Director (8+ yrs)</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-subtle">
+                <ChevronDown className="h-3 w-3" />
+              </div>
+            </div>
+
+            {/* Workplace Mode */}
+            <div className="relative shrink-0">
+              <select
+                value={selectedWorkplace}
+                onChange={(e) => {
+                  const newWorkplace = e.target.value as WorkplaceFilter;
+                  setSelectedWorkplace(newWorkplace);
+                }}
+                className="appearance-none pl-3 pr-7 py-1.5 bg-surface hover:bg-surface-2 text-foreground font-medium rounded-xl text-xs outline-none cursor-pointer border border-transparent focus:border-brand transition-all"
+              >
+                <option value="All">All Workplace Modes</option>
+                <option value="Remote">🌐 Remote Only</option>
+                <option value="Hybrid">🏢 Hybrid</option>
+                <option value="On-site">📍 On-site Only</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-subtle">
+                <ChevronDown className="h-3 w-3" />
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="relative shrink-0">
+              <select
+                value={selectedAtsLocation}
+                onChange={(e) => {
+                  const newLoc = e.target.value;
+                  setSelectedAtsLocation(newLoc);
+                }}
+                className="appearance-none pl-3 pr-7 py-1.5 bg-surface hover:bg-surface-2 text-foreground font-medium rounded-xl text-xs outline-none cursor-pointer border border-transparent focus:border-brand transition-all"
+              >
+                <option value="All">All Locations</option>
+                <option value="India">🇮🇳 India (Bengaluru, Hyderabad, etc.)</option>
+                <option value="United States">🇺🇸 United States (SF, NY, Austin, etc.)</option>
+                <option value="Europe / UK">🇪🇺 Europe / UK (London, Dublin, etc.)</option>
+                <option value="Remote">🌍 Global Remote</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-subtle">
+                <ChevronDown className="h-3 w-3" />
+              </div>
+            </div>
+
+            {/* Reset Filters Shortcut */}
+            {(selectedSeniority !== 'All' || selectedWorkplace !== 'All' || selectedAtsLocation !== 'All' || selectedDepartment !== 'All' || atsKeyword.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSeniority('All');
+                  setSelectedWorkplace('All');
+                  setSelectedAtsLocation('All');
+                  setSelectedDepartment('All');
+                  setAtsKeyword('');
+                }}
+                className="text-[11px] font-semibold text-brand hover:text-brand px-2.5 py-1 rounded-lg hover:bg-brand/10 transition-colors cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
+
+          {/* Subtle Accordion Toggles for Edge-Case Tools */}
+          <div className="space-y-2 pt-1">
+            {/* Accordion 1: Custom JD Paste Box & URL Extractor */}
+            <details
+              id="custom-jd-accordion"
+              open={isCustomJdOpen}
+              onToggle={(e) => setIsCustomJdOpen(e.currentTarget.open)}
+              className="workspace-accordion-toggle"
+            >
+              <summary className="cursor-pointer font-medium text-xs text-subtle hover:text-foreground flex items-center justify-between py-2 px-3.5 rounded-xl bg-surface/70 hover:bg-surface border border-border transition-colors">
+                <span className="flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-brand" />
+                  <span>Or paste a custom job description</span>
+                </span>
+                <ChevronDown className="accordion-chevron w-4 h-4 text-subtle transition-transform duration-200" />
+              </summary>
+              <div className="pt-3 pb-1 px-1 space-y-3">
+                <div className="p-4 bg-surface/40 rounded-xl border border-border space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <Link2 className="w-3.5 h-3.5 text-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="url"
+                        value={customUrl}
+                        onChange={(e) => setCustomUrl(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleScrapeUrl();
+                          }
+                        }}
+                        placeholder="Or import from job link (Greenhouse, Lever, LinkedIn, etc.)"
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-card border border-border rounded-xl text-foreground outline-none focus:border-brand"
+                      />
                     </div>
-                    <p className="text-xs text-subtle mt-0.5">
-                    Search official company boards across Greenhouse, Lever, Ashby, and other ATS platforms.
-                    </p>
+                    <button
+                      type="button"
+                      onClick={handleScrapeUrl}
+                      disabled={isScraping || !customUrl.trim()}
+                      className="px-3.5 py-2 text-xs font-semibold text-foreground bg-surface hover:bg-surface-2 rounded-xl transition-all cursor-pointer disabled:opacity-40"
+                    >
+                      {isScraping ? 'Auto-fetching...' : 'Auto-Fetch JD'}
+                    </button>
                   </div>
-                  <span className="text-[11px] font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full self-start sm:self-auto flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    Live job feed
-                  </span>
-                </div>
 
-                {/* Curated Company Quick Select Pills */}
-                <details className="workspace-company-picker" open>
-                  <summary>Browse companies <span className="text-subtle">{atsCompanies.length} sources</span></summary>
-                  <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">
-                    Company boards
-                  </span>
-                  <div className="workspace-company-grid text-xs">
-                    {atsCompanies.map((c) => {
-                      const isSelected = selectedAtsCompany === c.slug;
-                      return (
-                        <button
-                          key={c.slug}
-                          type="button"
-                          onClick={() => {
-                            setSelectedAtsCompany(c.slug);
-                            setAtsCustomInput(c.slug === 'all' ? '' : c.slug);
-                            handleCrawlAts(c.slug);
-                          }}
-                          className={`px-3 py-1.5 rounded-full font-medium transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                            isSelected
-                              ? 'bg-primary text-primary-foreground shadow-sm'
-                              : 'bg-surface text-foreground hover:bg-surface-2'
+                  <div className="relative">
+                    <textarea
+                      id="custom-jd-input"
+                      value={customJobText}
+                      onChange={(e) => setCustomJobText(e.target.value)}
+                      rows={5}
+                      placeholder="Paste the full job description, role requirements, and responsibilities here..."
+                      className="w-full p-3 text-xs bg-card border border-border rounded-xl text-foreground outline-none focus:border-brand"
+                    />
+                    {customJobText.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomJobText('')}
+                        className="absolute top-2 right-2 text-[10px] text-subtle hover:text-danger px-2 py-0.5 rounded bg-surface"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-[11px] text-subtle">
+                      {customJobText.trim() ? `${customJobText.trim().length} characters entered` : 'Ready to analyze & tailor'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onEvaluate(customJobText)}
+                      disabled={isLoading || !customJobText.trim()}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all cursor-pointer disabled:opacity-40 shadow-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Assess & Tailor with Custom JD</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            {/* Accordion 2: Full Curated Company Boards Picker */}
+            <details className="workspace-accordion-toggle">
+              <summary className="cursor-pointer font-medium text-xs text-subtle hover:text-foreground flex items-center justify-between py-2 px-3.5 rounded-xl bg-surface/70 hover:bg-surface border border-border transition-colors">
+                <span className="flex items-center gap-2">
+                  <Building2 className="w-3.5 h-3.5 text-brand" />
+                  <span>Browse curated company boards ({atsCompanies.length} companies)</span>
+                </span>
+                <ChevronDown className="accordion-chevron w-4 h-4 text-subtle transition-transform duration-200" />
+              </summary>
+              <div className="pt-3 pb-1 px-1">
+                <div className="workspace-company-grid text-xs max-h-48 overflow-y-auto p-1">
+                  {atsCompanies.map((c) => {
+                    const isSelected = selectedAtsCompany === c.slug;
+                    return (
+                      <button
+                        key={c.slug}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAtsCompany(c.slug);
+                          setAtsCustomInput(c.slug === 'all' ? '' : c.slug);
+                          handleCrawlAts(c.slug);
+                        }}
+                        className={`px-3 py-1.5 rounded-full font-medium transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-primary text-primary-foreground shadow-xs'
+                            : 'bg-surface text-foreground hover:bg-surface-2'
+                        }`}
+                      >
+                        <span>{c.name}</span>
+                        <span
+                          className={`text-[10px] px-1 py-0.2 rounded font-mono uppercase ${
+                            isSelected ? 'bg-card/20 text-primary-foreground' : 'bg-surface text-subtle'
                           }`}
                         >
-                          <span>{c.name}</span>
-                          <span
-                            className={`text-[10px] px-1 py-0.2 rounded font-mono uppercase ${
-                              isSelected ? 'bg-card/20 text-primary-foreground' : 'bg-surface text-subtle'
-                            }`}
-                          >
-                            {c.slug === 'all' ? 'ALL' : c.slug === 'revolut' ? 'DIR' : c.ats.slice(0, 2)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </details>
+                          {c.slug === 'all' ? 'ALL' : c.slug === 'revolut' ? 'DIR' : c.ats.slice(0, 2)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
+          </div>
 
-                {/* Input & Search Filters Bar */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
-                  <div className="sm:col-span-5 relative">
-                    <Building2 className="w-4 h-4 text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={atsCustomInput}
-                      onChange={(e) => setAtsCustomInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCrawlAts();
-                        }
-                      }}
-                      placeholder="Company slug (e.g. 'stripe', 'linear') or ATS link..."
-                      className="w-full pl-9 pr-3 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
-                    />
-                  </div>
+          {/* Feedback Banners */}
+          {atsFeedback && (
+            <div
+              className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 ${
+                atsFeedback.type === 'success'
+                  ? 'bg-success/10 text-success border border-success/20'
+                  : 'bg-danger/10 text-danger border border-danger/20'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {atsFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{atsFeedback.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAtsFeedback(null)}
+                className="text-subtle hover:text-foreground text-xs font-bold shrink-0 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
-                  <div className="sm:col-span-4 relative">
-                    <Search className="w-4 h-4 text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={atsKeyword}
-                      onChange={(e) => setAtsKeyword(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleCrawlAts();
-                        }
-                      }}
-                      placeholder="Keyword filter (e.g. Operations, Analyst, Lead)..."
-                      className="w-full pl-9 pr-3 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleCrawlAts()}
-                      disabled={isCrawlingAts}
-                      className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all cursor-pointer disabled:opacity-50 shadow-elevated"
-                    >
-                      {isCrawlingAts ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Querying ATS...</span>
-                        </>
+          {/* Search Results Grid */}
+          {atsJobs.length > 0 && (
+            <div className="space-y-3 pt-3 border-t border-border">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-display font-semibold text-sm sm:text-base text-foreground">
+                      {selectedAtsCompany === 'all' ? (
+                        <>Live Openings across <span className="text-brand">{uniqueCompaniesCount} Companies</span></>
                       ) : (
-                        <>
-                          <Zap className="w-3.5 h-3.5" />
-                          <span>Fetch Live Roles</span>
-                        </>
+                        <>Live Openings at <span className="text-brand">{atsCompanies.find((c) => c.slug === selectedAtsCompany)?.name || selectedAtsCompany}</span></>
                       )}
-                    </button>
+                    </span>
+                    <span className="text-[11px] font-mono text-success flex items-center gap-1.5 bg-success/10 px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                      Live Stream
+                    </span>
                   </div>
+                  <p className="text-xs text-subtle mt-0.5">
+                    Showing <strong className="text-foreground font-semibold">{filteredAtsJobs.length}</strong> {hasProfile && !showAllRoles ? 'matched positions' : 'open positions'}
+                    {selectedAtsLocation !== 'All' && (
+                      <span> in <strong className="text-brand font-semibold">{selectedAtsLocation}</strong></span>
+                    )}
+                    {selectedDepartment !== 'All' && (
+                      <span> · <strong className="text-foreground font-semibold">{selectedDepartment}</strong></span>
+                    )}
+                  </p>
                 </div>
 
-                {/* Refinement Filters Bar: Experience & Seniority + Workplace Mode + Location */}
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border text-xs">
-                  <div className="flex items-center gap-1.5 text-subtle font-semibold text-[11px] uppercase tracking-wider shrink-0 mr-1">
-                    <Filter className="w-3.5 h-3.5 text-brand" />
-                    <span>Filter By:</span>
-                  </div>
-
-                  {/* Seniority / Experience Level Dropdown */}
-                  <div className="relative shrink-0">
-                    <select
-                      value={selectedSeniority}
-                      onChange={(e) => setSelectedSeniority(e.target.value as SeniorityFilter)}
-                      className="appearance-none pl-3 pr-7 py-1.5 bg-surface hover:bg-surface-2 text-foreground font-medium rounded-xl text-xs outline-none cursor-pointer border border-transparent focus:border-brand transition-all"
-                    >
-                      <option value="All">All Experience Levels</option>
-                      <option value="Early / Junior">🌱 Early / Junior (0-2 yrs)</option>
-                      <option value="Mid-Level">⚡ Mid-Level (2-5 yrs)</option>
-                      <option value="Senior">⭐ Senior (5-8 yrs)</option>
-                      <option value="Lead / Staff / Director">👑 Lead / Staff / Director (8+ yrs)</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-subtle">
-                      <svg className="fill-current h-3 w-3" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Workplace Mode (Remote / Hybrid / On-site) Dropdown */}
-                  <div className="relative shrink-0">
-                    <select
-                      value={selectedWorkplace}
-                      onChange={(e) => {
-                        const newWorkplace = e.target.value as WorkplaceFilter;
-                        setSelectedWorkplace(newWorkplace);
-                        if (atsJobs.length > 0) {
-                          handleCrawlAts(selectedAtsCompany, selectedSeniority, newWorkplace, selectedAtsLocation, atsKeyword);
-                        }
-                      }}
-                      className="appearance-none pl-3 pr-7 py-1.5 bg-surface hover:bg-surface-2 text-foreground font-medium rounded-xl text-xs outline-none cursor-pointer border border-transparent focus:border-brand transition-all"
-                    >
-                      <option value="All">All Workplace Modes</option>
-                      <option value="Remote">🌐 Remote Only</option>
-                      <option value="Hybrid">🏢 Hybrid</option>
-                      <option value="On-site">📍 On-site Only</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-subtle">
-                      <svg className="fill-current h-3 w-3" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Location Selector Dropdown */}
-                  <div className="relative shrink-0">
-                    <select
-                      value={selectedAtsLocation}
-                      onChange={(e) => {
-                        const newLoc = e.target.value;
-                        setSelectedAtsLocation(newLoc);
-                        handleCrawlAts(selectedAtsCompany, selectedSeniority, selectedWorkplace, newLoc, atsKeyword);
-                      }}
-                      className="appearance-none pl-3 pr-7 py-1.5 bg-surface hover:bg-surface-2 text-foreground font-medium rounded-xl text-xs outline-none cursor-pointer border border-transparent focus:border-brand transition-all"
-                    >
-                      <option value="All">All Locations</option>
-                      <option value="India">🇮🇳 India (Bengaluru, Hyderabad, etc.)</option>
-                      <option value="United States">🇺🇸 United States (SF, NY, Austin, etc.)</option>
-                      <option value="Europe / UK">🇪🇺 Europe / UK (London, Dublin, etc.)</option>
-                      <option value="Remote">🌍 Global Remote</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-subtle">
-                      <svg className="fill-current h-3 w-3" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Reset Filters Shortcut */}
-                  {(selectedSeniority !== 'All' || selectedWorkplace !== 'All' || selectedAtsLocation !== 'All' || atsKeyword.trim()) && (
+                {/* LinkedIn-Style Discovery Switcher */}
+                {hasProfile && (
+                  <div className="flex items-center bg-surface p-1 rounded-xl border border-border text-xs gap-1 self-start sm:self-auto shrink-0">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedSeniority('All');
-                        setSelectedWorkplace('All');
-                        setSelectedAtsLocation('All');
-                        setAtsKeyword('');
-                        if (atsJobs.length > 0) {
-                          handleCrawlAts(selectedAtsCompany, 'All', 'All', 'All', '');
-                        }
-                      }}
-                      className="text-[11px] font-semibold text-brand hover:text-brand px-2.5 py-1 rounded-lg hover:bg-brand/10 transition-colors cursor-pointer"
+                      onClick={() => setShowAllRoles(false)}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        !showAllRoles
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'text-subtle hover:text-foreground'
+                      }`}
                     >
-                      Reset Filters
+                      <span>🎯 Best Matches</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${!showAllRoles ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-surface-2 text-subtle'}`}>
+                        {profileMatchedJobs.length}
+                      </span>
                     </button>
-                  )}
-                </div>
-
-                {/* Feedback */}
-                {atsFeedback && (
-                  <div
-                    className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 ${
-                      atsFeedback.type === 'success'
-                        ? 'bg-success/10 text-success border border-success/20'
-                        : 'bg-danger/10 text-danger border border-danger/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {atsFeedback.type === 'success' ? (
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                      )}
-                      <span>{atsFeedback.message}</span>
-                    </div>
                     <button
                       type="button"
-                      onClick={() => setAtsFeedback(null)}
-                      className="text-subtle hover:text-foreground text-xs font-bold shrink-0 cursor-pointer"
+                      onClick={() => setShowAllRoles(true)}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showAllRoles
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'text-subtle hover:text-foreground'
+                      }`}
                     >
-                      ✕
+                      <span>🌐 All Open Roles</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${showAllRoles ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-surface-2 text-subtle'}`}>
+                        {baseFilteredAtsJobs.length}
+                      </span>
                     </button>
                   </div>
                 )}
+              </div>
 
-                {/* Results Grid */}
-                {atsJobs.length > 0 && (
-                  <div className="space-y-3 pt-2 border-t border-border">
-                    <div className="flex items-center justify-between text-xs text-subtle flex-wrap gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span>
-                          Showing <strong className="text-foreground font-semibold">{filteredAtsJobs.length}</strong> active positions across <strong className="text-brand font-semibold">{uniqueCompaniesCount} companies</strong>
-                          {selectedAtsLocation !== 'All' && (
-                            <span> in <strong className="text-brand font-semibold">{selectedAtsLocation}</strong></span>
-                          )}
-                          {selectedSeniority !== 'All' && <span> · <span className="text-foreground font-medium">{selectedSeniority}</span></span>}
-                          {selectedWorkplace !== 'All' && <span> · <span className="text-foreground font-medium">{selectedWorkplace}</span></span>}
-                          {filteredAtsJobs.length < atsJobs.length && (
-                            <span className="text-subtle text-[11px]"> (filtered from {atsJobs.length} loaded)</span>
-                          )}
-                        </span>
-                        {hasProfile ? (
-                          <span className="text-[11px] text-muted-foreground">
-                            {showAllRoles
-                              ? `Showing all ${scoredAtsJobs.length} fetched roles`
-                              : `${profileMatchedJobs.length} of ${scoredAtsJobs.length} fetched roles match your Master Profile`}
-                            <button type="button" onClick={() => setShowAllRoles((v) => !v)} className="ml-2 text-brand font-semibold hover:underline cursor-pointer">
-                              {showAllRoles ? 'Show profile matches only' : 'Show all roles'}
-                            </button>
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-warning">Add your Master Profile to see only roles that match you.</span>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-mono text-success flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                        Live Stream Connected
-                      </span>
-                    </div>
+              {/* Quick Discipline Filter Bar (LinkedIn style) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto py-1 text-xs no-scrollbar">
+                <span className="text-[11px] text-subtle uppercase tracking-wider font-semibold mr-1 shrink-0">Discipline:</span>
+                {[
+                  { id: 'All', label: 'All Roles' },
+                  { id: 'Engineering', label: '💻 Engineering' },
+                  { id: 'Product & Design', label: '🎨 Product & Design' },
+                  { id: 'Operations & Strategy', label: '⚙️ Operations' },
+                  { id: 'Data & AI', label: '🤖 Data & AI' },
+                  { id: 'Sales & Growth', label: '📈 Sales / Growth' },
+                ].map((dept) => {
+                  const isActive = selectedDepartment === dept.id;
+                  return (
+                    <button
+                      key={dept.id}
+                      type="button"
+                      onClick={() => setSelectedDepartment(dept.id)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-2xs font-semibold'
+                          : 'bg-surface text-subtle hover:text-foreground hover:bg-surface-2 border border-border/60'
+                      }`}
+                    >
+                      {dept.label}
+                    </button>
+                  );
+                })}
+              </div>
 
-                    {filteredAtsJobs.length === 0 ? (
-                      <div className="p-8 text-center bg-surface rounded-2xl space-y-2">
-                        <p className="text-sm font-semibold text-foreground">{hasProfile && !showAllRoles && scoredAtsJobs.length > 0 ? 'None of the fetched roles match your Master Profile yet' : 'No positions match your selected filters'}</p>
-                        <p className="text-xs text-subtle">
-                          Try adjusting your Experience Level, Workplace Mode, or Location filters.
-                        </p>
+              {/* Results rows */}
+              <div className="workspace-job-results grid grid-cols-1 gap-2 max-h-[520px] overflow-y-auto">
+                {filteredAtsJobs.length === 0 ? (
+                  <div className="p-8 text-center bg-surface/30 rounded-2xl border border-border space-y-2.5">
+                    <Search className="w-8 h-8 text-subtle mx-auto opacity-40" />
+                    <h4 className="font-display font-semibold text-sm text-foreground">No matching positions found</h4>
+                    <p className="text-xs text-subtle max-w-md mx-auto">
+                      {hasProfile && !showAllRoles
+                        ? `No roles met the strict profile match threshold in this view. Switch to "All Open Roles" (${baseFilteredAtsJobs.length}) to inspect all available openings.`
+                        : 'No active roles matched your current filter criteria. Try selecting "All Disciplines" or resetting filters.'}
+                    </p>
+                    <div className="pt-2 flex items-center justify-center gap-2 flex-wrap">
+                      {hasProfile && !showAllRoles && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllRoles(true)}
+                          className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+                        >
+                          View All Open Roles ({baseFilteredAtsJobs.length})
+                        </button>
+                      )}
+                      {(selectedSeniority !== 'All' || selectedWorkplace !== 'All' || selectedAtsLocation !== 'All' || selectedDepartment !== 'All' || atsKeyword.trim()) && (
                         <button
                           type="button"
                           onClick={() => {
                             setSelectedSeniority('All');
                             setSelectedWorkplace('All');
                             setSelectedAtsLocation('All');
+                            setSelectedDepartment('All');
                             setAtsKeyword('');
                           }}
-                          className="mt-2 px-3.5 py-1.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-colors cursor-pointer"
+                          className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-card border border-border text-foreground hover:bg-surface transition-all cursor-pointer"
                         >
-                          Clear Filters
+                          Reset Filters
                         </button>
-                      </div>
-                    ) : (
-                      <div className="workspace-job-results grid grid-cols-1 gap-0 max-h-[600px] overflow-y-auto">
-                        {filteredAtsJobs.map((job) => {
-                          const importedId = importedAtsIds.get(job.id);
-                          const isImported = !!importedId && opportunities.some((o) => o.id === importedId);
-                          return (
-                            <div
-                              key={job.id}
-                              className="workspace-job-row p-4 flex flex-col justify-between gap-2.5 transition-all"
-                            >
-                              <div className="space-y-2">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="space-y-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-[11px] font-bold text-foreground">
-                                        {job.company}
-                                      </span>
-                                      <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-surface text-muted-foreground">
-                                        {job.platform}
-                                      </span>
-                                      {job.seniority && (
-                                        <span
-                                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                                            job.seniority === 'Early / Junior'
-                                              ? 'bg-brand/10 text-brand border border-brand/25/60'
-                                              : job.seniority === 'Mid-Level'
-                                              ? 'bg-success/10 text-success border border-success/30/60'
-                                              : job.seniority === 'Senior'
-                                              ? 'bg-info/10 text-info border border-info/25/60'
-                                              : 'bg-warning/10 text-warning border border-warning/25/60'
-                                          }`}
-                                        >
-                                          {job.seniority}
-                                        </span>
-                                      )}
-                                      {job.workplaceType && (
-                                        <span
-                                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                                            job.workplaceType === 'Remote'
-                                              ? 'bg-success/10 text-success'
-                                              : job.workplaceType === 'Hybrid'
-                                              ? 'bg-warning/10 text-warning'
-                                              : 'bg-[#8E8E93]/10 text-[#636366]'
-                                          }`}
-                                        >
-                                          {job.workplaceType === 'Remote'
-                                            ? '🌐 Remote'
-                                            : job.workplaceType === 'Hybrid'
-                                            ? '🏢 Hybrid'
-                                            : '📍 On-site'}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <h5
-                                      className="font-display font-semibold text-sm text-foreground line-clamp-1"
-                                      title={job.title}
-                                    >
-                                      {job.title}
-                                    </h5>
-                                    {job.department && (
-                                      <p className="text-[11px] text-subtle truncate">
-                                        {job.department}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {job.matchScore !== undefined && (
-                                    <span
-                                      className={`text-xs font-bold shrink-0 ${getScoreColor(job.matchScore)}`}
-                                      title="Quick keyword estimate. Tailor Application runs the full check against the job's requirements."
-                                    >
-                                      <span className="font-medium text-muted-foreground mr-1">Quick fit</span>{job.matchScore}%
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-2 text-[11px] text-subtle flex-wrap">
-                                  <span className="flex items-center gap-1 truncate" title={job.location}>
-                                    <MapPin className="w-3 h-3 shrink-0" />
-                                    <span className="truncate">{job.location}</span>
-                                  </span>
-                                  {job.salarySnippet && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-2 py-0.5 rounded-md">
-                                      <span>💰</span>
-                                      <span>{job.salarySnippet}</span>
-                                    </span>
-                                  )}
-                                </div>
-
-                                {job.skills && job.skills.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 pt-0.5">
-                                    {job.skills.slice(0, 4).map((skill, sIdx) => (
-                                      <span
-                                        key={sIdx}
-                                        className="text-[9px] font-mono px-1.5 py-0.5 bg-surface text-muted-foreground rounded border border-border"
-                                      >
-                                        {skill}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {job.matchHighlight && (
-                                  <p className="text-[11px] text-muted-foreground bg-surface p-2 rounded-lg line-clamp-2">
-                                    <span className="font-semibold text-foreground">Match: </span>
-                                    {job.matchHighlight}
-                                  </p>
-                                )}
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
-                                {job.applyUrl && (
-                                  <a
-                                    href={job.applyUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[11px] text-brand hover:underline flex items-center gap-1 font-medium"
-                                  >
-                                    <span>Portal</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                )}
-
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleImportAtsJob(job, false)}
-                                    disabled={isImported}
-                                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-full transition-all cursor-pointer ${
-                                      isImported
-                                        ? 'bg-success/10 text-success'
-                                        : 'bg-surface text-foreground hover:bg-surface-2'
-                                    }`}
-                                  >
-                                    {isImported ? '✓ Added' : '+ Add Opportunity'}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (!isProUser && tailoredCount >= 2) {
-                                        if (onNavigateToPricing) onNavigateToPricing();
-                                        return;
-                                      }
-                                      handleImportAtsJob(job, true);
-                                    }}
-                                    className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-sm"
-                                  >
-                                    <Sparkles className="w-3 h-3" />
-                                    <span>{!isProUser && tailoredCount >= 2 ? 'Upgrade to Tailor' : 'Tailor Resume'}</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Load Next 100+ Live Positions Button */}
-                    {filteredAtsJobs.length > 0 && (
-                      <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border bg-surface/70 p-4 rounded-2xl">
-                        <div className="text-xs text-muted-foreground text-center sm:text-left">
-                          <p className="font-semibold text-foreground">
-                            Showing {filteredAtsJobs.length} active positions across {uniqueCompaniesCount} companies
-                          </p>
-                          <p className="text-[11px] text-subtle mt-0.5">
-                            Fetched live from public company job boards at search time
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleCrawlAts(
-                              selectedAtsCompany,
-                              selectedSeniority,
-                              selectedWorkplace,
-                              selectedAtsLocation,
-                              atsKeyword,
-                              true
-                            )
-                          }
-                          disabled={isLoadingMore || isCrawlingAts}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 shadow-elevated transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                        >
-                          {isLoadingMore ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Loading Next 100+ Jobs...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="w-3.5 h-3.5" />
-                              <span>Load Next 100+ Live Positions</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-
-            {/* Notification Feedback */}
-            {verificationFeedback && (
-              <div
-                className={`p-3 rounded-2xl text-[13px] flex items-center justify-between gap-2 ${
-                  verificationFeedback.type === 'success'
-                    ? 'bg-success/10 text-success border border-success/20'
-                    : 'bg-danger/10 text-danger border border-danger/20'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {verificationFeedback.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                  )}
-                  <span>{verificationFeedback.message}</span>
-                </div>
-                <button
-                  onClick={() => setVerificationFeedback(null)}
-                  className="text-subtle hover:text-foreground text-xs font-bold shrink-0 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            {/* Evaluated Workspace Opportunities (Rendered if user has saved/evaluated roles) */}
-            {filteredOpportunities.length > 0 && (
-              <div className="space-y-4 pt-2">
-                <div className="flex items-center justify-between border-b border-border pb-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-success" />
-                    <h3 className="font-display font-semibold text-sm sm:text-base text-foreground">
-                      Saved & Evaluated Roles ({filteredOpportunities.length})
-                    </h3>
-                  </div>
-                  {onClearOpportunities && (
-                    <button
-                      type="button"
-                      onClick={onClearOpportunities}
-                      className="px-3 py-1.5 text-xs text-danger hover:bg-danger/10 rounded-full transition-colors font-medium cursor-pointer"
-                      title="Clear evaluated opportunities from workspace"
+                ) : (
+                  filteredAtsJobs.map((job) => {
+                  const importedId = importedAtsIds.get(job.id);
+                  const isImported = !!importedId && opportunities.some((o) => o.id === importedId);
+                  const fitInfo = quickFitTier(job.matchScore || 0);
+                  return (
+                    <div
+                      key={job.id}
+                      className="p-4 rounded-xl border border-border bg-surface/50 hover:bg-surface hover:border-brand/30 transition-all flex flex-col justify-between gap-2.5"
                     >
-                      Clear Evaluated ({filteredOpportunities.length})
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredOpportunities.map((job) => {
-                    const isSelected = selectedJobId === job.id;
-                    return (
-                      <div
-                        key={job.id}
-                        data-saved-job-id={job.id}
-                        style={{ scrollMarginTop: 96 }}
-                        onClick={() => onSelectPreset(job.id)}
-                        className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-3 ${
-                          isSelected
-                            ? 'bg-card border-brand ring-2 ring-brand/20 shadow-elevated'
-                            : 'bg-card border-border hover:border-border hover:shadow-elevated'
-                        }`}
-                      >
-                        <div className="space-y-3">
-                          {/* Top Meta */}
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-display text-[13px] font-semibold text-foreground flex items-center gap-1.5">
-                                <Building2 className="w-3.5 h-3.5 text-subtle" />
-                                <span>{job.company}</span>
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-foreground">
+                                {job.company}
                               </span>
-                              <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-[rgba(120,120,128,0.12)] text-muted-foreground">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-card text-muted-foreground border border-border">
                                 {job.platform}
                               </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              {job.isEvaluated && (job.matchScore || 0) > 0 ? (
-                                <span className={`text-sm font-bold tabular-nums ${getScoreColor(job.matchScore)}`}>
-                                  {job.matchScore}%
-                                </span>
-                              ) : (
-                                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
-                                  Awaiting Evaluation
+                              {job.seniority && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-card text-foreground border border-border">
+                                  {job.seniority}
                                 </span>
                               )}
-                              {onRemoveOpportunity && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRemoveOpportunity(job.id);
-                                  }}
-                                  className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 transition-colors"
-                                  title="Remove listing"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                              {job.workplaceType && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-card text-muted-foreground border border-border">
+                                  {job.workplaceType}
+                                </span>
                               )}
                             </div>
+                            <h4 className="font-display font-semibold text-sm text-foreground line-clamp-1" title={job.title}>
+                              {job.title}
+                            </h4>
                           </div>
 
-                          {/* Job Title */}
-                          <h3 className="font-display text-base font-semibold text-foreground line-clamp-1">
-                            {job.title}
-                          </h3>
-
-                          {/* Location */}
-                          <div className="text-[13px] text-subtle flex items-center gap-1">
-                            <MapPin className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{job.location}</span>
-                          </div>
-
-                          {/* Why You're Eligible / Assessment */}
-                          {job.isEvaluated && (job.matchScore || 0) > 0 ? (
-                            <div className={`p-3 rounded-xl text-[12px] leading-snug ${
-                              (job.matchScore || 0) < 60
-                                ? 'bg-warning/10 text-warning border border-warning/25/60'
-                                : 'bg-surface text-muted-foreground'
-                            }`}>
-                              <span className="font-semibold text-foreground">
-                                {(job.matchScore || 0) < 60 ? 'Eligibility Notice: ' : 'Why you match: '}
-                              </span>
-                              <span>{job.matchHighlight}</span>
-                            </div>
-                          ) : (
-                            <div className="p-3 rounded-xl text-[12px] leading-snug bg-surface/80 border border-border/60 text-muted-foreground flex items-center justify-between gap-2">
-                              <span>Click <strong className="text-foreground">Tailor Application</strong> below to evaluate.</span>
-                              <span className="text-[11px] font-semibold text-brand shrink-0">Ready to Tailor →</span>
-                            </div>
+                          {/* High-Contrast Clean Fit Badge */}
+                          {job.matchScore !== undefined && (
+                            <span
+                              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 shadow-2xs ${
+                                fitInfo.tone === 'strong'
+                                  ? 'bg-emerald-600 text-white'
+                                  : fitInfo.tone === 'good'
+                                  ? 'bg-blue-600 text-white'
+                                  : fitInfo.tone === 'possible'
+                                  ? 'bg-amber-600 text-white'
+                                  : 'bg-muted text-muted-foreground border border-border'
+                              }`}
+                              title="Match estimate based on your Master Profile"
+                            >
+                              {fitInfo.label}
+                            </span>
                           )}
                         </div>
 
-                        {/* Action Bar */}
-                        <div className="flex items-center justify-between pt-3 border-t border-border text-[13px]">
-                          <span className={`font-medium ${isSelected ? 'text-brand font-semibold' : 'text-subtle'}`}>
-                            {isSelected ? '✓ Selected' : 'Click to select'}
+                        <div className="flex items-center gap-2 text-[11px] text-subtle flex-wrap">
+                          <span className="flex items-center gap-1 truncate" title={job.location}>
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{job.location}</span>
                           </span>
-
-                          {job.applyUrl && (
-                            <a
-                              href={job.applyUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 text-[12px] text-brand font-medium transition-colors hover:underline"
-                              title="Open verified live posting in new tab"
-                            >
-                              <span>Open on {job.platform}</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                          {job.salarySnippet && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-2 py-0.5 rounded-md">
+                              <span>💰</span>
+                              <span>{job.salarySnippet}</span>
+                            </span>
                           )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6 pt-1">
-            {/* Step 1: Import from Job Posting URL */}
-            <div className="p-5 sm:p-6 bg-card rounded-2xl border border-border shadow-elevated space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
-                    <Globe className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-sm sm:text-base font-semibold text-foreground">
-                      Import from Job Posting URL
-                    </h3>
-                    <p className="text-xs text-subtle">
-                      Paste any public job listing link. We'll automatically scrape and extract the job description.
-                    </p>
-                  </div>
-                </div>
-                <span className="text-[11px] font-mono font-medium text-subtle bg-surface px-2.5 py-1 rounded-full self-start sm:self-auto">
-                  LinkedIn · Greenhouse · Lever · Ashby · Workday
-                </span>
-              </div>
 
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <div className="relative flex-1">
-                  <Link2 className="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="url"
-                    value={customUrl}
-                    onChange={(e) => setCustomUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleScrapeUrl();
-                      }
-                    }}
-                    placeholder="https://boards.greenhouse.io/... or https://jobs.lever.co/... or LinkedIn job URL"
-                    className="w-full pl-10 pr-3 py-2.5 text-[13px] bg-surface border border-transparent rounded-xl text-foreground placeholder:text-subtle focus:outline-none focus:bg-card focus:border-brand focus:ring-2 focus:ring-brand/20 transition-all font-mono"
-                  />
-                </div>
+                      {/* Action Bar */}
+                      <div className="flex items-center justify-between pt-2 border-t border-border/80 text-xs">
+                        {job.applyUrl ? (
+                          <a
+                            href={job.applyUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-brand hover:underline flex items-center gap-1 font-medium"
+                          >
+                            <span>Official Portal</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : <span />}
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleScrapeUrl}
-                    disabled={isScraping || !customUrl.trim()}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-elevated"
-                  >
-                    {isScraping ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Extracting JD...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>Auto-Fetch & Load JD</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleVerifyLiveJob(customUrl)}
-                    disabled={isVerifyingListing || !customUrl.trim()}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-[13px] font-medium text-foreground bg-surface hover:bg-surface-2 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Verify listing is active on official portal and calculate match score"
-                  >
-                    {isVerifyingListing ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Verifying...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                        <span>Verify & Add</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                        {/* Single Prominent Action: + Save & Assess */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleImportAtsJob(job, false);
+                            setSearchExpanded(false);
+                          }}
+                          disabled={isImported}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                            isImported
+                              ? 'bg-success/15 text-success font-medium'
+                              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs'
+                          }`}
+                        >
+                          {isImported ? '✓ Saved & Active' : '+ Save & Assess'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }))}
               </div>
 
-              {/* Notification Feedback */}
-              {scrapeNotification && (
-                <div
-                  className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 ${
-                    scrapeNotification.type === 'success'
-                      ? 'bg-success/10 text-success border border-success/20'
-                      : 'bg-warning/10 text-warning border border-warning/20'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {scrapeNotification.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                    )}
-                    <span>{scrapeNotification.message}</span>
-                  </div>
-                  <button
-                    onClick={() => setScrapeNotification(null)}
-                    className="text-subtle hover:text-foreground text-xs font-bold cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {verificationFeedback && (
-                <div
-                  className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 ${
-                    verificationFeedback.type === 'success'
-                      ? 'bg-success/10 text-success border border-success/20'
-                      : 'bg-danger/10 text-danger border border-danger/20'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {verificationFeedback.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                    )}
-                    <span>{verificationFeedback.message}</span>
-                  </div>
-                  <button
-                    onClick={() => setVerificationFeedback(null)}
-                    className="text-subtle hover:text-foreground text-xs font-bold cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Subtle Divider */}
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <span className="relative px-4 bg-card text-[11px] font-semibold tracking-wider text-subtle uppercase">
-                Or Paste Job Description Manually
-              </span>
-            </div>
-
-            {/* Step 2: Job Description Textarea */}
-            <div className="p-5 sm:p-6 bg-card rounded-2xl border border-border shadow-elevated space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-sm sm:text-base font-semibold text-foreground">
-                      Job Description Text & Requirements
-                    </h3>
-                    <p className="text-xs text-subtle">
-                      Paste the responsibilities, minimum qualifications, and skills from the posting.
-                    </p>
-                  </div>
-                </div>
-
-                {customJobText.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomJobText('')}
-                    className="text-xs font-medium text-subtle hover:text-danger transition-colors cursor-pointer px-2 py-1 rounded-md hover:bg-danger/10"
-                  >
-                    Clear text
-                  </button>
-                )}
-              </div>
-
-              <div className="relative">
-                <textarea
-                  value={customJobText}
-                  onChange={(e) => setCustomJobText(e.target.value)}
-                  rows={8}
-                  placeholder="Paste the job description, role overview, and key requirements here...&#10;&#10;e.g.:&#10;About the Role: We are seeking an Operations Analyst to oversee incident management...&#10;Requirements:&#10;• 3+ years experience with CRM and incident triage&#10;• Experience with SQL or analytics dashboards"
-                  className="w-full p-4 text-[13px] bg-surface border border-transparent rounded-xl text-foreground placeholder:text-subtle focus:outline-none focus:bg-card focus:border-brand focus:ring-2 focus:ring-brand/20 transition-all font-sans leading-relaxed"
-                />
-              </div>
-
-              {/* Action Bar for Custom JD */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-border">
-                <div className="text-xs text-subtle">
-                  {customJobText.trim() ? (
-                    <span className="text-success font-medium flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{customJobText.trim().length.toLocaleString()} characters ready for ATS analysis</span>
-                    </span>
+              {/* Load Next Positions / End of Stream */}
+              <div className="pt-2 flex items-center justify-between gap-3 border-t border-border bg-surface/40 p-3 rounded-xl flex-wrap">
+                <div className="flex items-center gap-2 text-xs text-subtle">
+                  {!hasMoreAtsJobs ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                      <span className="text-foreground font-medium">
+                        {filteredAtsJobs.length === 0
+                          ? 'No matching positions found with current filters.'
+                          : `All ${filteredAtsJobs.length} live positions loaded.`}
+                      </span>
+                    </>
                   ) : (
-                    <span>Paste JD text or auto-fetch from URL to analyze match & tailor your resume</span>
+                    <span>Loaded {filteredAtsJobs.length} live positions</span>
                   )}
                 </div>
 
-                {!isProUser && tailoredCount >= 2 ? (
+                {hasMoreAtsJobs ? (
                   <button
                     type="button"
-                    onClick={onNavigateToPricing}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-elevated shrink-0"
+                    onClick={() =>
+                      handleCrawlAts(
+                        selectedAtsCompany,
+                        selectedSeniority,
+                        selectedWorkplace,
+                        selectedAtsLocation,
+                        atsKeyword,
+                        true
+                      )
+                    }
+                    disabled={isLoadingMore || isCrawlingAts}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-foreground bg-card border border-border hover:bg-surface transition-all cursor-pointer disabled:opacity-50"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-warning" />
-                    <span>Upgrade to Pro to Tailor (0 of 2 left)</span>
+                    {isLoadingMore ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                    <span>Load More</span>
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => onEvaluate(customJobText)}
-                    disabled={isLoading || !customJobText.trim()}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-elevated shrink-0"
-                  >
-                    {isLoading ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Tailoring… {tailorProgress}%</span>
-                        <span className="text-[11px] opacity-70">{tailorEta}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Tailor Resume for this Job</span>
-                      </>
-                    )}
-                  </button>
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    ✓ Up to date with official {selectedAtsCompany === 'all' ? 'company boards' : `${selectedAtsCompany} ATS`}
+                  </span>
                 )}
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* When no role is active, show previously saved & evaluated opportunities if any */}
+      {!isRoleActive && filteredOpportunities.length > 0 && (
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-success" />
+              <h3 className="font-display font-semibold text-sm sm:text-base text-foreground">
+                Saved & Evaluated Roles ({filteredOpportunities.length})
+              </h3>
+            </div>
+            {onClearOpportunities && (
+              <button
+                type="button"
+                onClick={onClearOpportunities}
+                className="px-3 py-1.5 text-xs text-danger hover:bg-danger/10 rounded-full transition-colors font-medium cursor-pointer"
+                title="Clear evaluated opportunities from workspace"
+              >
+                Clear Evaluated ({filteredOpportunities.length})
+              </button>
+            )}
           </div>
-        )}
 
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredOpportunities.map((job) => {
+              const isSelected = selectedJobId === job.id;
+              return (
+                <div
+                  key={job.id}
+                  data-saved-job-id={job.id}
+                  style={{ scrollMarginTop: 96 }}
+                  onClick={() => onSelectPreset(job.id)}
+                  className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                    isSelected
+                      ? 'bg-card border-brand ring-2 ring-brand/20 shadow-elevated'
+                      : 'bg-card border-border hover:border-border hover:shadow-elevated'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-[13px] font-semibold text-foreground flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-subtle" />
+                          <span>{job.company}</span>
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-[rgba(120,120,128,0.12)] text-muted-foreground">
+                          {job.platform}
+                        </span>
+                      </div>
 
-      {evaluation.job_title && evaluation.match_score > 0 && evaluation.isEvaluated ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {isSelected && isEvaluationComplete ? 'Assessed' : 'Assessment pending'}
+                        </span>
+                        {onRemoveOpportunity && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveOpportunity(job.id);
+                            }}
+                            className="p-1 rounded-md text-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+                            title="Remove listing"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <h3 className="font-display text-base font-semibold text-foreground line-clamp-1">
+                      {job.title}
+                    </h3>
+
+                    <div className="text-[13px] text-subtle flex items-center gap-1">
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{job.location}</span>
+                    </div>
+
+                    <div className={`p-3 rounded-xl text-[12px] leading-snug ${
+                      (job.matchScore || 0) < 60
+                        ? 'bg-warning/10 text-warning border border-warning/25/60'
+                        : 'bg-surface text-muted-foreground'
+                    }`}>
+                      <span className="font-semibold text-foreground">
+                        {isSelected && isEvaluationComplete ? 'Assessment: ' : 'Role overview: '}
+                      </span>
+                      <span>{job.matchHighlight}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-border text-[13px]">
+                    <span className={`font-medium ${isSelected ? 'text-brand font-semibold' : 'text-subtle'}`}>
+                      {isSelected ? '✓ Selected' : 'Click to select & focus'}
+                    </span>
+
+                    {job.applyUrl && (
+                      <a
+                        href={job.applyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-[12px] text-brand font-medium transition-colors hover:underline"
+                        title="Open verified live posting in new tab"
+                      >
+                        <span>Open on {job.platform}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Stage 2B: Dedicated Active Role Workspace */}
+      {isRoleActive ? (
         <>
-          {/* Evaluation Card */}
+          {/* Quick Switcher among Saved Roles */}
+          {filteredOpportunities.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+              <span className="text-subtle font-medium shrink-0">Saved roles:</span>
+              {filteredOpportunities.map((op) => {
+                const isActive = selectedJobId === op.id;
+                return (
+                  <div
+                    key={op.id}
+                    className={`inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-xs font-medium shrink-0 transition-all ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                        : 'bg-card border border-border text-foreground hover:bg-surface'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onSelectPreset(op.id)}
+                      className="cursor-pointer truncate max-w-[220px]"
+                      title={`Switch to ${op.title} @ ${op.company}`}
+                    >
+                      {op.title} @ {op.company}
+                    </button>
+                    {onRemoveOpportunity && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveOpportunity(op.id);
+                        }}
+                        className={`p-0.5 rounded-full transition-colors cursor-pointer ${
+                          isActive
+                            ? 'hover:bg-primary-foreground/20 text-primary-foreground/80 hover:text-primary-foreground'
+                            : 'hover:bg-surface-2 text-subtle hover:text-danger'
+                        }`}
+                        title={`Remove ${op.title} from saved roles`}
+                        aria-label={`Remove ${op.title} from saved roles`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {onClearOpportunities && (
+                <button
+                  type="button"
+                  onClick={onClearOpportunities}
+                  className="text-xs text-subtle hover:text-danger ml-auto shrink-0 font-medium transition-colors cursor-pointer px-2 py-1 rounded-md hover:bg-danger/10"
+                  title="Clear all saved roles"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Evaluation Summary Card */}
           <div id="evaluation-summary" className="apple-card p-6 sm:p-8 space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div className="flex items-center gap-5">
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center gap-5 min-w-0">
                 {/* Score Circle */}
-                <div className={`relative w-16 h-16 rounded-full bg-surface border-2 ${
+                {isEvaluationComplete && <div className={`relative w-16 h-16 rounded-full bg-surface border-2 ${
                   evaluation.match_score >= 80 ? 'border-success' : evaluation.match_score >= 60 ? 'border-brand' : 'border-warning'
                 } flex flex-col items-center justify-center shrink-0`}>
                   <span className={`font-display text-lg font-bold tabular-nums ${getScoreColor(evaluation.match_score)}`}>
@@ -1574,17 +1653,17 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                   <span className="text-[9px] font-semibold uppercase tracking-wider text-subtle">
                     MATCH
                   </span>
-                </div>
+                </div>}
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1 min-w-0 flex-1">
+                  {isEvaluationComplete ? <div className="flex items-center gap-2">
                     <span className={`apple-badge text-[11px] ${evaluation.should_apply ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
-                      {evaluation.verdict.replace('_', ' ')}
+                      {(evaluation.verdict || 'MATCH').replace('_', ' ')}
                     </span>
                     <span className="text-[13px] text-subtle font-medium">
                       {evaluation.should_apply ? '✓ Recommended' : 'Low Overlap'}
                     </span>
-                  </div>
+                  </div> : <p className="text-[13px] font-medium text-muted-foreground">Potential fit · Full assessment pending</p>}
                   <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
                     {evaluation.job_title}
                   </h2>
@@ -1601,18 +1680,10 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
               </div>
 
               {/* Action CTAs */}
-              <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
-                {!isProUser && tailoredCount >= 2 ? (
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                {!isEvaluationComplete ? (
                   <button
-                    onClick={onNavigateToPricing}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
-                    title="Upgrade to Pro for unlimited tailoring"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-warning" />
-                    <span>Upgrade to Pro (Limit reached)</span>
-                  </button>
-                ) : (
-                  <button
+                    data-tour="evaluator-tailor"
                     onClick={() => onEvaluate()}
                     disabled={isLoading}
                     className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
@@ -1620,36 +1691,38 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     {isLoading ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span className="tabular-nums">Tailoring… {tailorProgress}%</span>
-                        <span className="text-[11px] opacity-70">{tailorEta}</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>Tailor Application</span>
                       </>
                     )}
+                    <LoadingProgress inline active={isLoading} label="Tailoring" idleLabel="Tailor Application" resultToken={evaluation} />
                   </button>
-                )}
-
-                {onOpenRecruiterReview && (
+                ) : (
                   <button
-                    onClick={onOpenRecruiterReview}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold text-info bg-info/10 hover:bg-info/10 border border-info/25 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
-                    title="Simulate 3-Person Hiring Committee Review"
+                    data-tour="evaluator-tailor"
+                    onClick={() => onOpenTab ? onOpenTab('resume') : onProceedToResume()}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
                   >
-                    <UserCheck className="w-3.5 h-3.5 text-info" />
-                    <span>Recruiter Panel Review</span>
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Review Tailored Application</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
 
-                <button
-                  onClick={onProceedToResume}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold text-foreground bg-surface hover:bg-surface-2 rounded-full transition-all cursor-pointer whitespace-nowrap"
-                >
-                  <span>View Resume</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-subtle" />
-                </button>
+                {effectiveApplyUrl && (
+                  <a
+                    href={effectiveApplyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold text-brand hover:text-brand/90 bg-brand/10 hover:bg-brand/15 border border-brand/20 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                    title={`Open official job portal for ${evaluation.company_name || 'this role'} in a new tab`}
+                  >
+                    <span>Apply now</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
 
                 {onTrackApplication && (
                   <button
@@ -1658,25 +1731,45 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                         company_name: evaluation.company_name,
                         job_title: evaluation.job_title,
                         location: evaluation.location_info,
-                        apply_url: customUrl,
+                        apply_url: effectiveApplyUrl,
                         match_score: evaluation.match_score,
                       })
                     }
                     className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold rounded-full transition-all cursor-pointer whitespace-nowrap ${
                       isTracked
-                        ? 'bg-success/10 text-success hover:bg-success/20'
-                        : 'text-foreground bg-surface hover:bg-surface-2'
+                        ? 'bg-success/10 text-success hover:bg-success/20 border border-success/30'
+                        : 'text-foreground bg-surface hover:bg-surface-2 border border-border'
                     }`}
-                    title={isTracked ? 'Application tracked' : 'Track in Applied Jobs'}
+                    title={isTracked ? 'Click to untrack and remove from applied jobs' : 'Track in Applied Jobs'}
                   >
                     <CheckCircle2 className={`w-3.5 h-3.5 ${isTracked ? 'text-success' : 'text-subtle'}`} />
                     <span>{isTracked ? 'Tracked as Applied' : 'Mark as Applied'}</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={handleTailorNewRole}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold text-foreground bg-surface hover:bg-surface-2 border border-border rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                  title="Tailor a new role from scratch"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tailor New Role</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStartFresh}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold text-subtle hover:text-danger hover:bg-danger/10 rounded-full transition-all cursor-pointer whitespace-nowrap"
+                  title="Reset current tailored application back to Master Profile"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Start Fresh</span>
+                </button>
               </div>
             </div>
 
-            {evaluation.executive_summary && (
+            {isEvaluationComplete && evaluation.executive_summary && (
               <p className="text-[13px] text-muted-foreground border-t border-border pt-4 leading-relaxed">
                 <span className="font-semibold text-foreground">Assessment: </span>
                 {evaluation.executive_summary}
@@ -1684,6 +1777,91 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             )}
           </div>
 
+          {/* Fit Analysis & Center Stage Assessment */}
+          <div className="space-y-6">
+
+          {/* Hiring Committee Feedback Card (Streamlined Executive Pulse) */}
+          <div className="apple-card p-4 sm:p-5 space-y-3.5 border border-info/20 bg-info/5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-info/15 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-info/15 text-info flex items-center justify-center shrink-0">
+                  <UserCheck className="w-4 h-4 text-info" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-semibold text-sm sm:text-base text-foreground">
+                      Hiring Committee Feedback
+                    </h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-info/15 text-info uppercase tracking-wider font-mono">
+                      3-PERSON PANEL
+                    </span>
+                  </div>
+                  <p className="text-xs text-subtle mt-0.5">
+                    Multi-perspective review from Lead Recruiter, Hiring Manager, and Technical Lead.
+                  </p>
+                </div>
+              </div>
+              {onOpenRecruiterReview && (
+                <button
+                  type="button"
+                  onClick={onOpenRecruiterReview}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-info-foreground bg-info hover:bg-info/90 rounded-full transition-all cursor-pointer shadow-xs self-start sm:self-auto shrink-0"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Launch Panel Review</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+              <div className="p-3 rounded-xl bg-card/70 border border-border/80 flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground text-[13px]">Lead Recruiter</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">ATS & Resume</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />
+                  <span className="truncate">
+                    {isEvaluationComplete
+                      ? (evaluation.match_score >= 70 ? 'Strong ATS keyword alignment' : 'Moderate keyword overlap')
+                      : 'Screening evaluation ready'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card/70 border border-border/80 flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground text-[13px]">Hiring Manager</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand/10 text-brand font-medium">Strategic Impact</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0" />
+                  <span className="truncate">
+                    {isEvaluationComplete
+                      ? 'Leadership & project metrics aligned'
+                      : 'Direct relevancy evaluation ready'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-card/70 border border-border/80 flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground text-[13px]">Domain Lead</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning font-medium">Craft & Depth</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-warning shrink-0" />
+                  <span className="truncate">
+                    {isEvaluationComplete
+                      ? 'Core competencies ready for defense'
+                      : 'Technical trade-offs evaluation ready'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {isEvaluationComplete && <>
           {/* 3-Column: Matching Qualifications, Gaps & Growth Areas, Tailoring Strategy */}
           {(() => {
             const gapsList = getGapsList(evaluation);
@@ -1697,7 +1875,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                       <h3 className="font-display font-semibold text-base text-foreground">Matching Qualifications</h3>
                     </div>
                     <ul className="space-y-2.5 text-[13px] text-muted-foreground">
-                      {evaluation.key_matching_factors.map((factor, idx) => (
+                      {(evaluation.key_matching_factors || []).map((factor, idx) => (
                         <li key={idx} className="flex items-start gap-2.5">
                           <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                           <span className="leading-relaxed">{factor}</span>
@@ -1790,7 +1968,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                       <h3 className="font-display font-semibold text-base text-foreground">Tailoring Recommendations</h3>
                     </div>
                     <ul className="space-y-2.5 text-[13px] text-muted-foreground">
-                      {evaluation.tailoring_recommendations.map((rec, idx) => (
+                      {(evaluation.tailoring_recommendations || []).map((rec, idx) => (
                         <li key={idx} className="flex items-start gap-2.5">
                           <span className="w-5 h-5 rounded-full bg-surface text-muted-foreground text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
                             {idx + 1}
@@ -1810,7 +1988,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             const roadmapSteps =
               evaluation.skill_roadmap && evaluation.skill_roadmap.length > 0
                 ? evaluation.skill_roadmap
-                : evaluation.missing_critical_skills.map((gap, i) => ({
+                : (evaluation.missing_critical_skills || []).map((gap, i) => ({
                     skill: gap.split('(')[0].replace(/mitigated by.*$/i, '').trim(),
                     action_plan: `Master core operational methodologies and industry frameworks related to: ${gap}.`,
                     recommended_certification: 'Industry Professional Certification',
@@ -1880,7 +2058,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     issuer: 'ServiceNow',
                     target_skill: 'Enterprise ticketing workflow automation, SLA alerting, incident triage',
                     estimated_time: '3–4 weeks',
-                    why_it_helps: 'High demand across enterprise technology employers looking for platform-certified incident leads.',
+                    why_it_helps: 'High demand across BETSOL and IT service employers looking for platform-certified incident leads.',
                     difficulty: 'Intermediate',
                   },
                 ]
@@ -1891,7 +2069,7 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                     issuer: 'The Workforce Management Institute (SWPP)',
                     target_skill: 'Capacity forecasting, intraday variance steering, Erlang modeling',
                     estimated_time: '3–4 weeks',
-                    why_it_helps: 'Proves formal mastery of global workforce management theory alongside practical operational experience.',
+                    why_it_helps: 'Supports learning workforce planning methods relevant to this role.',
                     difficulty: 'Intermediate',
                   },
                   {
@@ -1949,253 +2127,213 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             const gapPercentage = Math.max(0, 100 - evaluation.match_score);
 
             return (
-              <div className="apple-card p-6 sm:p-8 space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-border">
-                  <div className="space-y-1">
-                    <h3 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
-                      Skill Roadmap & Certifications
-                    </h3>
-                    <p className="text-[13px] text-subtle">
-                      Learning milestones and certifications to bridge gaps and reach 100% eligibility.
-                    </p>
+              <div className="apple-card p-5 sm:p-6 space-y-4">
+                {/* Header / Progressive Disclosure Summary Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                      <Milestone className="w-5 h-5 text-brand" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-display text-base sm:text-lg font-semibold text-foreground">
+                          Skill Roadmap & Certifications
+                        </h3>
+                        {gapPercentage > 0 ? (
+                          <span className="apple-badge text-[10px] font-mono">
+                            {gapPercentage}% TO BRIDGE
+                          </span>
+                        ) : (
+                          <span className="apple-badge bg-success/10 text-success text-[10px] font-mono">
+                            100% MATCH
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-subtle mt-0.5">
+                        {roadmapSteps.length} learning milestones and {certifications.length} industry certifications identified to bridge skill gaps for {evaluation.job_title}.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="shrink-0">
-                    {gapPercentage > 0 ? (
-                      <span className="apple-badge text-[11px]">
-                        {gapPercentage}% TO BRIDGE
-                      </span>
-                    ) : (
-                      <span className="apple-badge bg-success/10 text-success text-[11px]">
-                        100% MATCH
-                      </span>
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                    {onOpenTab && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenTab('roadmaps')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-card hover:bg-surface border border-border rounded-lg transition-all cursor-pointer"
+                        title="Open full interactive roadmap workspace"
+                      >
+                        <span>Career Roadmaps</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => setIsRoadmapExpanded(!isRoadmapExpanded)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-foreground bg-surface hover:bg-surface-2 border border-border rounded-lg transition-all cursor-pointer shadow-2xs"
+                    >
+                      <span>{isRoadmapExpanded ? 'Hide Bridge Plan' : 'View Bridge Plan'}</span>
+                      {isRoadmapExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-subtle" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-subtle" />
+                      )}
+                    </button>
                   </div>
                 </div>
 
-                {/* 2-Column Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Column 1: Learning Roadmap */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-foreground font-display font-semibold text-[13px] uppercase tracking-wider">
-                      <Milestone className="w-4 h-4 text-subtle" />
-                      <span>Learning Roadmap</span>
-                    </div>
+                {/* Collapsible Content */}
+                {isRoadmapExpanded && (
+                  <div className="pt-4 border-t border-border space-y-6">
+                    {/* 2-Column Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Column 1: Learning Roadmap */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-foreground font-display font-semibold text-[13px] uppercase tracking-wider">
+                          <Milestone className="w-4 h-4 text-subtle" />
+                          <span>Learning Roadmap</span>
+                        </div>
 
-                    <div className="space-y-3">
-                      {roadmapSteps.map((step, idx) => {
-                        const isCritical = step.importance === 'CRITICAL';
-                        return (
-                          <div
-                            key={idx}
-                            className="p-4 rounded-2xl border border-border bg-surface text-[13px] space-y-3"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2.5">
-                                <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-[11px] font-semibold flex items-center justify-center shrink-0">
-                                  {idx + 1}
-                                </span>
-                                <span className="font-display font-semibold text-foreground text-[14px]">
-                                  {step.skill}
-                                </span>
+                        <div className="space-y-3">
+                          {roadmapSteps.map((step, idx) => {
+                            const isCritical = step.importance === 'CRITICAL';
+                            return (
+                              <div
+                                key={idx}
+                                className="p-4 rounded-2xl border border-border bg-surface text-[13px] space-y-3"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-[11px] font-semibold flex items-center justify-center shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <span className="font-display font-semibold text-foreground text-[14px]">
+                                      {step.skill}
+                                    </span>
+                                  </div>
+
+                                  <span className={`apple-badge text-[10px] ${isCritical ? 'bg-danger/10 text-danger' : ''}`}>
+                                    {step.importance || 'RECOMMENDED'}
+                                  </span>
+                                </div>
+
+                                <p className="text-muted-foreground leading-relaxed pl-[34px]">
+                                  {step.action_plan}
+                                </p>
+
+                                <div className="pt-2 border-t border-border pl-[34px] flex flex-wrap gap-2 text-[11px]">
+                                  {step.timeline && (
+                                    <span className="inline-flex items-center gap-1 text-muted-foreground bg-card border border-border px-2.5 py-1 rounded-lg font-medium">
+                                      <Clock className="w-3 h-3 text-subtle" />
+                                      <span>{step.timeline}</span>
+                                    </span>
+                                  )}
+
+                                  {step.recommended_certification && (
+                                    <span className="inline-flex items-center gap-1 text-brand bg-card border border-border px-2.5 py-1 rounded-lg font-semibold">
+                                      <Award className="w-3 h-3" />
+                                      <span>{step.recommended_certification}</span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {step.practical_project && (
+                                  <div className="ml-[34px] p-3 rounded-xl bg-card border border-border text-[12px] text-muted-foreground flex items-start gap-2">
+                                    <Target className="w-3.5 h-3.5 text-subtle shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="font-semibold text-foreground">Project: </span>
+                                      <span>{step.practical_project}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Column 2: Certifications */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-foreground font-display font-semibold text-[13px] uppercase tracking-wider">
+                          <Award className="w-4 h-4 text-subtle" />
+                          <span>Target Certifications</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {certifications.map((cert, idx) => (
+                            <div
+                              key={idx}
+                              className="p-4 rounded-2xl border border-border bg-surface text-[13px] space-y-3"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <h4 className="font-display font-semibold text-foreground text-[14px]">
+                                    {cert.name}
+                                  </h4>
+                                  <span className="text-[12px] text-brand font-medium block mt-0.5">
+                                    {cert.issuer}
+                                  </span>
+                                </div>
+
+                                {cert.difficulty && (
+                                  <span className="apple-badge text-[10px]">
+                                    {cert.difficulty}
+                                  </span>
+                                )}
                               </div>
 
-                              <span className={`apple-badge text-[10px] ${isCritical ? 'bg-danger/10 text-danger' : ''}`}>
-                                {step.importance || 'RECOMMENDED'}
-                              </span>
-                            </div>
-
-                            <p className="text-muted-foreground leading-relaxed pl-[34px]">
-                              {step.action_plan}
-                            </p>
-
-                            <div className="pt-2 border-t border-border pl-[34px] flex flex-wrap gap-2 text-[11px]">
-                              {step.timeline && (
-                                <span className="inline-flex items-center gap-1 text-muted-foreground bg-card border border-border px-2.5 py-1 rounded-lg font-medium">
-                                  <Clock className="w-3 h-3 text-subtle" />
-                                  <span>{step.timeline}</span>
-                                </span>
-                              )}
-
-                              {step.recommended_certification && (
-                                <span className="inline-flex items-center gap-1 text-brand bg-card border border-border px-2.5 py-1 rounded-lg font-semibold">
-                                  <Award className="w-3 h-3" />
-                                  <span>{step.recommended_certification}</span>
-                                </span>
-                              )}
-                            </div>
-
-                            {step.practical_project && (
-                              <div className="ml-[34px] p-3 rounded-xl bg-card border border-border text-[12px] text-muted-foreground flex items-start gap-2">
-                                <Target className="w-3.5 h-3.5 text-subtle shrink-0 mt-0.5" />
+                              <div className="text-muted-foreground text-[12px] flex items-start gap-2">
+                                <BookOpen className="w-3.5 h-3.5 text-subtle shrink-0 mt-0.5" />
                                 <div>
-                                  <span className="font-semibold text-foreground">Project: </span>
-                                  <span>{step.practical_project}</span>
+                                  <span className="font-semibold text-foreground">Validates: </span>
+                                  <span>{cert.target_skill}</span>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
 
-                  {/* Column 2: Certifications */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-foreground font-display font-semibold text-[13px] uppercase tracking-wider">
-                      <Award className="w-4 h-4 text-subtle" />
-                      <span>Target Certifications</span>
-                    </div>
+                              <div className="p-3 rounded-xl bg-card border border-border text-[12px] text-muted-foreground">
+                                <span className="font-semibold text-foreground">Impact: </span>
+                                <span>{cert.why_it_helps}</span>
+                              </div>
 
-                    <div className="space-y-3">
-                      {certifications.map((cert, idx) => (
-                        <div
-                          key={idx}
-                          className="p-4 rounded-2xl border border-border bg-surface text-[13px] space-y-3"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h4 className="font-display font-semibold text-foreground text-[14px]">
-                                {cert.name}
-                              </h4>
-                              <span className="text-[12px] text-brand font-medium block mt-0.5">
-                                {cert.issuer}
-                              </span>
+                              <div className="flex items-center justify-between pt-2 text-[11px] text-subtle font-medium border-t border-border">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  <span>Prep: {cert.estimated_time}</span>
+                                </span>
+                                <span className="text-success font-semibold">
+                                  ATS Approved ✓
+                                </span>
+                              </div>
                             </div>
-
-                            {cert.difficulty && (
-                              <span className="apple-badge text-[10px]">
-                                {cert.difficulty}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="text-muted-foreground text-[12px] flex items-start gap-2">
-                            <BookOpen className="w-3.5 h-3.5 text-subtle shrink-0 mt-0.5" />
-                            <div>
-                              <span className="font-semibold text-foreground">Validates: </span>
-                              <span>{cert.target_skill}</span>
-                            </div>
-                          </div>
-
-                          <div className="p-3 rounded-xl bg-card border border-border text-[12px] text-muted-foreground">
-                            <span className="font-semibold text-foreground">Impact: </span>
-                            <span>{cert.why_it_helps}</span>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-2 text-[11px] text-subtle font-medium border-t border-border">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              <span>Prep: {cert.estimated_time}</span>
-                            </span>
-                            <span className="text-success font-semibold">
-                              ATS Approved ✓
-                            </span>
-                          </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                    </div>
+
+                    {/* Tip Banner */}
+                    <div className="p-4 rounded-2xl bg-surface flex items-start sm:items-center gap-3 text-[13px]">
+                      <Lightbulb className="w-5 h-5 text-warning shrink-0" />
+                      <div className="leading-relaxed text-muted-foreground">
+                        <span className="font-semibold text-foreground">Tip: </span>
+                        <span>
+                          Use the identified gaps to focus your learning and document relevant projects in your resume.
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Tip Banner */}
-                <div className="p-4 rounded-2xl bg-surface flex items-start sm:items-center gap-3 text-[13px]">
-                  <Lightbulb className="w-5 h-5 text-warning shrink-0" />
-                  <div className="leading-relaxed text-muted-foreground">
-                    <span className="font-semibold text-foreground">Tip: </span>
-                    <span>
-                      Completing even 1 targeted certification or documenting the suggested project in your resume can elevate a {evaluation.match_score}% match into a top-tier interview invitation.
-                    </span>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })()}
+          </>}
+            </div>
+
+
+
+
+
         </>
-      ) : evaluation.job_title ? (
-        /* Selected Opportunity - Awaiting Evaluation Card */
-        <div id="evaluation-summary" className="apple-card p-6 sm:p-8 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0">
-                <Sparkles className="w-6 h-6 text-brand" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="apple-badge text-[11px] bg-brand/10 text-brand font-semibold">
-                    AWAITING AI ATS EVALUATION
-                  </span>
-                  <span className="text-[12px] text-subtle font-medium">Ready to Tailor</span>
-                </div>
-                <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
-                  {evaluation.job_title}
-                </h2>
-                <div className="text-[13px] text-subtle flex items-center gap-2 font-medium">
-                  <span className="text-foreground font-semibold">{evaluation.company_name}</span>
-                  {evaluation.location_info && (
-                    <>
-                      <span className="text-subtle">·</span>
-                      <span>{evaluation.location_info}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Action CTA */}
-            <div className="flex items-center gap-3 shrink-0">
-              {!isProUser && tailoredCount >= 2 ? (
-                <button
-                  type="button"
-                  onClick={onNavigateToPricing}
-                  className="inline-flex items-center gap-2 px-6 py-3 text-[14px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer shadow-md"
-                >
-                  <Sparkles className="w-4 h-4 text-warning" />
-                  <span>Upgrade to Pro to Tailor (0 of 2 left)</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => onEvaluate()}
-                  disabled={isLoading}
-                  className="inline-flex items-center gap-2 px-6 py-3 text-[14px] font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer disabled:opacity-50 shadow-md"
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Evaluating &amp; Tailoring… {tailorProgress}%</span>
-                      <span className="text-[11px] opacity-70">{tailorEta}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Tailor Application &amp; Run ATS Evaluation</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {!isProUser && tailoredCount >= 2 ? (
-            <div className="p-4 rounded-xl bg-warning/10 border border-warning/25 text-[13px] text-warning flex items-start gap-3">
-              <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold text-foreground">Free Tier Limit Reached (2 of 2 used)</p>
-                <p className="leading-relaxed text-muted-foreground">
-                  You have tailored 2 out of 2 free resumes. To tailor this resume for <strong className="text-foreground">{evaluation.job_title}</strong> and unlock unlimited resumes, please upgrade to Pro.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 rounded-xl bg-surface border border-border text-[13px] text-muted-foreground flex items-start gap-3">
-              <Info className="w-4 h-4 text-brand shrink-0 mt-0.5" />
-              <p className="leading-relaxed">
-                Click <strong className="text-foreground">"Tailor Application &amp; Run ATS Evaluation"</strong> to run the local Gemma 4 AI engine. It will analyze your verified master profile against this target job description, calculate your authentic ATS match score, reveal missing qualifications &amp; actionable skill gaps, and build your tailored resume simultaneously.
-              </p>
-            </div>
-          )}
-        </div>
       ) : (
         <div className="workspace-evaluation-empty">
           <div className="workspace-empty-symbol">
@@ -2208,7 +2346,26 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             <p className="text-[13px] sm:text-sm text-subtle max-w-md leading-relaxed">
               Find a live role or bring your own job description to see your match, skill gaps, and tailored application materials.
             </p>
-            <Button variant="ghost" size="sm" type="button" onClick={() => setActiveInputMode('custom')} className="gap-2 text-brand text-xs font-medium mt-3 px-0">Import a job description <ArrowRight className="w-3.5 h-3.5" /></Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setSearchExpanded(true);
+                setIsCustomJdOpen(true);
+                setTimeout(() => {
+                  const el = document.getElementById('custom-jd-accordion');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const input = el.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
+                    if (input) input.focus();
+                  }
+                }, 50);
+              }}
+              className="gap-2 text-brand text-xs font-medium mt-3 px-0 cursor-pointer"
+            >
+              Import a job description <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
       )}

@@ -1,6 +1,34 @@
-- The Job Studio app lives in `src/jobstudio/` and renders client-only from `/`; its backend endpoints run from `src/server/jobstudio-api.ts` via the catch-all `src/routes/api/$.ts`.
+<!-- LOVABLE:BEGIN -->
+> [!IMPORTANT]
+> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
+> published git history — force pushing, or rebasing/amending/squashing commits
+> that are already pushed — as it rewrites history on Lovable's side and the
+> user will likely lose their project history.
+>
+> Commits you push to the connected branch sync back to Lovable and show up in
+> the editor, so keep the branch in a working state.
+<!-- LOVABLE:END -->
+
+- The imported Job Studio app lives in `src/jobstudio/` and renders client-only from `/`; its original Express endpoints run from `src/server/jobstudio-api.ts` via the catch-all `src/routes/api/$.ts` — keeps the source's `/api/*` contract unchanged.
 - The cinematic landing story lives in `src/jobstudio/components/CinematicHome.tsx` (GSAP ScrollTrigger + Lenis, pinned scenes at every width, static only for reduced motion); pin tall scenes when their bottom reaches the viewport bottom so the product demonstration stays visible on small screens. It renders above HomeView and uses illustrative sample data only.
 - Operational tabs use WorkspaceNavigation and a `.job-workspace`-scoped design system in styles.css; keep landing theme and document export rules outside workspace overrides so presentation changes cannot leak into either.
-- The `auth` tab renders the AuthView and remains accessible when signed out; landing search actions reset scroll on entry so visitors immediately see the form.
-- Accounts use Supabase auth; per-user browser keys prefixed `jobstudio_` are mirrored to the `user_data` table by `src/jobstudio/utils/cloudSync.ts` — keeps the original localStorage-based app logic unchanged while persisting it per user.
+- The `auth` tab renders the existing AuthView separately from the landing story and remains accessible when signed out; landing search actions reset scroll on entry so visitors immediately see the form. This changes navigation only, not the imported browser-only demo login mechanism.
+- Accounts use Lovable Cloud auth; per-user browser keys prefixed `jobstudio_` are mirrored to the `user_data` table by `src/jobstudio/utils/cloudSync.ts` — keeps the original localStorage-based app logic unchanged while persisting it per user.
 - Job Evaluator ranks fetched roles against the Master Profile with keyword overlap in `src/jobstudio/utils/profileMatch.ts` — instant and free for hundreds of roles, unlike per-role AI calls.
+- Job Evaluator distinguishes completed assessments from selection previews with explicit state; only completed assessments display numeric match scores, while internal ranking remains unchanged.
+
+- Master Profile saves must persist and activate the same newly generated snapshot; never rely on a pending React state update, so builder edits reach evaluation on the first click.
+- Profile filtering checks engineering background before scoring engineering titles; generic business-keyword overlap must not qualify a non-engineering candidate.
+- Account/profile hydration and signed-out tab guards stay separate; changing tabs must preserve the current tailored resume rather than reload the master profile.
+- Project target_alignment is internal relevance metadata, not resume content; omit it from previews, PDF, print, DOCX, and plain-text exports.
+- Master Profile deletion persists an empty user-scoped replacement and clears builder imports and current derived materials; keep account identity and saved application history intact so a fresh start survives reload without restoring old profile data.
+- Candidate defaults are empty and all candidate-dependent materials use the active account's saved profile; never seed personal sample profiles or substitute successful sample assessments when generation fails.
+- CompanyFocusPacks separates dated official company guidance from generated practice questions; role/JD determines competencies, saved profile supplies answer facts, and source normalization never treats AI labels as verified reports.
+- MCP is read-only, OAuth client-claim protected, and reads exact caller-owned cloud keys through RLS; unsaved browser state stays browser-local. Consent returns are canonical local paths preserved across every sign-in method.
+- WebMCP registrations live in the screen owning visible controls and use shared telemetry; browser tools must return only the rendered filtered collection without changing normal UI behavior.
+- All `/api/*` routes (except health) require a verified sign-in token, and outbound links are checked before fetching (`src/server/api-guard.ts`). Pro status and the free tailoring quota live server-side in `user_entitlements` and `api_usage`, so the browser cannot grant itself Pro or reset its limits.
+- Onboarding (welcome screen, tour, checklist) lives in `src/jobstudio/components/onboarding/`. Progress is saved per account in a `jobstudio_onboarding_<userId>` key so cloudSync carries it across devices. The tour highlights only elements marked with `data-tour` and never changes feature logic.
+- Counting-percentage loading feedback (LoadingProgress + useEstimatedProgress, native HTML progress, holds at 95% until the successful result changes) is reserved for AI generation and document export only; render it inside the initiating button or existing output/loading region, never as a global/sticky banner. Ordinary waits (page load, sign-in, fetches) use the BusyIndicator spinner instead.
+- Resolve the real session before displaying auth forms; returning accounts start in Job Evaluator, signed-in landing auth actions bypass forms, and /login preserves sanitized consent destinations using router navigation.
+- Restore verified accounts' current workspace tab from account-scoped sessionStorage on refresh; serialize session hydration and defer tab guards until it completes so startup cannot reset navigation. Explicit sign-in still opens Job Evaluator, and logout clears the remembered tab.
+- Mobile presentation rules use screen-only scoped styles: wrap workspace record text and filters, constrain dialogs including those outside main, and leave cinematic motion and print/export layouts unchanged.

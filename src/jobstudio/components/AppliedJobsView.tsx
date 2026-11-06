@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { AppliedJobRecord, ApplicationStatus, TailoredResumeData } from '../data/defaultData';
 import { downloadResumeAsPdf } from '../utils/pdfExport';
+import { useWebMCP } from 'use-webmcp-tool';
+import { runWebMCPTool } from '@/lib/webmcp-telemetry';
 
 interface AppliedJobsViewProps {
   appliedJobs: AppliedJobRecord[];
@@ -228,6 +230,15 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
       })
       .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
   }, [appliedJobs, statusFilter, searchQuery]);
+
+  useWebMCP({
+    name: 'read_application_view',
+    description: 'Read the applications currently shown in the application board or list, respecting its search and status filters.',
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    execute: () => runWebMCPTool('read_application_view', () => {
+      return filteredJobs.length ? filteredJobs.map(job => `${job.id}: ${job.company_name} — ${job.job_title} — ${job.status}`).join('\n') : 'No applications shown.';
+    }),
+  });
 
   // Board columns honour the same filters; a status filter narrows to that column only
   const boardColumns = useMemo(() => {
@@ -1055,7 +1066,7 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
       {/* Add / Edit Application Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-card rounded-3xl border border-border max-w-lg w-full p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200">
+          <div role="dialog" aria-modal="true" aria-label={editingJob ? 'Edit Application' : 'Track New Application'} className="mobile-dialog-panel bg-card rounded-3xl border border-border max-w-lg w-full p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200">
             <button
               onClick={() => setIsAddModalOpen(false)}
               className="absolute top-5 right-5 p-2 rounded-full text-subtle hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
@@ -1063,7 +1074,7 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
               <X className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-2 mb-4">
+            <div className="mobile-application-heading flex items-center gap-2 mb-4">
               <span className="apple-badge-blue text-[11px]">TRACKER</span>
               <h3 className="font-display font-semibold text-lg text-foreground">
                 {editingJob ? 'Edit Application' : 'Track New Application'}
@@ -1080,7 +1091,7 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
                   required
                   value={formCompany}
                   onChange={(e) => setFormCompany(e.target.value)}
-                  placeholder="e.g. Google, Stripe, Microsoft"
+                  placeholder="e.g. Revolut, Honeywell, Google"
                   className="w-full px-3.5 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-xl text-xs text-foreground outline-none transition-all"
                 />
               </div>

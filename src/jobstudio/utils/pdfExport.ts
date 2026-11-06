@@ -273,17 +273,6 @@ export function generateVectorResumePdf(
     resume.projects.forEach((proj) => {
       checkPageBreak(32);
 
-      // Alignment tag width on the right
-      let alignW = 0;
-      if (proj.target_alignment) {
-        const sanitizedAlign = cleanPdfText(proj.target_alignment);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(0, 113, 227); // Apple Blue
-        alignW = doc.getTextWidth(sanitizedAlign);
-        doc.text(sanitizedAlign, pageWidth - marginX - alignW, y);
-      }
-
       // Project Name on left
       const sanitizedName = cleanPdfText(proj.name);
       doc.setFont('helvetica', 'bold');
@@ -297,7 +286,7 @@ export function generateVectorResumePdf(
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.setTextColor(70, 70, 75);
-        const maxRoleW = contentWidth - alignW - nameW - 12;
+        const maxRoleW = contentWidth - nameW - 12;
         const roleText = ` | ${cleanPdfText(proj.role)}`;
         const rLines = doc.splitTextToSize(roleText, Math.max(maxRoleW, 100));
         doc.text(rLines[0] || roleText, marginX + nameW, y);
@@ -479,7 +468,7 @@ ${exp.bullets.map((b) => `• ${b}`).join('\n')}`;
         resume.projects
           .map(
             (p) =>
-              `${p.name.toUpperCase()}${p.role ? ` | ${p.role}` : ''}${p.target_alignment ? ` (${p.target_alignment})` : ''}
+              `${p.name.toUpperCase()}${p.role ? ` | ${p.role}` : ''}
 ${p.description ? p.description + '\n' : ''}${p.bullets.map((b) => `• ${b}`).join('\n')}`
           )
           .join('\n\n')

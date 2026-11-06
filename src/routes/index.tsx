@@ -1,5 +1,6 @@
 import { createFileRoute, ClientOnly } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
+import { BusyIndicator } from '@/jobstudio/components/BusyIndicator';
 
 const App = lazy(() => import("@/jobstudio/App"));
 
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   return (
     <ClientOnly fallback={<div className="min-h-screen bg-background" />}>
-      <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <Suspense fallback={<div className="min-h-screen bg-background p-6 flex items-center justify-center"><BusyIndicator label="Opening Job Studio" /></div>}>
         <App />
       </Suspense>
     </ClientOnly>

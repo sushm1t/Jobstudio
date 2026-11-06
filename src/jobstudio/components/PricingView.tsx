@@ -1,4 +1,4 @@
-// @ts-nocheck -- ported verbatim from the original project
+// @ts-nocheck -- ported with 3-tier pricing (Free, Plus, Pro)
 import React, { useState } from 'react';
 import {
   Check,
@@ -21,7 +21,9 @@ import {
 } from 'lucide-react';
 
 interface PricingViewProps {
+  userPlan?: 'free' | 'plus' | 'pro';
   isProUser: boolean;
+  onUpgradeToPlan?: (plan: 'plus' | 'pro') => void;
   onUpgradeToPro: () => void;
   onDowngradeToFree: () => void;
   tailoredCount: number;
@@ -29,20 +31,30 @@ interface PricingViewProps {
 }
 
 export const PricingView: React.FC<PricingViewProps> = ({
+  userPlan,
   isProUser,
+  onUpgradeToPlan,
   onUpgradeToPro,
   onDowngradeToFree,
   tailoredCount,
   onNavigateToTab,
 }) => {
+  const currentPlan = userPlan || (isProUser ? 'pro' : 'free');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
+  const [selectedCheckoutPlan, setSelectedCheckoutPlan] = useState<'plus' | 'pro'>('plus');
   const [checkoutSuccess, setCheckoutSuccess] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<Record<number, boolean>>({ 0: true });
 
-  const monthlyPrice = 9.99;
-  const annualMonthlyPrice = 7.99; // 20% discount
-  const annualTotal = (annualMonthlyPrice * 12).toFixed(2);
+  // Plus pricing
+  const plusMonthly = 9.99;
+  const plusAnnualMonthly = 7.99; // 20% discount
+  const plusAnnualTotal = (plusAnnualMonthly * 12).toFixed(2);
+
+  // Pro pricing
+  const proMonthly = 19.99;
+  const proAnnualMonthly = 15.99; // 20% discount
+  const proAnnualTotal = (proAnnualMonthly * 12).toFixed(2);
 
   const toggleFaq = (index: number) => {
     setOpenFaq((prev) => ({
@@ -51,64 +63,69 @@ export const PricingView: React.FC<PricingViewProps> = ({
     }));
   };
 
-  const handleStartCheckout = () => {
+  const handleStartCheckout = (plan: 'plus' | 'pro') => {
+    setSelectedCheckoutPlan(plan);
     setShowCheckoutModal(true);
   };
 
   const handleConfirmUpgrade = () => {
-    onUpgradeToPro();
-    setCheckoutSuccess(true);
-    setTimeout(() => {
-      setShowCheckoutModal(false);
-      setCheckoutSuccess(false);
-    }, 1800);
+    setShowCheckoutModal(false);
+    if (onUpgradeToPlan) {
+      onUpgradeToPlan(selectedCheckoutPlan);
+    } else {
+      onUpgradeToPro();
+    }
   };
 
   const faqs = [
     {
-      q: 'How does the 2 free tailored resumes limit work?',
-      a: 'Free users can tailor up to 2 resumes per month using our AI matching engine. Each tailored resume aligns your verified background with the target job description and generates custom impact bullets. Once you reach 2 resumes, you can upgrade to Pro for $9.99/month to tailor unlimited resumes.',
+      q: 'How do the resume tailoring limits work across Free, Plus, and Pro?',
+      a: 'Free users can tailor up to 2 resumes per month to test-drive the AI matching engine. Plus users receive 50 tailored resumes per month ($9.99/mo) — ideal for active candidates submitting 1–2 applications per day. Pro users ($19.99/mo) get unlimited tailored resumes with zero monthly quotas for intense or executive searches.',
     },
     {
-      q: 'Can I cancel my Pro subscription at any time?',
-      a: 'Yes, absolutely. There are no contracts, lock-ins, or cancellation fees. You can cancel with a single click at any time, and you will retain Pro access until the end of your billing cycle.',
+      q: 'What is the main difference between Plus ($9.99) and Pro ($19.99)?',
+      a: 'Plus includes 50 tailored resumes, 25 cover letters, full 3-persona recruiter reviews, DOCX exports, and access to all 100+ company focus packs. Pro unlocks unlimited resumes, plus advanced Stage 2 interview tools: the Behavioral STAR Mock Interview Practice Coach, Offer & Salary Negotiation Copilot (with counter-offer scripts and live phone tactics), and unlimited ATS portal questions.',
+    },
+    {
+      q: 'Can I cancel or switch my plan at any time?',
+      a: 'Yes, absolutely. There are no long-term contracts, lock-ins, or cancellation fees. You can upgrade, downgrade, or cancel with a single click at any time, retaining access until the end of your billing cycle.',
     },
     {
       q: 'What is included in the ATS Application Question Answerer?',
-      a: 'When applying on Greenhouse, Lever, Ashby, or Workday, portals frequently ask custom open-ended questions like "Describe a time you mitigated an operational failure" or "Why do you want to work here?". Pro users can generate tailored, metric-backed STAR stories with embedded ATS keywords for any portal question.',
+      a: 'When applying on Greenhouse, Lever, Ashby, or Workday, portals frequently ask custom open-ended questions like "Describe a time you mitigated an operational failure" or "Why do you want to work here?". Plus includes 20 portal answers/month, while Pro includes unlimited metric-backed STAR stories with embedded ATS keywords.',
     },
     {
       q: 'How does Interview Prep Intelligence work?',
-      a: 'Pro unlocks authentic interview questions reported by real candidates on Glassdoor and AmbitionBox for your target company and role. You get interviewer objectives, key talking points, and tailored STAR model answers grounded in your verified experience.',
+      a: 'Both Plus and Pro unlock our curated 100+ global employer guidance library (Google, Amazon, Stripe, Revolut, etc.) with culture pillars, domain context, and interview strategies. Pro additionally provides real Glassdoor/AmbitionBox question breakdowns and behavioral STAR AI scoring.',
     },
     {
       q: 'Which ATS job platforms are connected?',
-      a: 'Job Studio fetches live openings directly from public company job boards on Greenhouse, Lever, Ashby, SmartRecruiters and Workable, plus selected remote and tech job boards. Results reflect what those boards list at the time you search.',
+      a: 'Job Studio fetches live openings directly from public company job boards on Greenhouse, Lever, Ashby, SmartRecruiters and Workable, plus selected tech and remote job boards.',
     },
     {
       q: 'Are my personal details and resume confidential?',
-      a: 'Yes, 100%. Your career history, contact details, and resume files are stored strictly within your local session and are never sold or shared with third-party recruiters.',
+      a: 'Yes, 100%. Your career history, contact details, and resume files are stored strictly within your secure user account and are never sold or shared with third parties.',
     },
   ];
 
   return (
-    <div className="workspace-pricing max-w-5xl mx-auto space-y-12 pb-16">
+    <div className="workspace-pricing max-w-6xl mx-auto space-y-12 pb-16">
       {/* Top Hero Banner */}
       <div className="text-center space-y-4 pt-4 sm:pt-8">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-wider uppercase font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-          PRICING & PLANS
+          PRICING &amp; PLANS
         </div>
 
         <h1
           className="font-display text-3xl sm:text-5xl font-bold text-foreground tracking-tight max-w-2xl mx-auto leading-tight"
           style={{ letterSpacing: '-0.03em' }}
         >
-          Plans &amp; subscription
+          Choose the right plan for your job search
         </h1>
 
-        <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto leading-relaxed">
-          Free is a useful career workspace, not a countdown. Pro adds unlimited agent tailoring workflows, clean PDF exports, and deep interview preparation. Cancel anytime.
+        <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          From casual exploration to high-volume autonomous job applications. Upgrade, downgrade, or cancel anytime.
         </p>
 
         {/* Billing Cycle Toggle */}
@@ -143,17 +160,17 @@ export const PricingView: React.FC<PricingViewProps> = ({
         </div>
       </div>
 
-      {/* Pricing Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-stretch">
-        {/* FREE CARD */}
+      {/* 3-Tier Pricing Cards Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-6 items-stretch">
+        {/* 1. FREE CARD */}
         <div
           className={`bg-card rounded-3xl border p-7 sm:p-8 flex flex-col justify-between transition-all relative ${
-            !isProUser
+            currentPlan === 'free'
               ? 'border-brand/40 shadow-elevated'
               : 'border-border shadow-elevated'
           }`}
         >
-          {!isProUser && (
+          {currentPlan === 'free' && (
             <div className="absolute -top-3 left-6">
               <span className="px-3 py-1 bg-surface border border-border text-foreground text-[10px] font-bold uppercase tracking-wider rounded-full shadow-xs">
                 YOUR CURRENT PLAN
@@ -165,7 +182,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
             <div>
               <h3 className="font-display text-xl font-bold text-foreground">Free</h3>
               <p className="text-xs text-subtle mt-1">
-                Explore the market & test-drive AI tailoring.
+                Explore the market &amp; test-drive truthful AI tailoring.
               </p>
             </div>
 
@@ -197,7 +214,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               </div>
               <p className="text-[10px] text-subtle">
                 {tailoredCount >= 2
-                  ? 'Quota reached for this month. Upgrade to Pro for unlimited tailoring.'
+                  ? 'Free quota reached. Upgrade to Plus or Pro for more tailoring.'
                   : `${2 - Math.min(tailoredCount, 2)} free tailored resume${
                       2 - Math.min(tailoredCount, 2) === 1 ? '' : 's'
                     } remaining.`}
@@ -213,37 +230,31 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>2 Truthful AI Tailored Resumes</strong> per month with match score
+                    <strong>2 Truthful AI Tailored Resumes</strong> / mo with ATS match score
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>Recruiter-Panel Review:</strong> Score + Top 2 findings
+                    <strong>Recruiter ATS Scan</strong>: Match score + top findings
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>1 Custom Cover Letter draft</strong> with recruiter sign-off
+                    <strong>1 Custom Cover Letter draft</strong> with sign-off
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>Search live jobs</strong> from company boards on Greenhouse, Lever, Ashby and more
+                    <strong>Live job search</strong> across Greenhouse, Lever, Ashby
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>17 Career Roadmaps</strong> (Stage 1 & 2 foundations)
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Quick-Copy Applicant Dossier</strong> for application autofill
+                    <strong>17 Career Roadmaps</strong> (Stage 1 &amp; 2 foundations)
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -262,6 +273,10 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
+                  <span>100+ Global Company Focus Guidance</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-subtle">
+                  <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
                   <span>Offer &amp; Salary Negotiation Copilot</span>
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
@@ -273,7 +288,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
           </div>
 
           <div className="pt-8">
-            {!isProUser ? (
+            {currentPlan === 'free' ? (
               <button
                 type="button"
                 disabled
@@ -293,18 +308,189 @@ export const PricingView: React.FC<PricingViewProps> = ({
           </div>
         </div>
 
-        {/* PRO CARD ($9.99/mo) */}
+        {/* 2. PLUS CARD ($9.99/mo) - MOST POPULAR */}
         <div
           className={`bg-card rounded-3xl border-2 p-7 sm:p-8 flex flex-col justify-between transition-all relative ${
-            isProUser
+            currentPlan === 'plus'
               ? 'border-success shadow-elevated'
-              : 'border-brand shadow-elevated'
+              : 'border-brand/70 shadow-elevated'
           }`}
         >
           {/* Badge */}
           <div className="absolute -top-3.5 left-6 flex items-center gap-1.5">
             <span className="px-3.5 py-1 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider rounded-full shadow-md flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-primary-foreground" />
+              MOST POPULAR
+            </span>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold text-foreground">Plus</h3>
+                <p className="text-xs text-subtle mt-1">
+                  The active job search copilot for steady momentum.
+                </p>
+              </div>
+              {currentPlan === 'plus' && (
+                <span className="px-2.5 py-1 bg-success/15 text-success text-[11px] font-bold rounded-full font-mono">
+                  ACTIVE
+                </span>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-border">
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-display text-4xl sm:text-5xl font-bold text-foreground tracking-tight">
+                  ${billingCycle === 'monthly' ? plusMonthly : plusAnnualMonthly}
+                </span>
+                <span className="text-xs font-semibold text-subtle">/mo</span>
+              </div>
+              <p className="text-[11px] text-subtle mt-1">
+                {billingCycle === 'monthly'
+                  ? 'Billed monthly · Cancel anytime'
+                  : `$${plusAnnualTotal} billed yearly · Save $24/year`}
+              </p>
+            </div>
+
+            {/* Plus Highlight Box */}
+            <div className="p-3.5 rounded-2xl bg-brand/5 border border-brand/15 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-brand">
+                <Zap className="w-3.5 h-3.5" />
+                <span>50 Tailored Resumes / Month</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Ideal for 1–2 focused applications per day. Never get blocked by strict free limits.
+              </p>
+            </div>
+
+            {/* Plus Quota Progress (if active) */}
+            {currentPlan === 'plus' && (
+              <div className="p-3 rounded-2xl bg-surface border border-border space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground">Monthly Plus Quota</span>
+                  <span className="font-bold text-brand font-mono">
+                    {Math.min(tailoredCount, 50)} / 50 used
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-500"
+                    style={{ width: `${Math.min((tailoredCount / 50) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Feature List */}
+            <div className="space-y-3 pt-2">
+              <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider block">
+                EVERYTHING IN FREE, PLUS:
+              </span>
+              <ul className="space-y-2.5 text-xs text-foreground">
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>50 Truthful AI Tailored Resumes</strong> / month
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>Full 3-Persona Recruiter-Panel Reviews</strong> (Recruiter, HM, Technical Lead)
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>25 Custom Role-Specific Cover Letters</strong> / month
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>Full 100+ Global Company Guidance Library</strong> (Google, Stripe, Revolut, etc.)
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>Clean PDF + Editable DOCX Export + ATS Plaintext</strong>
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>All 17 Career Roadmaps</strong> (Stages 1–4 full access)
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>
+                    <strong>20 ATS Application Portal Answers</strong> / month
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5 text-subtle">
+                  <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
+                  <span>Offer &amp; Salary Negotiation Copilot</span>
+                </li>
+                <li className="flex items-start gap-2.5 text-subtle">
+                  <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
+                  <span>Behavioral STAR Mock Interview Practice Coach</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="pt-8">
+            {currentPlan === 'plus' ? (
+              <button
+                type="button"
+                disabled
+                className="w-full py-3.5 px-4 rounded-full bg-success/15 text-success text-xs font-bold flex items-center justify-center gap-1.5 cursor-default"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Active Plus Plan</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleStartCheckout('plus')}
+                className="w-full py-3.5 px-4 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-all cursor-pointer shadow-elevated flex items-center justify-center gap-2 group"
+              >
+                <span>Upgrade to Plus (${billingCycle === 'monthly' ? '$9.99' : '$7.99'}/mo)</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 3. PRO CARD ($19.99/mo) - BEST VALUE · COMPLETE COPILOT */}
+        <div
+          className={`bg-card rounded-3xl border-2 p-7 sm:p-8 flex flex-col justify-between transition-all relative ${
+            currentPlan === 'pro'
+              ? 'border-success shadow-elevated'
+              : 'border-primary shadow-elevated'
+          }`}
+        >
+          {/* Badge */}
+          <div className="absolute -top-3.5 left-6 flex items-center gap-1.5">
+            <span className="px-3.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full shadow-md flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-white" />
               BEST VALUE · RECOMMENDED
             </span>
           </div>
@@ -317,7 +503,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                   Run an intense, autonomous search with complete AI copilot tools.
                 </p>
               </div>
-              {isProUser && (
+              {currentPlan === 'pro' && (
                 <span className="px-2.5 py-1 bg-success/15 text-success text-[11px] font-bold rounded-full font-mono">
                   ACTIVE
                 </span>
@@ -327,14 +513,14 @@ export const PricingView: React.FC<PricingViewProps> = ({
             <div className="pt-2 border-t border-border">
               <div className="flex items-baseline gap-1.5">
                 <span className="font-display text-4xl sm:text-5xl font-bold text-foreground tracking-tight">
-                  ${billingCycle === 'monthly' ? monthlyPrice : annualMonthlyPrice}
+                  ${billingCycle === 'monthly' ? proMonthly : proAnnualMonthly}
                 </span>
                 <span className="text-xs font-semibold text-subtle">/mo</span>
               </div>
               <p className="text-[11px] text-subtle mt-1">
                 {billingCycle === 'monthly'
                   ? 'Billed monthly · Cancel anytime'
-                  : `$${annualTotal} billed yearly · Save $24/year`}
+                  : `$${proAnnualTotal} billed yearly · Save $48/year`}
               </p>
             </div>
 
@@ -342,17 +528,17 @@ export const PricingView: React.FC<PricingViewProps> = ({
             <div className="p-3.5 rounded-2xl bg-brand/5 border border-brand/15 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-brand">
                 <Zap className="w-3.5 h-3.5" />
-                <span>Zero Limits on Tailoring & Preparation</span>
+                <span>Zero Limits on Tailoring &amp; Preparation</span>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Tailor as many positions as you find. Never get blocked by monthly limits when high-volume hiring waves open.
+                Tailor as many positions as you find. Full interview defense, bar-raiser practice, and salary negotiation copilot.
               </p>
             </div>
 
             {/* Feature List */}
             <div className="space-y-3 pt-2">
               <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider block">
-                EVERYTHING IN FREE, PLUS:
+                EVERYTHING IN PLUS, PLUS:
               </span>
               <ul className="space-y-2.5 text-xs text-foreground">
                 <li className="flex items-start gap-2.5">
@@ -368,7 +554,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Full 3-Persona Recruiter-Panel Reviews</strong> (Senior Recruiter, Hiring Manager, Technical Lead)
+                    <strong>Unlimited 3-Persona Recruiter-Panel Reviews</strong> + Candidate Defense Scripts
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -376,7 +562,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Offer &amp; Salary Negotiation Copilot</strong> (Counter-offer email generator, live phone script, objection handlers)
+                    <strong>Offer &amp; Salary Negotiation Copilot</strong> (Counter-offer email generator, live phone scripts, objection handlers)
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -392,7 +578,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Company Focus Interview Packs</strong> (Google, Amazon, Stripe, Revolut, Figma, Meta, Netflix)
+                    <strong>Unlimited Custom Cover Letters</strong> &amp; Exec LinkedIn InMails
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -400,7 +586,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Clean PDF + DOCX Export + ATS Plaintext</strong>
+                    <strong>Unlimited ATS Application Question Answers</strong> (STAR stories, Why Company, embedded keywords)
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -408,7 +594,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>All 17 Career Roadmaps &amp; Readiness Assessments</strong> — full access to all stages and diagnostic matching
+                    <strong>1-Click Applicant Dossier Autofill</strong> for fast application submissions
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -416,15 +602,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Full ATS Application Question Answerer</strong> (STAR stories, Why Company, embedded keywords)
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong>Priority AI Processing</strong> with fast, unthrottled generation
+                    <strong>Priority AI Processing</strong> with fast, unthrottled generation pipeline
                   </span>
                 </li>
               </ul>
@@ -432,7 +610,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
           </div>
 
           <div className="pt-8">
-            {isProUser ? (
+            {currentPlan === 'pro' ? (
               <button
                 type="button"
                 disabled
@@ -444,10 +622,10 @@ export const PricingView: React.FC<PricingViewProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={handleStartCheckout}
-                className="w-full py-3.5 px-4 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-all cursor-pointer shadow-elevated flex items-center justify-center gap-2 group"
+                onClick={() => handleStartCheckout('pro')}
+                className="w-full py-3.5 px-4 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white text-xs font-semibold transition-all cursor-pointer shadow-elevated flex items-center justify-center gap-2 group"
               >
-                <span>Upgrade to Pro (${billingCycle === 'monthly' ? '$9.99' : '$7.99'}/mo)</span>
+                <span>Upgrade to Pro (${billingCycle === 'monthly' ? '$19.99' : '$15.99'}/mo)</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </button>
             )}
@@ -462,7 +640,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
             Detailed Plan Comparison
           </h3>
           <p className="text-xs text-subtle mt-1">
-            Compare every capability across Free and Pro tiers.
+            Compare every capability across Free, Plus, and Pro tiers.
           </p>
         </div>
 
@@ -471,122 +649,151 @@ export const PricingView: React.FC<PricingViewProps> = ({
             <thead>
               <tr className="border-b border-border text-subtle uppercase tracking-wider text-[10px]">
                 <th className="py-3 pr-4 font-semibold">Capability</th>
-                <th className="py-3 px-4 font-semibold w-32 sm:w-44 text-center">Free ($0)</th>
-                <th className="py-3 pl-4 font-semibold w-32 sm:w-44 text-center text-brand">
-                  Pro ($9.99/mo)
+                <th className="py-3 px-3 font-semibold w-28 sm:w-36 text-center">Free ($0)</th>
+                <th className="py-3 px-3 font-semibold w-28 sm:w-36 text-center text-brand">
+                  Plus ($9.99/mo)
+                </th>
+                <th className="py-3 pl-3 font-semibold w-28 sm:w-36 text-center text-emerald-500 font-bold">
+                  Pro ($19.99/mo)
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[rgba(0,0,0,0.04)] text-foreground">
               {/* Category 1: BUILD & APPLY */}
               <tr className="bg-surface/50 font-semibold text-[11px] text-muted-foreground">
-                <td colSpan={3} className="py-2.5 px-2">
+                <td colSpan={4} className="py-2.5 px-2">
                   BUILD &amp; APPLY
                 </td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">Tailored Resumes with ATS Match Score</td>
-                <td className="py-3 px-4 text-center font-medium text-subtle">2 per month</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">Unlimited</td>
+                <td className="py-3 px-3 text-center font-medium text-subtle">2 per month</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">50 per month</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">Unlimited</td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">Clean (Unwatermarked) PDF + DOCX Export</td>
-                <td className="py-3 px-4 text-center text-subtle">PDF Vector</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
-                  ✓ Clean PDF + DOCX + Plaintext
+                <td className="py-3 px-3 text-center text-subtle">PDF Vector</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">
+                  ✓ PDF + DOCX + Plaintext
+                </td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ PDF + DOCX + Plaintext + Themes
                 </td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">Recruiter-Panel Multi-Persona Reviews</td>
-                <td className="py-3 px-4 text-center text-subtle">Score + Top 2 findings</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
+                <td className="py-3 px-3 text-center text-subtle">Score + Top findings</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">
                   ✓ Full 3-Persona Committee
+                </td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ Full Committee + Defense Scripts
                 </td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">Custom Role-Specific Cover Letters</td>
-                <td className="py-3 px-4 text-center font-medium text-subtle">1 draft</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">Unlimited</td>
+                <td className="py-3 px-3 text-center font-medium text-subtle">1 draft</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">25 per month</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">Unlimited + InMails</td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">Match Gap Breakdown &amp; Action Plan</td>
-                <td className="py-3 px-4 text-center text-success">✓ Included</td>
-                <td className="py-3 pl-4 text-center text-success">✓ Included</td>
+                <td className="py-3 px-3 text-center text-success">✓ Included</td>
+                <td className="py-3 px-3 text-center text-success">✓ Included</td>
+                <td className="py-3 pl-3 text-center text-success">✓ Included</td>
               </tr>
 
               {/* Category 2: COPILOT & INTERVIEWS */}
               <tr className="bg-surface/50 font-semibold text-[11px] text-muted-foreground">
-                <td colSpan={3} className="py-2.5 px-2">
+                <td colSpan={4} className="py-2.5 px-2">
                   COPILOT &amp; INTERVIEWS
                 </td>
               </tr>
               <tr>
-                <td className="py-3 pr-4">Offer &amp; Salary Negotiation Copilot</td>
-                <td className="py-3 px-4 text-center text-subtle">—</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
-                  ✓ Email, Phone Script &amp; Objections
+                <td className="py-3 pr-4">100+ Global Company Focus Guidance</td>
+                <td className="py-3 px-3 text-center text-subtle">8 Featured</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">
+                  ✓ Full 100+ Library
                 </td>
-              </tr>
-              <tr>
-                <td className="py-3 pr-4">Behavioral Interview Practice &amp; STAR Coach</td>
-                <td className="py-3 px-4 text-center text-subtle">—</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
-                  ✓ AI Bar Raiser + Gold Model Rewrites
-                </td>
-              </tr>
-              <tr>
-                <td className="py-3 pr-4">Company Focus Interview Packs</td>
-                <td className="py-3 px-4 text-center text-subtle">1 Sample</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
-                  ✓ All Top Companies (Amazon, Google, etc.)
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ Full 100+ Library + Live Intel
                 </td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">ATS Application Question Answerer (STAR Stories)</td>
-                <td className="py-3 px-4 text-center text-subtle">Preview (1 question)</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
+                <td className="py-3 px-3 text-center text-subtle">Preview (1 question)</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">20 questions / mo</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
                   ✓ Unlimited questions
                 </td>
               </tr>
               <tr>
-                <td className="py-3 pr-4">Portal-Reported Questions (Glassdoor / AmbitionBox)</td>
-                <td className="py-3 px-4 text-center text-subtle">Sample preview</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
-                  ✓ Full portal intel
+                <td className="py-3 pr-4">Behavioral Interview Practice &amp; STAR Coach</td>
+                <td className="py-3 px-3 text-center text-subtle">—</td>
+                <td className="py-3 px-3 text-center text-subtle">Common questions</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ AI Bar Raiser + Model Rewrites
+                </td>
+              </tr>
+              <tr>
+                <td className="py-3 pr-4">Offer &amp; Salary Negotiation Copilot</td>
+                <td className="py-3 px-3 text-center text-subtle">—</td>
+                <td className="py-3 px-3 text-center text-subtle">—</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ Email, Phone Scripts &amp; Objections
+                </td>
+              </tr>
+              <tr>
+                <td className="py-3 pr-4">1-Click Applicant Dossier Autofill</td>
+                <td className="py-3 px-3 text-center text-subtle">Standard</td>
+                <td className="py-3 px-3 text-center text-brand">✓ Included</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ Priority Autofill Copilot
                 </td>
               </tr>
 
               {/* Category 3: CAREER ROADMAPS & SEARCH */}
               <tr className="bg-surface/50 font-semibold text-[11px] text-muted-foreground">
-                <td colSpan={3} className="py-2.5 px-2">
+                <td colSpan={4} className="py-2.5 px-2">
                   CAREER ROADMAPS &amp; SEARCH
                 </td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">17 Career Roadmaps Access</td>
-                <td className="py-3 px-4 text-center font-medium text-subtle">
+                <td className="py-3 px-3 text-center font-medium text-subtle">
                   Stages 1 &amp; 2 (Foundations)
                 </td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
+                <td className="py-3 px-3 text-center font-bold text-brand">
                   All Stages (Complete 17 Paths)
+                </td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  All Stages + Custom Projects
                 </td>
               </tr>
               <tr>
                 <td className="py-3 pr-4">Roadmap Readiness Assessments</td>
-                <td className="py-3 px-4 text-center text-subtle">—</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">
+                <td className="py-3 px-3 text-center text-subtle">—</td>
+                <td className="py-3 px-3 text-center font-bold text-brand">
                   ✓ 1-Click Profile Diagnostic
+                </td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ 1-Click Diagnostic + Gap Bridging
                 </td>
               </tr>
               <tr>
-                <td className="py-3 pr-4">Live ATS Job Explorer (company boards on 5 ATS platforms)</td>
-                <td className="py-3 px-4 text-center text-success">✓ Full Search</td>
-                <td className="py-3 pl-4 text-center text-success">✓ Full Search + Direct Crawler</td>
+                <td className="py-3 pr-4">Live ATS Job Explorer (Greenhouse, Lever, Ashby)</td>
+                <td className="py-3 px-3 text-center text-success">✓ Full Search</td>
+                <td className="py-3 px-3 text-center text-success">✓ Full Search</td>
+                <td className="py-3 pl-3 text-center text-success">✓ Full Search + Priority Crawler</td>
               </tr>
               <tr>
-                <td className="py-3 pr-4">Applied Jobs Pipeline Tracker</td>
-                <td className="py-3 px-4 text-center font-medium text-subtle">Up to 5 jobs</td>
-                <td className="py-3 pl-4 text-center font-bold text-brand">Unlimited</td>
+                <td className="py-3 pr-4">AI Processing Speed</td>
+                <td className="py-3 px-3 text-center text-subtle">Standard</td>
+                <td className="py-3 px-3 text-center text-brand">Priority</td>
+                <td className="py-3 pl-3 text-center font-bold text-emerald-500">
+                  ✓ Dedicated Instant Pipeline
+                </td>
               </tr>
             </tbody>
           </table>
@@ -602,7 +809,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               Frequently Asked Questions
             </h3>
             <p className="text-xs text-subtle">
-              Everything you need to know about plans and billing.
+              Everything you need to know about Free, Plus, and Pro billing.
             </p>
           </div>
         </div>
@@ -652,38 +859,64 @@ export const PricingView: React.FC<PricingViewProps> = ({
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <h3 className="font-display text-xl font-bold text-foreground">
-                  Welcome to Job Studio Pro!
+                  Welcome to Job Studio {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'}!
                 </h3>
                 <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                  Your Pro account is now active. All limits have been removed across resume tailoring, interview prep, and roadmaps.
+                  Your {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'} account is now active. Enjoy higher limits and powerful copilot tools.
                 </p>
               </div>
             ) : (
               <>
                 <div className="space-y-1">
                   <span className="apple-badge-blue text-[10px] uppercase font-mono font-bold">
-                    UPGRADE TO PRO
+                    UPGRADE TO {selectedCheckoutPlan === 'pro' ? 'PRO' : 'PLUS'}
                   </span>
                   <h3 className="font-display text-xl font-bold text-foreground">
-                    Confirm Pro Subscription
+                    Confirm {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'} Subscription
                   </h3>
                   <p className="text-xs text-subtle">
-                    Instant access to unlimited tailored resumes, interview prep, and clean exports.
+                    {selectedCheckoutPlan === 'pro'
+                      ? 'Instant access to unlimited tailored resumes, interview coaching, and salary negotiation.'
+                      : 'Instant access to 50 tailored resumes, 3-persona recruiter reviews, and clean DOCX exports.'}
                   </p>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-surface border border-border space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                    <span>Job Studio Pro ({billingCycle === 'monthly' ? 'Monthly' : 'Annual'})</span>
-                    <span>${billingCycle === 'monthly' ? '9.99' : annualTotal}</span>
+                    <span>
+                      Job Studio {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'} (
+                      {billingCycle === 'monthly' ? 'Monthly' : 'Annual'})
+                    </span>
+                    <span>
+                      $
+                      {selectedCheckoutPlan === 'pro'
+                        ? billingCycle === 'monthly'
+                          ? proMonthly
+                          : proAnnualTotal
+                        : billingCycle === 'monthly'
+                        ? plusMonthly
+                        : plusAnnualTotal}
+                    </span>
                   </div>
                   <div className="text-[11px] text-subtle flex items-center justify-between">
                     <span>Billing cycle:</span>
-                    <span>{billingCycle === 'monthly' ? '$9.99/month' : '$7.99/month (Billed annually)'}</span>
+                    <span>
+                      {selectedCheckoutPlan === 'pro'
+                        ? billingCycle === 'monthly'
+                          ? `$${proMonthly}/month`
+                          : `$${proAnnualMonthly}/month (Billed annually)`
+                        : billingCycle === 'monthly'
+                        ? `$${plusMonthly}/month`
+                        : `$${plusAnnualMonthly}/month (Billed annually)`}
+                    </span>
                   </div>
                   <div className="text-[11px] text-success font-medium flex items-center gap-1 pt-1 border-t border-border">
                     <Check className="w-3 h-3" />
-                    <span>Includes 200+ portal questions & unlimited tailored resumes</span>
+                    <span>
+                      {selectedCheckoutPlan === 'pro'
+                        ? 'Includes unlimited tailored resumes & salary negotiation copilot'
+                        : 'Includes 50 tailored resumes/month & full 3-persona panel reviews'}
+                    </span>
                   </div>
                 </div>
 
@@ -707,7 +940,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     onClick={handleConfirmUpgrade}
                     className="flex-1 py-2.5 px-4 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold cursor-pointer transition-colors shadow-md"
                   >
-                    Activate Pro Now
+                    Activate {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'} Now
                   </button>
                 </div>
               </>
@@ -718,4 +951,3 @@ export const PricingView: React.FC<PricingViewProps> = ({
     </div>
   );
 };
-
