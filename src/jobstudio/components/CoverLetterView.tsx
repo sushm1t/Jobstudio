@@ -79,16 +79,19 @@ export const CoverLetterView: React.FC<CoverLetterViewProps> = ({
 
   return (
     <div className="workspace-letter space-y-6 max-w-4xl mx-auto">
-      {/* Action Bar */}
-      <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="bg-[rgba(120,120,128,0.12)] text-muted-foreground text-[11px] font-semibold rounded-md px-2 py-0.5 uppercase tracking-wide">Cover Letter</span>
-            <h2 className="font-display text-base sm:text-lg font-semibold text-foreground">
-              Tailored Cover Letter
-            </h2>
+      {/* Landing-Inspired Action Header Card */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-elevated">
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-1.5 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="bg-brand/10 text-brand text-[11px] font-bold rounded-full px-3 py-0.5 uppercase tracking-widest font-mono border border-brand/20 shadow-2xs">
+              TAILORED DOCUMENTS
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1" style={{ fontFamily: 'var(--font-body)' }}>
+          <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Tailored Cover Letter
+          </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Addressed to <span className="font-semibold text-foreground">{companyName}</span> · {jobTitle}
           </p>
         </div>

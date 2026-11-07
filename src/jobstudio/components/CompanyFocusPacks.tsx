@@ -464,38 +464,39 @@ export function CompanyFocusPacks({
       )}
 
       {/* Selected Company Guidance Dossier */}
-      <section className="space-y-4 border-b border-border pb-5 bg-card/40 p-4 sm:p-5 rounded-2xl border">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="font-semibold text-foreground text-sm sm:text-base">
+      <section className="relative overflow-hidden space-y-5 rounded-3xl border border-border/80 bg-gradient-to-b from-card via-card/95 to-surface/90 p-6 sm:p-7 shadow-elevated">
+        <div className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h4 className="font-display font-bold text-foreground text-base sm:text-lg tracking-tight">
               {company.isRoleAnchored ? 'Role-anchored company guidance' : 'Site-verified company guidance'} · {company.name}
             </h4>
             {isSelectedActiveRole && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand uppercase tracking-wider font-mono">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-brand/15 text-brand uppercase tracking-wider font-mono border border-brand/30 shadow-2xs">
                 ACTIVE APPLICATION
               </span>
             )}
           </div>
           {company.industry && (
-            <span className="text-xs text-subtle font-medium">
+            <span className="text-xs text-muted-foreground font-mono">
               {company.industry}
             </span>
           )}
         </div>
 
-        <p className="text-sm text-muted-foreground leading-relaxed">{company.guidance}</p>
+        <p className="relative z-10 text-xs sm:text-sm text-muted-foreground leading-relaxed">{company.guidance}</p>
 
         {/* Culture & Operational Pillars */}
         {company.values.length > 0 && (
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-bold text-subtle uppercase tracking-wider block font-mono">
+          <div className="relative z-10 space-y-2">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block font-mono">
               {company.isRoleAnchored ? 'IDENTIFIED CULTURE & OPERATIONAL PILLARS:' : 'OFFICIAL COMPANY VALUES:'}
             </span>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {company.values.map((val, idx) => (
                 <span
                   key={idx}
-                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface text-foreground border border-border/80 shadow-2xs"
+                  className="text-xs font-semibold px-3 py-1 rounded-xl bg-surface/90 text-foreground border border-border/80 shadow-2xs font-mono"
                 >
                   {val}
                 </span>
@@ -506,24 +507,24 @@ export function CompanyFocusPacks({
 
         {/* Domain Context & Interview Strategy Cards */}
         {(company.domainContext || company.interviewStrategy) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
             {company.domainContext && (
-              <div className="p-3.5 rounded-xl bg-surface/70 border border-border/80 space-y-1 text-xs">
-                <span className="font-semibold text-brand flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+              <div className="p-4 rounded-2xl bg-surface/80 border border-border/80 space-y-1.5 text-xs shadow-2xs">
+                <span className="font-semibold text-brand flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-mono">
                   <Building2 className="w-3.5 h-3.5" /> Domain &amp; Industry Context
                 </span>
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-muted-foreground leading-relaxed text-xs">
                   {company.domainContext}
                 </p>
               </div>
             )}
 
             {company.interviewStrategy && (
-              <div className="p-3.5 rounded-xl bg-surface/70 border border-border/80 space-y-1 text-xs">
-                <span className="font-semibold text-info flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+              <div className="p-4 rounded-2xl bg-surface/80 border border-border/80 space-y-1.5 text-xs shadow-2xs">
+                <span className="font-semibold text-cyan-400 flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-mono">
                   <Target className="w-3.5 h-3.5" /> Company Interview Strategy
                 </span>
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-muted-foreground leading-relaxed text-xs">
                   {company.interviewStrategy}
                 </p>
               </div>
@@ -531,7 +532,7 @@ export function CompanyFocusPacks({
           </div>
         )}
 
-        <div className="flex flex-wrap gap-4 pt-1">
+        <div className="relative z-10 flex flex-wrap gap-4 pt-1">
           {company.sources.map(source => (
             <a
               key={source.url}
@@ -547,7 +548,7 @@ export function CompanyFocusPacks({
         </div>
 
         {company.checkedOn && !company.isRoleAnchored && (
-          <p className="text-[11px] text-subtle pt-1">
+          <p className="relative z-10 text-[11px] text-muted-foreground pt-1 font-mono">
             Official employer guidance verified on {company.checkedOn}.
           </p>
         )}
@@ -690,43 +691,43 @@ export function CompanyFocusPacks({
               competency: getQuestionCompetency(q.q, practice.family),
             }))
         ).map((item, index) => (
-          <div key={index} className="p-4 sm:p-5 rounded-2xl border border-border bg-card space-y-3 shadow-2xs">
+          <div key={index} className="relative overflow-hidden p-5 sm:p-6 rounded-2xl border border-border/80 bg-gradient-to-b from-card via-card/95 to-surface/90 space-y-4 shadow-elevated after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-brand/25 after:to-transparent">
             <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1 min-w-0">
+              <div className="space-y-1.5 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-brand/10 text-brand">
+                  <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-brand/10 text-brand border border-brand/20 shadow-2xs">
                     QUESTION {index + 1}
                   </span>
-                  <span className="text-[11px] font-medium text-subtle">
-                    Target Competency: <strong className="text-foreground">{item.competency}</strong>
+                  <span className="text-[11px] font-medium text-muted-foreground font-mono">
+                    Target Competency: <strong className="text-foreground font-semibold">{item.competency}</strong>
                   </span>
                 </div>
-                <h5 className="text-sm font-semibold text-foreground leading-snug">
+                <h5 className="font-display font-bold text-sm sm:text-base text-foreground leading-snug tracking-tight">
                   {index + 1}. {item.q}
                 </h5>
               </div>
               <button
                 type="button"
                 onClick={() => handleCopyQuestion(index, item.q, questions.length ? item.strategy : '')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-surface-2 border border-border text-foreground transition-all cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-surface/90 hover:bg-surface border border-border/80 text-foreground transition-all cursor-pointer shrink-0 shadow-2xs"
                 title="Copy question and model STAR framework"
               >
                 {copiedQuestionIndex === index ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-success" />
-                    <span className="text-success">Copied!</span>
+                    <span className="text-success font-medium">Copied!</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5 text-subtle" />
+                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>Copy Answer</span>
                   </>
                 )}
               </button>
             </div>
 
-            <div className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-brand/40 bg-surface/40 p-3 rounded-r-xl space-y-1">
-              <span className="font-semibold text-foreground block">
+            <div className="text-xs text-muted-foreground leading-relaxed pl-4 border-l-2 border-brand bg-surface/70 p-3.5 rounded-r-2xl space-y-1.5">
+              <span className="font-display font-bold text-foreground block text-xs">
                 {questions.length ? 'Suggested practice answer:' : 'Preparation framework:'}
               </span>
               <p className="whitespace-pre-line text-muted-foreground">
@@ -738,10 +739,10 @@ export function CompanyFocusPacks({
 
             {item.points.length > 0 && (
               <div className="pt-1 space-y-1.5">
-                <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider block font-mono">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block font-mono">
                   Key Talking Points:
                 </span>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {item.points.map((point, i) => (
                     <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-brand mt-1.5 shrink-0" />

@@ -419,18 +419,18 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
           setDragOverStatus(null);
         }}
         onClick={() => setDetailJobId(job.id)}
-        className={`bg-card border border-border rounded-xl p-3.5 cursor-pointer transition-all hover:border-brand/40 hover:shadow-elevated text-left w-full ${
+        className={`relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:border-brand/50 hover:shadow-[0_15px_30px_-10px_rgba(0,0,0,0.5),0_0_20px_0_rgba(0,229,153,0.1)] text-left w-full group after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-brand/25 after:to-transparent ${
           dragJobId === job.id ? 'opacity-50' : ''
         }`}
       >
         <div className="flex items-start gap-2">
-          <GripVertical className="w-3.5 h-3.5 text-subtle/60 mt-0.5 shrink-0" />
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <h4 className="font-display font-semibold text-[13px] text-foreground leading-snug line-clamp-2">
+            <h4 className="font-display font-bold text-sm text-foreground leading-snug line-clamp-2 group-hover:text-brand transition-colors">
               {job.job_title}
             </h4>
-            <p className="text-[11px] text-subtle mt-0.5 flex items-center gap-1 min-w-0">
-              <Building2 className="w-3 h-3 shrink-0" />
+            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 min-w-0 font-medium">
+              <Building2 className="w-3 h-3 shrink-0 text-brand" />
               <span className="truncate">{job.company_name}</span>
             </p>
           </div>
@@ -439,12 +439,12 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
         {(job.location || job.match_score !== undefined) && (
           <div className="flex items-center gap-2 mt-2 pl-[22px] flex-wrap">
             {job.match_score !== undefined && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success/10 text-success">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-success/15 text-success border border-success/30 font-mono">
                 {job.match_score}% match
               </span>
             )}
             {job.location && (
-              <span className="text-[10px] text-subtle flex items-center gap-1 min-w-0">
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1 min-w-0">
                 <MapPin className="w-3 h-3 shrink-0" />
                 <span className="truncate">{job.location}</span>
               </span>
@@ -503,69 +503,93 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
 
   return (
     <div className="workspace-applications space-y-6 max-w-6xl mx-auto">
-      <div className="workspace-page-header"><div><h1>Applied Jobs</h1><p>Your applications, progress, and next steps in one place.</p></div></div>
+      {/* Landing-Inspired Showcase Header Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-8 shadow-elevated">
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-widest uppercase font-mono border border-brand/20 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <span>APPLICATION TRACKER · ACTIVE PIPELINE</span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-tight text-foreground leading-[1.1]">
+              Applied Jobs
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Your applications, active interview rounds, follow-up battlecards, and tailored resume snapshots in one unified cockpit.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium font-mono bg-surface/90 border border-border/80 text-foreground shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+              <span>{appliedJobs.length} {appliedJobs.length === 1 ? 'Tracked Role' : 'Tracked Roles'}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* KPI / Metrics Header Banner */}
       <div className="workspace-metrics grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="apple-card p-4 flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">Total Applied</span>
-          <div className="text-2xl font-bold text-foreground mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated flex flex-col justify-between hover:border-brand/40 transition-all duration-200">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-mono">Total Applied</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-foreground mt-1 tracking-tight">
             {stats.total}
           </div>
-          <span className="text-[10px] text-subtle mt-0.5">Tracked applications</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">Tracked applications</span>
         </div>
 
-        <div className="apple-card p-4 flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-brand uppercase tracking-wider">Sent / Pending</span>
-          <div className="text-2xl font-bold text-brand mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated flex flex-col justify-between hover:border-brand/40 transition-all duration-200">
+          <span className="text-[11px] font-bold text-brand uppercase tracking-wider font-mono">Sent / Pending</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-brand mt-1 tracking-tight">
             {stats.applied}
           </div>
-          <span className="text-[10px] text-subtle mt-0.5">Awaiting initial review</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">Awaiting initial review</span>
         </div>
 
-        <div className="apple-card p-4 flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-warning uppercase tracking-wider">Under Review</span>
-          <div className="text-2xl font-bold text-warning mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated flex flex-col justify-between hover:border-brand/40 transition-all duration-200">
+          <span className="text-[11px] font-bold text-warning uppercase tracking-wider font-mono">Under Review</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-warning mt-1 tracking-tight">
             {stats.reviewing}
           </div>
-          <span className="text-[10px] text-subtle mt-0.5">Recruiter screening</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">Recruiter screening</span>
         </div>
 
-        <div className="apple-card p-4 flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-info uppercase tracking-wider">Interviewing</span>
-          <div className="text-2xl font-bold text-info mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated flex flex-col justify-between hover:border-brand/40 transition-all duration-200">
+          <span className="text-[11px] font-bold text-info uppercase tracking-wider font-mono">Interviewing</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-info mt-1 tracking-tight">
             {stats.interviewing}
           </div>
-          <span className="text-[10px] text-subtle mt-0.5">Active interview rounds</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">Active interview rounds</span>
         </div>
 
-        <div className="apple-card p-4 flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-success uppercase tracking-wider">Offers</span>
-          <div className="text-2xl font-bold text-success mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated flex flex-col justify-between hover:border-brand/40 transition-all duration-200">
+          <span className="text-[11px] font-bold text-success uppercase tracking-wider font-mono">Offers</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-success mt-1 tracking-tight">
             {stats.offered}
           </div>
-          <span className="text-[10px] text-subtle mt-0.5">Offers received</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">Offers received</span>
         </div>
 
-        <div className="apple-card p-4 flex flex-col justify-between">
-          <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">Avg Match</span>
-          <div className="text-2xl font-bold text-foreground mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated flex flex-col justify-between hover:border-brand/40 transition-all duration-200">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-mono">Avg Match</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-foreground mt-1 tracking-tight">
             {stats.avgScore ? `${stats.avgScore}%` : '—'}
           </div>
-          <span className="text-[10px] text-subtle mt-0.5">ATS fit overlap</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5 font-mono">ATS fit overlap</span>
         </div>
       </div>
 
       {/* Control Bar: Search, Filters, View Toggle, and New Application CTA */}
-      <div className="apple-card p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-2xl border border-border/80 p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-elevated">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-subtle absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search company, title, notes, or platform..."
-            className="w-full pl-10 pr-4 py-2 bg-surface border border-transparent focus:border-brand focus:bg-card rounded-full text-xs text-foreground placeholder-subtle outline-none transition-all"
+            className="w-full pl-10 pr-4 py-2 bg-surface/90 border border-border/80 focus:border-brand focus:bg-card rounded-full text-xs text-foreground placeholder:text-muted-foreground outline-none transition-all"
           />
         </div>
 

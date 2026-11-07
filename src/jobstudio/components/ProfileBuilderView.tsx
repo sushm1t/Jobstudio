@@ -795,6 +795,31 @@ ${certText}
     <div className="workspace-profile space-y-6 max-w-5xl mx-auto pb-20">
       <BusyIndicator active={isReadingFile} label="Reading resume file" />
 
+      {/* Landing-Inspired Showcase Header Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-8 shadow-elevated">
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-widest uppercase font-mono border border-brand/20 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <span>MASTER PROFILE VAULT · SINGLE SOURCE OF TRUTH</span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-tight text-foreground leading-[1.1]">
+              Master Profile
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Curate your career experience, accomplishments, and skills. Every tailored resume and ATS application grounds directly into this verified profile.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium font-mono bg-surface/90 border border-border/80 text-foreground shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+              <span>{isLoggedIn ? 'Cloud Synced' : 'Guest Mode (Local)'}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Guest Mode Notice */}
       {!isLoggedIn && (
         <div className="bg-brand/5 border border-brand/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
@@ -815,14 +840,15 @@ ${certText}
       )}
 
       {/* HERO AI / PDF FAST-TRACK */}
-      <section aria-label="Resume auto-fill fast-track" className="apple-card p-6 sm:p-8 bg-card border-2 border-brand/30 shadow-elevated space-y-6 rounded-3xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <section aria-label="Resume auto-fill fast-track" className="relative overflow-hidden p-6 sm:p-8 bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 shadow-elevated space-y-6 rounded-3xl after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-brand/35 after:to-transparent">
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold uppercase tracking-wider font-mono">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold uppercase tracking-wider font-mono border border-brand/20 shadow-2xs">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Hero AI Fast-Track</span>
             </div>
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
               Upload Resume to Auto-Fill Profile
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
@@ -831,7 +857,7 @@ ${certText}
           </div>
 
           {/* Toggle: PDF Upload vs Text Paste */}
-          <div className="flex items-center p-1 bg-surface rounded-full text-xs font-medium shrink-0 self-start sm:self-auto border border-border">
+          <div className="flex items-center p-1 bg-surface/90 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto border border-border/80 shadow-2xs">
             <button
               type="button"
               data-tour="profile-upload"
@@ -842,7 +868,7 @@ ${certText}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 importMode === 'pdf'
                   ? 'bg-card text-foreground shadow-xs font-semibold'
-                  : 'text-subtle hover:text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <FileUp className="w-3.5 h-3.5 text-brand" />
@@ -857,17 +883,17 @@ ${certText}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 importMode === 'text'
                   ? 'bg-card text-foreground shadow-xs font-semibold'
-                  : 'text-subtle hover:text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <FileText className="w-3.5 h-3.5 text-subtle" />
+              <FileText className="w-3.5 h-3.5 text-muted-foreground" />
               <span>Paste Text</span>
             </button>
           </div>
         </div>
 
         {parseError && (
-          <div className="p-3.5 rounded-xl bg-danger/10 text-danger border border-danger/20 text-xs flex items-center gap-2 animate-fadeIn">
+          <div className="relative z-10 p-3.5 rounded-xl bg-danger/10 text-danger border border-danger/20 text-xs flex items-center gap-2 animate-fadeIn font-mono">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{parseError}</span>
           </div>
@@ -875,7 +901,7 @@ ${certText}
 
         {/* MODE 1: PDF UPLOAD (DRAG & DROP) */}
         {importMode === 'pdf' && (
-          <div className="space-y-4">
+          <div className="relative z-10 space-y-4">
             <input
               type="file"
               ref={fileInputRef}
@@ -891,10 +917,10 @@ ${certText}
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-3xl p-6 sm:p-10 text-center transition-all cursor-pointer ${
                 isDragging
-                  ? 'border-brand bg-brand/5 scale-[1.01]'
+                  ? 'border-brand bg-brand/10 scale-[1.01] shadow-[0_0_30px_rgba(0,229,153,0.2)]'
                   : uploadedPdf
-                  ? 'border-success bg-success/5'
-                  : 'border-border hover:border-brand hover:bg-surface/70 bg-surface'
+                  ? 'border-success/60 bg-success/5 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+                  : 'border-border/80 hover:border-brand/70 hover:bg-surface/90 bg-surface/60 hover:shadow-[0_0_25px_rgba(0,229,153,0.1)]'
               }`}
             >
               {uploadedPdf ? (

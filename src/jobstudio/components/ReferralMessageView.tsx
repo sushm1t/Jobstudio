@@ -336,21 +336,22 @@ ${forwardableBlurb}
 
   return (
     <div className="workspace-referral space-y-6 max-w-4xl mx-auto">
-      {/* Action Header Card */}
+      {/* Landing-Inspired Action Header Card */}
       <div
-        className="bg-card rounded-2xl border border-border p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs"
+        className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-elevated"
       >
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <span className="bg-brand/10 text-brand text-[11px] font-semibold rounded-md px-2 py-0.5 uppercase tracking-wide flex items-center gap-1 font-mono">
-              <MessageSquareQuote className="w-3 h-3" />
-              Referral Request
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-1.5 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="bg-brand/10 text-brand text-[11px] font-bold rounded-full px-3 py-0.5 uppercase tracking-widest flex items-center gap-1.5 font-mono border border-brand/20 shadow-2xs">
+              <MessageSquareQuote className="w-3.5 h-3.5" />
+              REFERRAL REQUEST
             </span>
-            <h2 className="font-display text-base sm:text-lg font-semibold text-foreground">
-              Internal Referral Outreach
-            </h2>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Internal Referral Outreach
+          </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Targeting <strong className="text-foreground">{activeRole}</strong> at{' '}
             <strong className="text-foreground">{activeComp}</strong>. Referrals receive up to 4x higher interview rates than direct cold applications.
           </p>

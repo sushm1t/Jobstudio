@@ -339,24 +339,25 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
     <div className="workspace-screening space-y-6 max-w-5xl mx-auto">
       {/* Top Banner with Direct Application Link */}
       <div
-        className="bg-card rounded-2xl border border-border/80 p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm"
+        className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 shadow-elevated"
       >
-        <div className="space-y-1">
+        <div className="absolute -top-16 -right-16 w-72 h-72 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-2 max-w-2xl">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-brand/10 text-brand text-[11px] font-bold rounded-md px-2.5 py-0.5 uppercase tracking-wider font-mono">
+            <span className="bg-brand/10 text-brand text-[11px] font-bold rounded-md px-2.5 py-0.5 uppercase tracking-wider font-mono border border-brand/20 shadow-2xs">
               INTERVIEW COPILOT
             </span>
-            <h2 className="font-display text-base sm:text-lg font-bold text-foreground">
+            <h2 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight">
               ATS &amp; Interview
             </h2>
           </div>
-          <p className="text-xs text-subtle">
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Tailored for <strong className="text-foreground">{jobTitle || 'Target Role'}</strong> at{' '}
             <strong className="text-foreground">{companyName || 'your target opportunity'}</strong> · Grounded in your Master Profile
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap sm:flex-nowrap">
+        <div className="relative z-10 flex items-center gap-2 self-stretch sm:self-auto flex-wrap sm:flex-nowrap">
           {applyUrl && (
             <a
               href={applyUrl}
@@ -443,13 +444,14 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
         {stage1Tab === 'screening' && (
           <div className="space-y-6 pt-1">
           {/* Quick-Copy Applicant Details Grid */}
-          <div className="bg-card rounded-2xl border border-border/80 p-6 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-7 space-y-5 shadow-elevated">
+            <div className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <span className="bg-surface text-muted-foreground text-[11px] font-semibold rounded-md px-2 py-0.5 uppercase tracking-wider">
+                <span className="bg-brand/10 text-brand text-[11px] font-bold rounded-md px-2.5 py-0.5 uppercase tracking-wider font-mono border border-brand/20">
                   QUICK AUTOFILL
                 </span>
-                <h3 className="font-display font-semibold text-sm sm:text-base text-foreground">
+                <h3 className="font-display font-bold text-sm sm:text-base text-foreground">
                   Standard Portal Application Fields
                 </h3>
               </div>
@@ -554,8 +556,9 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
           </div>
 
           {/* ATS Custom Question Generator */}
-          <div className="bg-card rounded-2xl border border-border/80 p-6 space-y-5 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-7 space-y-5 shadow-elevated">
+            <div className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="bg-brand/10 text-brand text-[11px] font-semibold rounded-md px-2 py-0.5 uppercase tracking-wider flex items-center gap-1 border border-brand/25">
@@ -852,8 +855,9 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
       {/* ========================================================================= */}
       {/* STAGE 2: LATE STAGE / INTERVIEW CALL STAGE (EXPANDABLE MODULE)            */}
       {/* ========================================================================= */}
-      <div className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4 shadow-xs" data-testid="round-2-module">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-b from-card via-card/95 to-surface/90 p-6 sm:p-7 space-y-5 shadow-elevated" data-testid="round-2-module">
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-info/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-info/10 text-info border border-info/20 font-mono">
@@ -863,10 +867,10 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
                 Interview Call Stage
               </span>
             </div>
-            <h3 className="font-display font-semibold text-base sm:text-lg text-foreground">
+            <h3 className="font-display font-bold text-base sm:text-xl text-foreground tracking-tight">
               Round 2 &amp; Offer Prep
             </h3>
-            <p className="text-xs text-subtle max-w-xl leading-relaxed">
+            <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
               Behavioral STAR mock interview scoring and salary negotiation battlecards. Kept distinct so first-round applicants aren't overwhelmed by salary tactics before submitting their resume.
             </p>
           </div>
@@ -874,7 +878,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
           <button
             type="button"
             onClick={() => setIsRound2Expanded((prev) => !prev)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-surface hover:bg-surface-2 border border-border text-foreground transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-surface hover:bg-surface-2 border border-border text-foreground transition-all cursor-pointer shrink-0 self-start sm:self-auto shadow-2xs"
           >
             <span>{isRound2Expanded ? 'Collapse Round 2 & Offer Prep' : 'Expand Round 2 & Offer Prep'}</span>
             {isRound2Expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

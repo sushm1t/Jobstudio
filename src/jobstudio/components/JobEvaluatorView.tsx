@@ -871,12 +871,29 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
   return (
     <div className="workspace-evaluator space-y-6 max-w-7xl mx-auto">
-      <div className="workspace-page-header">
-        <div><h1>Job Evaluator</h1><p>Discover opportunities and evaluate how well they match your experience.</p></div>
-        <span className="workspace-header-status">
-          <span className="workspace-status-dot" />
-          {isProUser ? 'Pro plan · Unlimited tailoring' : `${2 - Math.min(tailoredCount, 2)} of 2 tailored resumes available`}
-        </span>
+      {/* Landing-Inspired Showcase Header Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-8 shadow-elevated">
+        <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-widest uppercase font-mono border border-brand/20 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <span>ROLE DISCOVERY &amp; ATS INTELLIGENCE</span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-tight text-foreground leading-[1.1]">
+              Job Evaluator
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Discover opportunities and evaluate how well they match your experience.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium font-mono bg-surface/90 border border-border/80 text-foreground shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+              <span>{isProUser ? 'Pro plan · Unlimited tailoring' : `${2 - Math.min(tailoredCount, 2)} of 2 tailored resumes available`}</span>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Modern 2-Pane Master-Detail Cockpit */}
@@ -929,25 +946,26 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
             </div>
           ) : (
             /* Stage 2A: Role Discovery Card (Search Mode) */
-            <div className="workspace-discovery p-5 sm:p-6 space-y-4 bg-card border border-border rounded-2xl shadow-elevated">
+            <div className="workspace-discovery relative overflow-hidden p-6 sm:p-7 space-y-5 bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 rounded-3xl shadow-elevated">
+              <div className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border">
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border/80">
             <div>
               <div className="flex items-center gap-2.5">
-                <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
+                <h2 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight">
                   Role Discovery
                 </h2>
                 {isProUser ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success font-mono tracking-wider">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success font-mono tracking-wider border border-success/30">
                     ★ PRO
                   </span>
                 ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface text-subtle font-mono">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface text-subtle font-mono border border-border/70">
                     FREE PLAN
                   </span>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-subtle mt-1">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Search live positions across official company boards or import any job listing URL.
               </p>
             </div>
@@ -1616,36 +1634,36 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                   return (
                     <div
                       key={job.id}
-                      className="p-4 rounded-xl border border-border bg-surface/50 hover:bg-surface hover:border-brand/30 transition-all flex flex-col justify-between gap-2.5"
+                      className="relative overflow-hidden p-4 sm:p-5 rounded-2xl border border-border/80 bg-gradient-to-b from-card via-card/95 to-surface/90 hover:border-brand/50 hover:shadow-[0_15px_30px_-10px_rgba(0,0,0,0.5),0_0_25px_0_rgba(0,229,153,0.1)] transition-all duration-200 flex flex-col justify-between gap-3 group after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-brand/25 after:to-transparent"
                     >
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-1 min-w-0">
+                          <div className="space-y-1.5 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-foreground">
+                              <span className="text-xs font-bold text-foreground font-display tracking-tight">
                                 {job.company}
                               </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-card text-muted-foreground border border-border">
+                              <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-surface/90 text-muted-foreground border border-border/70 uppercase">
                                 {job.platform}
                               </span>
                               {job.seniority && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-card text-foreground border border-border">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-surface/90 text-foreground border border-border/70">
                                   {job.seniority}
                                 </span>
                               )}
                               {job.workplaceType && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-card text-muted-foreground border border-border">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-surface/90 text-muted-foreground border border-border/70">
                                   {job.workplaceType}
                                 </span>
                               )}
                               {job.verifiedLive && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shadow-2xs">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shadow-2xs font-mono">
                                   <CheckCircle2 className="w-2.5 h-2.5" />
                                   <span>Verified Open</span>
                                 </span>
                               )}
                             </div>
-                            <h4 className="font-display font-semibold text-sm text-foreground line-clamp-1" title={job.title}>
+                            <h4 className="font-display font-bold text-sm sm:text-base text-foreground group-hover:text-brand transition-colors line-clamp-1" title={job.title}>
                               {job.title}
                             </h4>
                           </div>
@@ -1655,11 +1673,11 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                             <span
                               className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 shadow-2xs ${
                                 fitInfo.tone === 'strong'
-                                  ? 'bg-emerald-600 text-white'
+                                  ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.35)]'
                                   : fitInfo.tone === 'good'
-                                  ? 'bg-blue-600 text-white'
+                                  ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.35)]'
                                   : fitInfo.tone === 'possible'
-                                  ? 'bg-amber-600 text-white'
+                                  ? 'bg-amber-600 text-white shadow-[0_0_12px_rgba(217,119,6,0.35)]'
                                   : 'bg-muted text-muted-foreground border border-border'
                               }`}
                               title="Match estimate based on your Master Profile"
@@ -1669,13 +1687,13 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 text-[11px] text-subtle flex-wrap">
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1 truncate" title={job.location}>
-                            <MapPin className="w-3 h-3 shrink-0" />
+                            <MapPin className="w-3 h-3 shrink-0 text-subtle" />
                             <span className="truncate">{job.location}</span>
                           </span>
                           {job.salarySnippet && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-2 py-0.5 rounded-md">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-mono">
                               <span>💰</span>
                               <span>{job.salarySnippet}</span>
                             </span>
@@ -2104,34 +2122,35 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
           )}
 
           {/* Evaluation Summary Card */}
-          <div id="evaluation-summary" className="apple-card p-6 sm:p-8 space-y-5">
-            <div className="flex flex-col gap-5">
+          <div id="evaluation-summary" className="relative overflow-hidden p-6 sm:p-8 space-y-6 bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 rounded-3xl shadow-elevated">
+            <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col gap-5">
               <div className="flex items-center gap-5 min-w-0">
                 {/* Score Circle */}
-                {isEvaluationComplete && <div className={`relative w-16 h-16 rounded-full bg-surface border-2 ${
-                  evaluation.match_score >= 80 ? 'border-success' : evaluation.match_score >= 60 ? 'border-brand' : 'border-warning'
+                {isEvaluationComplete && <div className={`relative w-16 h-16 rounded-full bg-surface/90 border-2 ${
+                  evaluation.match_score >= 80 ? 'border-success shadow-[0_0_15px_rgba(16,185,129,0.25)]' : evaluation.match_score >= 60 ? 'border-brand shadow-[0_0_15px_rgba(0,229,153,0.25)]' : 'border-warning shadow-[0_0_15px_rgba(245,158,11,0.25)]'
                 } flex flex-col items-center justify-center shrink-0`}>
                   <span className={`font-display text-lg font-bold tabular-nums ${getScoreColor(evaluation.match_score)}`}>
                     {evaluation.match_score}%
                   </span>
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-subtle">
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground font-mono">
                     MATCH
                   </span>
                 </div>}
 
-                <div className="space-y-1 min-w-0 flex-1">
+                <div className="space-y-1.5 min-w-0 flex-1">
                   {isEvaluationComplete ? <div className="flex items-center gap-2">
-                    <span className={`apple-badge text-[11px] ${evaluation.should_apply ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider font-mono ${evaluation.should_apply ? 'bg-success/15 text-success border border-success/30' : 'bg-warning/15 text-warning border border-warning/30'}`}>
                       {(evaluation.verdict || 'MATCH').replace('_', ' ')}
                     </span>
-                    <span className="text-[13px] text-subtle font-medium">
+                    <span className="text-xs text-muted-foreground font-medium">
                       {evaluation.should_apply ? '✓ Recommended' : 'Low Overlap'}
                     </span>
-                  </div> : <p className="text-[13px] font-medium text-muted-foreground">Potential fit · Full assessment pending</p>}
-                  <h2 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
+                  </div> : <p className="text-xs font-medium text-muted-foreground font-mono uppercase tracking-wider">Potential fit · Full assessment pending</p>}
+                  <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                     {evaluation.job_title}
                   </h2>
-                  <div className="text-[13px] text-subtle flex items-center gap-2 font-medium">
+                  <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 font-medium">
                     <span className="text-foreground font-semibold">{evaluation.company_name}</span>
                     {evaluation.location_info && (
                       <>
@@ -2931,21 +2950,22 @@ export const JobEvaluatorView: React.FC<JobEvaluatorViewProps> = ({
 
         </>
       ) : (
-        <div className="workspace-evaluation-empty apple-card p-6 sm:p-10 text-center space-y-6 bg-card border border-border rounded-2xl shadow-xs">
-          <div className="space-y-2 max-w-md mx-auto">
-            <div className="workspace-empty-symbol mx-auto w-12 h-12 rounded-2xl bg-brand/10 text-brand flex items-center justify-center">
-              <Compass className="w-6 h-6 text-brand" />
+        <div className="workspace-evaluation-empty relative overflow-hidden p-6 sm:p-10 text-center space-y-6 bg-gradient-to-b from-card via-card/95 to-surface/90 border border-border/80 rounded-3xl shadow-elevated">
+          <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+          <div className="relative z-10 space-y-2 max-w-md mx-auto">
+            <div className="workspace-empty-symbol mx-auto w-14 h-14 rounded-2xl bg-brand/15 border border-brand/30 text-brand flex items-center justify-center shadow-[0_0_20px_rgba(0,229,153,0.2)]">
+              <Compass className="w-7 h-7 text-brand" />
             </div>
-            <h3 className="font-display text-xl sm:text-2xl font-semibold text-foreground">
+            <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight">
               Your match analysis starts here
             </h3>
-            <p className="text-[13px] sm:text-sm text-subtle leading-relaxed">
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               Select a position from the live feed or import your custom job description to inspect your match.
             </p>
           </div>
 
           {/* Quick Guided Paths */}
-          <div className="grid grid-cols-1 gap-3 max-w-md mx-auto text-left pt-1">
+          <div className="relative z-10 grid grid-cols-1 gap-3 max-w-md mx-auto text-left pt-1">
             <button
               type="button"
               onClick={() => {
