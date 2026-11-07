@@ -285,22 +285,24 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
             </div>
           </div>
 
-          {/* Clean Apple-Style Header Banner */}
-          <div className="bg-card rounded-3xl border border-border p-6 sm:p-8 shadow-elevated space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div className="space-y-2 max-w-2xl">
+          {/* Landing-Inspired Header Banner */}
+          <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-9 shadow-elevated space-y-6">
+            <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="space-y-3 max-w-2xl">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand/10 text-brand text-[10px] font-semibold tracking-wider uppercase font-mono">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-[10px] font-semibold tracking-widest uppercase font-mono border border-brand/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                     ROADMAP · {activeRoadmap.category.toUpperCase()}
                   </span>
                   {activeRoadmap.badge && (
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-danger/10 text-danger border border-danger/20 uppercase">
+                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                       {activeRoadmap.badge}
                     </span>
                   )}
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-display font-bold tracking-tight text-foreground">
+                <h2 className="text-2xl sm:text-4xl font-display font-bold tracking-tight text-foreground">
                   {activeRoadmap.title}
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
@@ -323,7 +325,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                   type="button"
                   onClick={handleAssessReadiness}
                   disabled={isAssessingReadiness}
-                  className="px-4 py-2 bg-brand/10 hover:bg-brand/15 border border-brand/20 text-brand text-xs font-semibold rounded-full transition-all cursor-pointer inline-flex items-center gap-1.5"
+                  className="px-4 py-2 bg-brand/10 hover:bg-brand/15 border border-brand/25 text-brand text-xs font-semibold rounded-full transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <LoadingProgress inline active={isAssessingReadiness} label="Analyzing profile" idleLabel="Assess My Readiness" expectedSeconds={35} resultToken={readinessData} />
@@ -334,7 +336,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                   onClick={() => {
                     if (onSelectRoleForJobs) onSelectRoleForJobs(activeRoadmap.title);
                   }}
-                  className="px-4.5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-full transition-all shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-full transition-all shadow-[0_2px_14px_rgba(0,229,153,0.3)] cursor-pointer inline-flex items-center gap-2"
                 >
                   <span>Train on this path</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -343,7 +345,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
             </div>
 
             {/* Core Stack */}
-            <div className="space-y-2 pt-4 border-t border-border">
+            <div className="relative z-10 space-y-2.5 pt-5 border-t border-border">
               <span className="font-mono text-[11px] font-semibold text-subtle uppercase tracking-wider block">
                 CORE STACK
               </span>
@@ -351,9 +353,9 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                 {activeRoadmap.coreStack.map((tech) => (
                   <span
                     key={tech.name}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-medium bg-surface border border-border text-foreground"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-mono font-medium bg-surface/90 border border-border/80 text-foreground hover:border-brand/40 transition-colors"
                   >
-                    <span className="text-[10px] px-1 py-0.2 rounded bg-card font-bold text-brand border border-border">
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-card font-bold text-brand border border-border">
                       {tech.tag}
                     </span>
                     <span>{tech.name}</span>
@@ -364,19 +366,19 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
           </div>
 
           {/* Progress Tracker Card */}
-          <div className="bg-card rounded-2xl border border-border p-5 shadow-xs space-y-3">
+          <div className="bg-gradient-to-b from-card to-surface/80 rounded-2xl border border-border p-5 shadow-xs space-y-3">
             <div className="roadmap-progress-heading flex items-center justify-between text-xs font-mono">
               <span className="text-subtle font-semibold tracking-wider uppercase">
                 TRACK YOUR PROGRESS
               </span>
-              <span className="text-success font-bold">
+              <span className="text-brand font-bold">
                 {activeRoadmapProgress.completed} / {activeRoadmapProgress.total} skills done ({activeRoadmapProgress.percent}%)
               </span>
             </div>
             {/* Progress Bar */}
-            <div className="w-full bg-surface h-2 rounded-full overflow-hidden">
+            <div className="w-full bg-surface h-2.5 rounded-full overflow-hidden border border-border/60">
               <div
-                className="bg-success h-full transition-all duration-300 rounded-full"
+                className="bg-gradient-to-r from-brand to-emerald-400 h-full transition-all duration-300 rounded-full shadow-[0_0_12px_rgba(0,229,153,0.35)]"
                 style={{ width: `${activeRoadmapProgress.percent}%` }}
               />
             </div>
@@ -613,45 +615,73 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
         </div>
       ) : (
         /* Grid Overview of all Roadmaps */
-        <div className="space-y-7">
-          {/* Clean Apple-Style Header Banner */}
-          <div className="bg-card rounded-3xl border border-border p-6 sm:p-8 shadow-elevated space-y-5">
-            <div className="space-y-2 max-w-3xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-wider uppercase font-mono">
+        <div className="space-y-8">
+          {/* Landing-Inspired Showcase Header Banner */}
+          <div className="relative overflow-hidden bg-gradient-to-b from-card via-card/95 to-surface/90 rounded-3xl border border-border/80 p-6 sm:p-9 shadow-elevated space-y-6">
+            {/* Ambient Cosmic Radial Glows */}
+            <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 space-y-3 max-w-3xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-widest uppercase font-mono border border-brand/20 shadow-2xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                CAREER ROADMAPS
+                <span>CAREER ROADMAPS · 2026 BLUEPRINTS</span>
               </div>
-              <h1 className="text-2xl sm:text-4xl font-display font-bold tracking-tight text-foreground">
+              <h1 className="text-3xl sm:text-5xl font-display font-bold tracking-tight text-foreground leading-[1.08]">
                 Learning Paths for 2026 Careers
               </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-2xl">
                 Pick your target role, explore curriculum milestones with curated free resources, and bridge skill gaps directly into your tailored resume and ATS job applications.
               </p>
+
+              {/* Value Highlight Pills */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-muted-foreground bg-surface/80 border border-border/70">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand" />
+                  31 Production Blueprints
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-muted-foreground bg-surface/80 border border-border/70">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                  Curated Free Resources
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono text-muted-foreground bg-surface/80 border border-border/70">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Direct Resume &amp; ATS Bridge
+                </span>
+              </div>
             </div>
 
-            {/* Career Quiz Callout Banner */}
+            {/* Career Quiz Callout Banner with Interactive Landing Treatment */}
             <div
               onClick={() => setIsQuizOpen(true)}
-              className="p-4 bg-surface hover:bg-surface-2 rounded-2xl border border-border transition-all cursor-pointer flex items-center justify-between gap-4 group"
+              className="relative overflow-hidden p-5 sm:p-6 bg-gradient-to-r from-brand/10 via-surface/80 to-surface/60 hover:from-brand/15 hover:via-surface hover:to-surface rounded-2xl border border-brand/25 hover:border-brand/50 transition-all duration-300 cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group shadow-sm hover:shadow-[0_8px_30px_rgba(0,229,153,0.12)]"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-brand/10 text-brand flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4" />
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-brand/15 border border-brand/30 text-brand flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-brand group-hover:text-background transition-all shadow-[0_0_16px_rgba(0,229,153,0.2)]">
+                  <Sparkles className="w-5 h-5" />
                 </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-semibold text-foreground group-hover:text-brand transition-colors">
-                    Not sure which role fits you?
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm sm:text-base font-semibold text-foreground group-hover:text-brand transition-colors">
+                      Not sure which role fits you?
+                    </h4>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand uppercase tracking-wider">
+                      2-MIN MATCH QUIZ
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
                     Take the two-minute career quiz and discover your top 3 matching paths.
                   </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-subtle group-hover:text-brand group-hover:translate-x-1 transition-all shrink-0" />
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-surface border border-border text-foreground group-hover:bg-brand group-hover:text-background group-hover:border-brand transition-all shrink-0 shadow-2xs">
+                <span>Take career quiz</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </div>
 
             {/* Search and Domain Filters */}
-            <div className="pt-4 border-t border-border space-y-4">
+            <div className="relative z-10 pt-4 border-t border-border space-y-4">
               {/* Row 1: Search Bar & Result Summary */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="relative flex-1 max-w-md">
@@ -661,7 +691,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search roles, skills, or tech (e.g. React, Python, Cloud)..."
-                    className="w-full pl-10 pr-9 py-2 bg-surface focus:bg-card border border-border focus:border-brand rounded-xl text-xs text-foreground placeholder:text-subtle focus:outline-none transition-all"
+                    className="w-full pl-10 pr-9 py-2.5 bg-surface/90 focus:bg-card border border-border focus:border-brand/60 rounded-xl text-xs sm:text-sm text-foreground placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all shadow-2xs"
                   />
                   {searchQuery && (
                     <button
@@ -696,7 +726,7 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
 
               {/* Row 2: Category Filter Pills */}
               <div className="space-y-2">
-                <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider block">
+                <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider block font-mono">
                   Browse by Domain:
                 </span>
                 <div className="roadmap-category-filters flex flex-wrap items-center gap-2">
@@ -708,17 +738,17 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
                         key={cat}
                         type="button"
                         onClick={() => setSelectedCategory(cat)}
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
                           isSelected
-                            ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                            : 'bg-surface text-muted-foreground hover:text-foreground hover:bg-surface-2 border border-border/80'
+                            ? 'bg-primary text-primary-foreground font-semibold shadow-[0_2px_14px_rgba(0,229,153,0.3)] border border-primary scale-[1.02]'
+                            : 'bg-surface/80 hover:bg-surface-2 text-muted-foreground hover:text-foreground border border-border/80 hover:border-brand/30'
                         }`}
                       >
                         <span>{cat}</span>
                         <span
                           className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                             isSelected
-                              ? 'bg-card/25 text-primary-foreground font-bold'
+                              ? 'bg-black/20 text-primary-foreground font-bold'
                               : 'bg-surface-2 text-subtle'
                           }`}
                         >
@@ -759,70 +789,86 @@ export const CareerRoadmapsView: React.FC<CareerRoadmapsViewProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredRoadmaps.map((roadmap) => (
-                <div
-                  key={roadmap.id}
-                  onClick={() => setSelectedRoadmapId(roadmap.id)}
-                  className="bg-card hover:bg-surface p-6 rounded-3xl border border-border hover:border-brand/40 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-5 group shadow-elevated hover:shadow-elevated hover:-translate-y-0.5"
-                >
-                  <div className="space-y-3.5">
-                    {/* Top Stack Icons + Optional Badge */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {roadmap.coreStack.slice(0, 4).map((tech) => (
+              {filteredRoadmaps.map((roadmap) => {
+                const badgeUpper = (roadmap.badge || '').toUpperCase();
+                const isStartHere = badgeUpper === 'START HERE';
+                const isPopular = badgeUpper === 'POPULAR';
+                const isHighDemand = badgeUpper === 'HIGH DEMAND';
+
+                return (
+                  <div
+                    key={roadmap.id}
+                    onClick={() => setSelectedRoadmapId(roadmap.id)}
+                    className="relative bg-gradient-to-b from-card via-card/95 to-surface/80 hover:to-surface p-6 sm:p-7 rounded-3xl border border-border/90 hover:border-brand/60 transition-all duration-300 cursor-pointer flex flex-col justify-between gap-5 group shadow-elevated hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5),0_0_30px_0_rgba(0,229,153,0.12)] hover:-translate-y-1.5 overflow-hidden"
+                  >
+                    {/* Top edge glowing gradient border on hover */}
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    <div className="space-y-4">
+                      {/* Top Stack Icons + Optional Badge */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {roadmap.coreStack.slice(0, 4).map((tech) => (
+                            <span
+                              key={tech.name}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-surface border border-border/80 text-foreground/90 group-hover:border-brand/30 group-hover:text-brand transition-colors"
+                              title={tech.name}
+                            >
+                              {tech.tag}
+                            </span>
+                          ))}
+                          {roadmap.coreStack.length > 4 && (
+                            <span className="text-[10px] font-mono text-subtle px-1">
+                              +{roadmap.coreStack.length - 4}
+                            </span>
+                          )}
+                        </div>
+
+                        {roadmap.badge && (
                           <span
-                            key={tech.name}
-                            className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-surface border border-border text-foreground"
-                            title={tech.name}
+                            className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              isStartHere
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                                : isHighDemand
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                                : isPopular
+                                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                                : 'bg-brand/10 text-brand border border-brand/20'
+                            }`}
                           >
-                            {tech.tag}
-                          </span>
-                        ))}
-                        {roadmap.coreStack.length > 4 && (
-                          <span className="text-[10px] font-mono text-subtle">
-                            +{roadmap.coreStack.length - 4}
+                            {roadmap.badge}
                           </span>
                         )}
                       </div>
 
-                      {roadmap.badge && (
-                        <span
-                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            roadmap.badge.toUpperCase() === 'START HERE'
-                              ? 'bg-brand/10 text-brand border border-brand/20'
-                              : 'bg-danger/10 text-danger border border-danger/20'
-                          }`}
-                        >
-                          {roadmap.badge}
-                        </span>
-                      )}
-                    </div>
+                      {/* Title & Subtitle */}
+                      <div className="space-y-1">
+                        <h3 className="font-display font-bold text-lg sm:text-xl text-foreground group-hover:text-brand transition-colors tracking-tight leading-snug">
+                          {roadmap.title}
+                        </h3>
+                        <p className="text-xs font-mono text-brand/90 font-medium">
+                          {roadmap.subtitle}
+                        </p>
+                      </div>
 
-                    {/* Title & Subtitle */}
-                    <div className="space-y-1">
-                      <h3 className="font-display font-bold text-lg text-foreground group-hover:text-brand transition-colors tracking-tight">
-                        {roadmap.title}
-                      </h3>
-                      <p className="text-[11px] font-mono text-brand">
-                        {roadmap.subtitle}
+                      {/* Description snippet */}
+                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3 group-hover:text-foreground/80 transition-colors">
+                        {roadmap.description}
                       </p>
                     </div>
 
-                    {/* Description snippet */}
-                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-                      {roadmap.description}
-                    </p>
+                    {/* Footer Stats & Arrow Button */}
+                    <div className="roadmap-card-stats pt-4 border-t border-border/80 flex items-center justify-between text-xs text-subtle font-mono group-hover:text-foreground transition-colors">
+                      <span className="truncate pr-2">
+                        {roadmap.stages.length} stages · {roadmap.stages.flatMap((s) => s.skills).length} skills · {roadmap.stages.flatMap((s) => s.skills).flatMap((k) => k.resources).length} resources
+                      </span>
+                      <div className="w-7 h-7 rounded-full bg-surface group-hover:bg-brand text-subtle group-hover:text-background border border-border group-hover:border-brand flex items-center justify-center transition-all shrink-0">
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Footer Stats */}
-                  <div className="roadmap-card-stats pt-3.5 border-t border-border flex items-center justify-between text-xs text-subtle font-mono group-hover:text-foreground transition-colors">
-                    <span>
-                      {roadmap.stages.length} stages · {roadmap.stages.flatMap((s) => s.skills).length} skills · {roadmap.stages.flatMap((s) => s.skills).flatMap((k) => k.resources).length} resources
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-brand group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
