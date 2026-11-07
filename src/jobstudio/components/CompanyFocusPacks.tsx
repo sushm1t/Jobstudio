@@ -13,6 +13,7 @@ import {
   Search,
   X,
   Check,
+  Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -60,6 +61,27 @@ function getQuestionCompetency(question: string, family: string): string {
   if (q.includes('disruption') || q.includes('outage') || q.includes('incident') || q.includes('stakeholder')) {
     return 'Incident Escalation & Cross-Functional Governance';
   }
+  if (q.includes('specimen') || q.includes('calibration') || q.includes('testing queues')) {
+    return 'Clinical Quality Control & Specimen Integrity';
+  }
+  if (q.includes('critical alert') || q.includes('escalating') || q.includes('alert values')) {
+    return 'Critical Value Escalation & Patient Safety';
+  }
+  if (q.includes('audit readiness') || q.includes('sop') || q.includes('cross-shift')) {
+    return 'SOP Compliance & Laboratory Audit Readiness';
+  }
+  if (q.includes('competing feature') || q.includes('tech debt') || q.includes('backlog')) {
+    return 'Product Strategy & Trade-off Prioritization';
+  }
+  if (q.includes('kpi') || q.includes('okr') || q.includes('launch') || q.includes('metric')) {
+    return 'Hypothesis Testing & Metric Impact Analysis';
+  }
+  if (q.includes('drop-off') || q.includes('funnel') || q.includes('diagnosed')) {
+    return 'Funnel Diagnostics & Root-Cause Resolution';
+  }
+  if (q.includes('dispute') || q.includes('chargeback') || q.includes('reconciliation') || q.includes('settlement')) {
+    return 'Financial Disputes & Settlement Governance';
+  }
   if (q.includes('rag') || q.includes('unsupported') || q.includes('hallucination')) {
     return 'RAG Architecture & Hallucination Mitigation';
   }
@@ -68,9 +90,6 @@ function getQuestionCompetency(question: string, family: string): string {
   }
   if (q.includes('leakage') || q.includes('validation')) {
     return 'Data Leakage Detection & Validation Strategy';
-  }
-  if (q.includes('metric') || q.includes('intervention')) {
-    return 'Hypothesis Testing & Metric Impact Analysis';
   }
   if (q.includes('prospect') || q.includes('qualify')) {
     return 'Prospect Discovery & Pain Point Mapping';
@@ -134,6 +153,14 @@ export function CompanyFocusPacks({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [requestKey, setRequestKey] = useState('');
+  const [copiedQuestionIndex, setCopiedQuestionIndex] = useState<number | null>(null);
+
+  const handleCopyQuestion = (idx: number, qText: string, ansText: string) => {
+    const fullText = `Question: ${qText}\n\nModel STAR Answer:\n${ansText || 'STAR Framework: Focus on direct situation context, specific task ownership, concrete actions taken, and measurable business results.'}`;
+    navigator.clipboard.writeText(fullText);
+    setCopiedQuestionIndex(idx);
+    setTimeout(() => setCopiedQuestionIndex(null), 2000);
+  };
 
   // Re-anchor whenever companyName or jobTitle changes
   useEffect(() => {
@@ -227,20 +254,6 @@ export function CompanyFocusPacks({
 
   return (
     <section className="space-y-5" aria-label="Company focus packs">
-      <header className="border-b border-border pb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base font-semibold text-foreground">Company Focus Guidance</h3>
-          {isSelectedActiveRole && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand/15 text-brand uppercase font-mono tracking-wider">
-              Anchored to Active Role
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Company culture guidance, operating domain intelligence, and role-specific interview preparation across 100+ top employers
-        </p>
-      </header>
-
       {/* Company Selector Quick-Access Row */}
       <div className="flex flex-wrap items-center gap-2">
         {displayedCompanies.map((item) => {
@@ -533,11 +546,11 @@ export function CompanyFocusPacks({
           ))}
         </div>
 
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {company.isRoleAnchored
-            ? `Role-anchored guidance dynamically synthesized from ${company.name} role specifications and operating domain context. Official interview stages may vary by role; practice questions below are generated separately from candidate profile facts.`
-            : `Official pages checked ${company.checkedOn}. Interview steps may vary by role; practice questions below are not confirmed company interview questions.`}
-        </p>
+        {company.checkedOn && !company.isRoleAnchored && (
+          <p className="text-[11px] text-subtle pt-1">
+            Official employer guidance verified on {company.checkedOn}.
+          </p>
+        )}
       </section>
 
       {/* Practice Questions Header & Trigger */}
@@ -692,6 +705,24 @@ export function CompanyFocusPacks({
                   {index + 1}. {item.q}
                 </h5>
               </div>
+              <button
+                type="button"
+                onClick={() => handleCopyQuestion(index, item.q, questions.length ? item.strategy : '')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-surface hover:bg-surface-2 border border-border text-foreground transition-all cursor-pointer shrink-0"
+                title="Copy question and model STAR framework"
+              >
+                {copiedQuestionIndex === index ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-success" />
+                    <span className="text-success">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-subtle" />
+                    <span>Copy Answer</span>
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-brand/40 bg-surface/40 p-3 rounded-r-xl space-y-1">

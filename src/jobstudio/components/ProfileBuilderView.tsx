@@ -33,6 +33,7 @@ import {
   ChevronUp,
   ExternalLink,
   FolderGit2,
+  Loader2,
 } from 'lucide-react';
 import {
   CandidateProfileRecord,
@@ -43,6 +44,7 @@ import {
   profileRecordToCandidateInfo,
 } from '../data/candidateProfiles';
 import { CandidateInfo, TailoredResumeData } from '../data/defaultData';
+import { triggerCloudSync } from '../utils/cloudSync';
 import { getAuthHeader } from '../utils/apiAuth';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
@@ -64,6 +66,45 @@ interface ProfileBuilderViewProps {
   onProfileReset?: () => void;
   isGeneratingMaterials?: boolean;
 }
+
+export type SaveStatus = 'saved' | 'saving' | 'unsaved';
+
+export interface CloudSyncIndicatorProps {
+  status: SaveStatus;
+  className?: string;
+}
+
+export const CloudSyncIndicator: React.FC<CloudSyncIndicatorProps> = ({ status, className = '' }) => {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface border border-border shadow-xs ${className}`}
+      data-testid="cloud-sync-indicator"
+    >
+      {status === 'saving' && (
+        <>
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
+          <span className="text-xs font-medium text-amber-400">Saving changes...</span>
+        </>
+      )}
+
+      {status === 'saved' && (
+        <>
+          <span className="w-2 h-2 rounded-full bg-success shrink-0" />
+          <span className="text-xs text-muted-foreground">Cloud synced</span>
+        </>
+      )}
+
+      {status === 'unsaved' && (
+        <>
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+          <span className="text-xs text-amber-400">Unsaved draft</span>
+        </>
+      )}
+    </div>
+  );
+};
 
 export const ProfileBuilderView: React.FC<ProfileBuilderViewProps> = ({
   userName,
@@ -130,6 +171,120 @@ export const ProfileBuilderView: React.FC<ProfileBuilderViewProps> = ({
 
   // Editor Tabs: 'builder' | 'vault'
   const [activeStudioTab, setActiveStudioTab] = useState<'builder' | 'vault'>('builder');
+
+  // Real-time Cloud Auto-Save & Debounce State
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialMount = useRef<boolean>(true);
+  const lastSavedJsonRef = useRef<string>(JSON.stringify(selectedProfile));
+
+  // Pure helper to generate Markdown Vault from candidate fields without state mutations
+  const generateVaultMarkdown = (profile: CandidateProfileRecord): string => {
+    const expText = profile.experiences
+      .map(
+        (e) => `**${e.company}** | ${e.title} | ${e.date_range}${e.location ? ` | ${e.location}` : ''}
+${e.bullets.map((b) => `- ${b}`).join('\n')}`
+      )
+      .join('\n\n');
+
+    const projText = (profile.projects || []).length > 0
+      ? `\n\n### FEATURED PROJECTS & PORTFOLIO\n` +
+        (profile.projects || [])
+          .map(
+            (p) => `**${p.name}** | ${p.role}${p.url ? ` | [Link](${p.url})` : ''}
+${p.description}
+${(p.bullets || []).map((b) => `- ${b}`).join('\n')}`
+          )
+          .join('\n\n')
+      : '';
+
+    const eduText = profile.education
+      .map((ed) => `- **${ed.degree}**, ${ed.institution} (${ed.year})`)
+      .join('\n');
+
+    const certText = profile.certifications
+      .map((c) => `- ${c}`)
+      .join('\n');
+
+    return `### CANDIDATE: ${profile.name || 'Candidate'}
+**Headline:** ${profile.headline || 'Professional'}
+**Email:** ${profile.email || userEmail} | **Phone:** ${profile.phone || ''} | **Location:** ${profile.location || ''}
+${profile.linkedin ? `**LinkedIn:** ${profile.linkedin}\n` : ''}
+### EXECUTIVE PROFESSIONAL SUMMARY
+${profile.summary || 'Summary not provided.'}
+
+### CORE COMPETENCIES & TECHNICAL SKILLS
+${profile.skills.join(', ')}
+
+### VERIFIED PROFESSIONAL EXPERIENCE
+${expText}${projText}
+
+### EDUCATION
+${eduText}
+
+### CERTIFICATIONS & CREDENTIALS
+${certText}
+`;
+  };
+
+  // 1,500ms auto-save debounce on profile edits
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      lastSavedJsonRef.current = JSON.stringify(selectedProfile);
+      return;
+    }
+
+    const currentJson = JSON.stringify(selectedProfile);
+    if (currentJson === lastSavedJsonRef.current) {
+      return;
+    }
+
+    // Immediately reflect that changes are in flight / saving
+    setSaveStatus('saving');
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const vaultText =
+          activeStudioTab === 'vault'
+            ? (selectedProfile.masterProfileText || '')
+            : generateVaultMarkdown(selectedProfile);
+
+        const recordToSave: CandidateProfileRecord = {
+          ...selectedProfile,
+          masterProfileText: vaultText,
+          updatedAt: Date.now(),
+        };
+
+        saveUserMasterProfile(recordToSave, userEmail);
+        await triggerCloudSync();
+
+        // Update application state
+        setMasterProfileText(recordToSave.masterProfileText);
+        setCandidateInfo(profileRecordToCandidateInfo(recordToSave));
+        setResume(profileRecordToResume(recordToSave));
+        if (typeof window !== 'undefined') {
+          (window as any).__JOBSTUDIO_ACTIVE_RESUME__ = profileRecordToResume(recordToSave);
+        }
+
+        lastSavedJsonRef.current = currentJson;
+        setSaveStatus('saved');
+      } catch (err) {
+        console.error('Auto-save error:', err);
+        setSaveStatus('unsaved');
+      }
+    }, 1500);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [selectedProfile, activeStudioTab, userEmail]);
 
   // AI Import & PDF Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -602,17 +757,25 @@ ${certText}
   };
 
   // Save changes to current master profile and update entire application
-  const handleSaveAndActivate = () => {
+  const handleSaveAndActivate = async () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
     try {
       const profile = activeStudioTab === 'vault'
         ? { ...selectedProfile, updatedAt: Date.now() }
         : handleSyncToVaultText();
       applyProfileToApp(profile);
-      setSaveFeedback({ success: true, message: 'Master Profile saved and active. Ready for job evaluation.' });
+      await triggerCloudSync();
+      lastSavedJsonRef.current = JSON.stringify(profile);
+      setSaveStatus('saved');
+      setSaveFeedback({ success: true, message: 'Profile Saved & Activated. Ready for job evaluation.' });
       setIsEditingProfile(false);
       setTimeout(() => setSaveFeedback(null), 6000);
       return true;
     } catch (error) {
+      setSaveStatus('unsaved');
       setSaveFeedback({ success: false, message: error instanceof Error ? error.message : 'Unable to save your profile. Please try again.' });
       return false;
     }
@@ -967,6 +1130,30 @@ TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, R
             <Pencil className="w-4 h-4 mr-1.5" />
             <span>Edit existing profile</span>
           </Button>
+
+          <Button
+            type="button"
+            onClick={handleSaveAndActivate}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-full shadow-xs cursor-pointer transition-colors ${
+              saveFeedback?.success
+                ? 'bg-success text-primary-foreground hover:bg-success/90'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
+            {saveFeedback?.success ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Profile Saved &amp; Activated</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Master Profile</span>
+              </>
+            )}
+          </Button>
+
+          <CloudSyncIndicator status={saveStatus} />
 
           <Button
             variant="ghost"
@@ -1943,6 +2130,8 @@ TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, R
           </div>
 
           <textarea
+            aria-label="Master Ground-Truth Markdown Vault"
+            placeholder="Paste or write your full career chronology..."
             value={selectedProfile.masterProfileText}
             onChange={(e) => setSelectedProfile({ ...selectedProfile, masterProfileText: e.target.value, updatedAt: Date.now() })}
             rows={18}
@@ -1975,7 +2164,9 @@ TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, R
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+              <CloudSyncIndicator status={saveStatus} />
+
               {isEditingProfile && isProfilePopulated && (
                 <Button
                   type="button"
@@ -1990,10 +2181,23 @@ TypeScript, JavaScript, React, Next.js, Node.js, Express, PostgreSQL, MongoDB, R
               <Button
                 type="button"
                 onClick={handleSaveAndActivate}
-                className="h-auto min-h-10 whitespace-normal flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs sm:text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all shadow-elevated cursor-pointer"
+                className={`h-auto min-h-10 whitespace-normal flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs sm:text-sm font-semibold rounded-full transition-all shadow-elevated cursor-pointer ${
+                  saveFeedback?.success
+                    ? 'bg-success text-primary-foreground hover:bg-success/90'
+                    : 'text-primary-foreground bg-primary hover:bg-primary/90'
+                }`}
               >
-                <Save className="w-4 h-4" />
-                <span>Save &amp; Activate Master Profile</span>
+                {saveFeedback?.success ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-primary-foreground" />
+                    <span>Profile Saved &amp; Activated</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save &amp; Activate Master Profile</span>
+                  </>
+                )}
               </Button>
 
               <button

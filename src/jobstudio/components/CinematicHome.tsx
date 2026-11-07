@@ -1,10 +1,10 @@
 // @ts-nocheck
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import {
-  ArrowRight, Search, MapPin, Sparkles, CheckCircle2, XCircle, FileText, MessageSquare,
+  ArrowRight, ArrowDown, Search, MapPin, Sparkles, CheckCircle2, XCircle, FileText, MessageSquare,
   Briefcase, Zap, ShieldCheck, ChevronDown, Target, Globe, Clock,
 } from 'lucide-react';
 
@@ -17,19 +17,19 @@ import {
 gsap.registerPlugin(ScrollTrigger);
 
 const JOBS = [
-  { t: 'Senior Distributed Systems Engineer', c: 'Stripe', l: 'San Francisco · Hybrid', s: 94 },
-  { t: 'Staff Backend Infrastructure Engineer', c: 'Linear', l: 'Remote · Global', s: 91 },
-  { t: 'Principal Platform Engineer', c: 'Figma', l: 'New York · Remote', s: 87 },
-  { t: 'Lead Cloud Infrastructure Architect', c: 'Notion', l: 'Remote · US', s: 76 },
-  { t: 'Site Reliability Engineering Lead', c: 'Revolut', l: 'London · Remote', s: 62 },
+  { t: 'Senior Operations Analyst', c: 'Stripe', l: 'Dublin · Hybrid', s: 94 },
+  { t: 'Fintech Operations & Payments Lead', c: 'Revolut', l: 'London · Remote', s: 91 },
+  { t: 'Product Operations Specialist', c: 'Linear', l: 'Remote · EU', s: 87 },
+  { t: 'Business Systems & Operations Lead', c: 'Notion', l: 'Remote · Global', s: 76 },
+  { t: 'Global Merchant Operations Manager', c: 'Klarna', l: 'Stockholm · Remote', s: 62 },
 ];
-const MATCH = ['Go', 'Kubernetes', 'Distributed Systems', 'PostgreSQL', 'System Design'];
-const MISS = ['Rust', 'gRPC'];
+const MATCH = ['SQL', 'Financial Modeling', 'Cross-Border Payments', 'SLA Operations', 'Process Automation', 'Looker'];
+const MISS = ['Python (Data Pipelines)', 'Regulatory Compliance Auditing'];
 const POSTED = ['2h ago', '5h ago', '1d ago', '2d ago'];
 const QUESTIONS = [
-  { k: 'Technical', q: 'How would you design a distributed, idempotent payment processing engine?' },
-  { k: 'Behavioural', q: 'Tell me about a high-severity production outage you resolved under pressure.' },
-  { k: 'System Design', q: 'How would you partition an event streaming cluster to scale to 100k events/sec?' },
+  { k: 'Technical', q: 'How do you audit and reconcile anomalous payment settlement exceptions across multi-currency ledgers?' },
+  { k: 'Behavioural', q: 'Describe a time you handled a critical payment gateway outage impacting high-volume merchants.' },
+  { k: 'System Design', q: 'How would you partition automated dispute workflows to scale from 1,000 to 50,000 cases per week?' },
   { k: 'Role-specific', q: 'Which latency thresholds and reliability SLAs would you establish in your first 30 days?' },
 ];
 
@@ -69,14 +69,24 @@ function SceneCopy({ idx, eyebrow, title, steps, cta, onCta }) {
 
 export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> = ({ onNavigateToTab }) => {
   const root = useRef<HTMLDivElement>(null);
+  const [showFloatingSkip, setShowFloatingSkip] = useState(false);
 
   useEffect(() => {
     const el = root.current;
     if (!el) return;
+
+    const handleScroll = () => {
+      setShowFloatingSkip(window.scrollY > 250);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) { el.classList.add('cine-static'); return; }
 
-    const lenis = new Lenis({ duration: 1.2, easing: (t) => 1 - Math.pow(1 - t, 4) });
+    const lenis = new Lenis({
+      duration: 0.7,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+    });
     lenis.on('scroll', ScrollTrigger.update);
     const tick = (time) => lenis.raf(time * 1000);
     gsap.ticker.add(tick);
@@ -109,9 +119,20 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
 
       mm.add('(prefers-reduced-motion: no-preference)', () => {
         const pinStart = (trigger) => () => trigger.getBoundingClientRect().height > window.innerHeight ? 'bottom bottom' : 'top top';
-        const scene = (sel, build, len = 2200) => {
+        const scene = (sel, build, len = 1000) => {
           const trigger = el.querySelector(sel);
-          const tl = gsap.timeline({ defaults: { ease: 'power2.out' }, scrollTrigger: { trigger, start: pinStart(trigger), end: () => `+=${Math.min(len, Math.max(900, window.innerHeight * 2.5))}`, scrub: 0.8, pin: true, anticipatePin: 1, invalidateOnRefresh: true } });
+          const tl = gsap.timeline({
+            defaults: { ease: 'power2.out' },
+            scrollTrigger: {
+              trigger,
+              start: pinStart(trigger),
+              end: () => `+=${Math.min(len, Math.max(650, window.innerHeight * 1.25))}`,
+              scrub: 0.35,
+              pin: true,
+              anticipatePin: 1,
+              invalidateOnRefresh: true,
+            },
+          });
           const steps = gsap.utils.toArray(`${sel} .cine-step`);
           build(tl, steps);
           return tl;
@@ -188,7 +209,16 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
         });
 
         // Tracking — kanban cards slide across with scroll
-        gsap.timeline({ scrollTrigger: { trigger: '.cine-track', start: pinStart(el.querySelector('.cine-track')), end: () => `+=${Math.min(1400, Math.max(700, window.innerHeight * 2))}`, scrub: 0.8, pin: true, invalidateOnRefresh: true } })
+        gsap.timeline({
+          scrollTrigger: {
+            trigger: '.cine-track',
+            start: pinStart(el.querySelector('.cine-track')),
+            end: () => `+=${Math.min(750, Math.max(500, window.innerHeight * 1.1))}`,
+            scrub: 0.35,
+            pin: true,
+            invalidateOnRefresh: true,
+          },
+        })
           .from('.cine-col', { opacity: 0, y: 40, stagger: 0.15, duration: 0.6 })
           .to('.cine-move-a', { x: () => { const cols = el.querySelectorAll('.cine-col'); return cols[1].getBoundingClientRect().left - cols[0].getBoundingClientRect().left; }, duration: 1 }, '+=0.2')
           .to('.cine-move-b', { x: () => { const cols = el.querySelectorAll('.cine-col'); return cols[2].getBoundingClientRect().left - cols[0].getBoundingClientRect().left; }, duration: 1.2 }, '<0.2')
@@ -209,12 +239,22 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
     window.addEventListener('pointermove', onMove);
 
     return () => {
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('pointermove', onMove);
       ctx.revert();
       gsap.ticker.remove(tick);
       lenis.destroy();
     };
   }, []);
+
+  const handleScrollToPricing = () => {
+    const pricingEl = document.getElementById('landing-pricing');
+    if (pricingEl) {
+      pricingEl.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      onNavigateToTab('pricing');
+    }
+  };
 
   const headline = ['Your', 'next', 'role,', 'found', 'and', 'scored', 'by', 'AI.'];
 
@@ -224,7 +264,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
       <section className="cine-hero">
         <div className="cine-planet" aria-hidden />
         <div className="cine-hero-copy relative z-10 text-center max-w-4xl mx-auto px-4">
-          <div className="cine-eyebrow justify-center mb-6"><Sparkles className="w-3.5 h-3.5" /> AI career studio</div>
+          <div className="cine-eyebrow justify-center mb-6"><Sparkles className="w-3.5 h-3.5" /> LIVE RECRUITING INTELLIGENCE</div>
           <h1 className="cine-h1">
             {headline.map((w, i) => (
               <React.Fragment key={i}><span className="cine-mask"><span className={`cine-hero-word ${w === 'AI.' ? 'cine-grad' : ''}`}>{w}</span></span>{' '}</React.Fragment>
@@ -276,7 +316,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
             </div>
           </Window>
           <div className="cine-float cine-float-a hidden sm:flex"><Globe className="w-4 h-4 text-brand" /> Live from company job boards</div>
-          <div className="cine-float cine-float-b hidden sm:flex"><Clock className="w-4 h-4 text-brand" /> Fetched live on each search</div>
+          <div className="cine-float cine-float-b hidden sm:flex"><ShieldCheck className="w-4 h-4 text-brand" /> AUTHENTIC RESUME GROUNDING</div>
           <div className="mt-4 text-center"><SampleTag /></div>
         </div>
         <a href="#cine-story" className="cine-scroll-hint" aria-label="Scroll to story"><ChevronDown className="w-4 h-4" /></a>
@@ -320,11 +360,11 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
         <SceneCopy idx={2} eyebrow="Match" title="Know if it's worth applying before you apply."
           steps={['Reads your real experience', 'Pulls out what the job needs', 'Shows the skills you have', 'Flags what you are missing', 'Gives a clear match score']}
           cta="Score a job now" onCta={() => onNavigateToTab('evaluator')} />
-        <Window title="Match analysis · Stripe · Senior Ops Analyst" className="cine-stage">
+        <Window title="Match analysis · Stripe · Senior Operations Analyst" className="cine-stage">
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_150px] gap-4 items-start">
             <div>
               <div className="cine-label">Your resume</div>
-              {['Relevant work history', 'Analytical problem solving', 'Team coordination', 'Reporting experience', 'Service operations'].map((t, i) => (
+              {['5+ years in fintech operations', 'Financial modeling & SQL analytics', 'Cross-border payment flows', 'Cross-functional stakeholder coordination', 'Incident & SLA management'].map((t, i) => (
                 <div key={i} className="cine-resume-line">{t}</div>
               ))}
             </div>
@@ -358,13 +398,13 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
         <div className="cine-stage grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-4">
           <div className="cine-doc paper relative overflow-hidden">
             <div className="cine-scan" aria-hidden />
-            <div className="text-[13px] font-bold tracking-wide">TOM CRUISE</div>
-            <div className="text-[10px] opacity-60 mb-3">Staff Software Engineer · Distributed Systems &amp; Cloud</div>
+            <div className="text-[13px] font-bold tracking-wide">ALEX RIVERA</div>
+            <div className="text-[10px] opacity-60 mb-3">Senior Product &amp; Operations Lead · Fintech &amp; Payments</div>
             <div className="text-[10px] font-semibold tracking-widest opacity-70 mb-1.5">EXPERIENCE</div>
             {[
-              ['Wrote backend APIs in Go and Node.', 'Architected distributed Go microservices handling 45,000 req/sec at 99.99% uptime.'],
-              ['Maintained PostgreSQL queries.', 'Optimized PostgreSQL sharding and indexes, cutting p99 query latency by 68%.'],
-              ['Managed service deployments.', 'Engineered Kubernetes GitOps pipelines enabling zero-downtime canary rollouts.'],
+              ['Handled payment reconciliation and queries.', 'Reduced payment settlement reconciliation latency by 42% across EMEA cross-border corridors.'],
+              ['Created operational dashboards in SQL.', 'Built automated Looker/SQL dashboards monitoring $120M+ monthly merchant volume and SLA adherence.'],
+              ['Coordinated payment exception handling.', 'Redesigned cross-border dispute workflows, cutting chargeback resolution times from 5 days to 18 hours.'],
             ].map(([o, n], i) => (
               <div key={i} className="relative min-h-[34px] text-[11px] leading-snug mb-1.5 pl-3">
                 <span className="absolute left-0 top-1.5 w-1 h-1 rounded-full bg-current opacity-60" />
@@ -373,7 +413,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
               </div>
             ))}
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {['Go', 'Kubernetes', 'PostgreSQL', 'Distributed Systems'].map((k) => <span key={k} className="cine-kw">{k}</span>)}
+              {['SQL', 'Cross-Border Payments', 'Financial Modeling', 'SLA Operations', 'Process Automation'].map((k) => <span key={k} className="cine-kw">{k}</span>)}
             </div>
           </div>
           <div className="space-y-3">
@@ -382,7 +422,7 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
               <div className="cine-bar h-2"><div className="cine-ats-fill" /></div>
               <div className="cine-ats-badge mt-3 inline-flex items-center gap-1.5 text-xs text-success"><ShieldCheck className="w-3.5 h-3.5" /> 98 / 100 · 1 page</div>
             </div>
-            {['Quantify latency & scale metrics', 'Highlight distributed architecture', 'Put system impact first'].map((t, i) => (
+            {['Quantify payment volume & scale', 'Highlight automated SLA workflows', 'Put operational impact first'].map((t, i) => (
               <div key={i} className="cine-tip"><Sparkles className="w-3.5 h-3.5 text-brand shrink-0" />{t}</div>
             ))}
             <SampleTag />
@@ -457,6 +497,21 @@ export const CinematicHome: React.FC<{ onNavigateToTab: (t: string) => void }> =
         </div>
         <div className="mt-10 text-center"><button onClick={() => onNavigateToTab('applied')} className="cine-link">Open my applications <ArrowRight className="w-4 h-4" /></button></div>
       </section>
+
+      {/* Floating Skip to Pricing Glass Button */}
+      {showFloatingSkip && (
+        <button
+          type="button"
+          onClick={handleScrollToPricing}
+          className="fixed bottom-6 right-6 z-40 bg-card/90 hover:bg-card text-foreground backdrop-blur-xl border border-border/80 shadow-2xl rounded-full px-4 py-2.5 text-xs font-semibold flex items-center gap-2 transition-all hover:border-brand/50 hover:text-brand cursor-pointer group animate-in fade-in slide-in-from-bottom-3 duration-200"
+          title="Skip product demo to view pricing & plans"
+          aria-label="Skip product demo to view pricing and plans"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-brand" />
+          <span>Skip to Pricing</span>
+          <ArrowDown className="w-3.5 h-3.5 text-subtle group-hover:translate-y-0.5 transition-transform" />
+        </button>
+      )}
     </div>
   );
 };

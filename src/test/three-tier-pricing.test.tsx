@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PricingView } from '@/jobstudio/components/PricingView';
 import { FREE_TAILOR_LIMIT, PLUS_TAILOR_LIMIT, PRO_TAILOR_LIMIT, getPlanLimit } from '@/server/api-guard';
@@ -146,5 +146,47 @@ describe('3-Tier Pricing System (Free, Plus, Pro)', () => {
     expect(screen.getByRole('columnheader', { name: /Free \(\$0\)/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Plus \(\$9\.99\/mo\)/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Pro \(\$19\.99\/mo\)/i })).toBeInTheDocument();
+  });
+
+  it('shows processing spinner then celebration screen on confirming upgrade', () => {
+    vi.useFakeTimers();
+    const onNavigateToTab = vi.fn();
+    render(
+      <PricingView
+        userPlan="free"
+        isProUser={false}
+        onUpgradeToPro={vi.fn()}
+        onUpgradeToPlan={vi.fn()}
+        onDowngradeToFree={vi.fn()}
+        tailoredCount={0}
+        onNavigateToTab={onNavigateToTab}
+      />
+    );
+
+    const upgradePlusBtn = screen.getByRole('button', { name: /Upgrade to Plus/i });
+    fireEvent.click(upgradePlusBtn);
+
+    const confirmBtn = screen.getByRole('button', { name: /Activate Plus Now/i });
+    fireEvent.click(confirmBtn);
+
+    // Shows processing state
+    expect(screen.getByText(/Activating Plus Subscription/i)).toBeInTheDocument();
+
+    // Advance timer past 1.2s inside act
+    act(() => {
+      vi.advanceTimersByTime(1300);
+    });
+
+    // Shows celebration screen
+    expect(screen.getByText(/Welcome to Job Studio Plus!/i)).toBeInTheDocument();
+    expect(screen.getByText(/Your increased tailoring quota and advanced copilot features are now active/i)).toBeInTheDocument();
+
+    const evaluatorBtn = screen.getByRole('button', { name: /Go to Job Evaluator/i });
+    fireEvent.click(evaluatorBtn);
+
+    expect(onNavigateToTab).toHaveBeenCalledWith('evaluator');
+    expect(screen.queryByText(/Welcome to Job Studio Plus!/i)).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 });

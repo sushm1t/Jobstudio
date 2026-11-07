@@ -26,6 +26,8 @@ import {
   ArrowRight,
   GripVertical,
   Layers,
+  Mail,
+  Copy,
 } from 'lucide-react';
 import { AppliedJobRecord, ApplicationStatus, TailoredResumeData } from '../data/defaultData';
 import { downloadResumeAsPdf } from '../utils/pdfExport';
@@ -34,6 +36,7 @@ import { runWebMCPTool } from '@/lib/webmcp-telemetry';
 
 interface AppliedJobsViewProps {
   appliedJobs: AppliedJobRecord[];
+  candidateName?: string;
   onAddJob: (job: Omit<AppliedJobRecord, 'id' | 'created_at'>) => void;
   onUpdateJob: (id: string, updates: Partial<AppliedJobRecord>) => void;
   onDeleteJob: (id: string) => void;
@@ -110,8 +113,53 @@ const EVENT_META: Record<string, { icon: React.ElementType; tone: string }> = {
   resume_version_saved: { icon: FileText, tone: 'text-success' },
 };
 
+export function getDaysSinceApplied(job: AppliedJobRecord): number {
+  const now = Date.now();
+  if (job.applied_date) {
+    const parsed = Date.parse(job.applied_date);
+    if (!isNaN(parsed)) {
+      const diffMs = now - parsed;
+      return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    }
+  }
+  if (job.created_at) {
+    const diffMs = now - job.created_at;
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  }
+  return 0;
+}
+
+export function isFollowUpDue(job: AppliedJobRecord): boolean {
+  if (job.status !== 'Applied' && job.status !== 'Under Review') {
+    return false;
+  }
+  if (job.followed_up_at) {
+    return false;
+  }
+  return getDaysSinceApplied(job) >= 5;
+}
+
+export function generateFollowUpEmail(job: AppliedJobRecord, candidateName: string = 'Alex Rivera') {
+  const recipient = `Recruiter / Hiring Team at ${job.company_name}`;
+  const subject = `Following up on application for ${job.job_title} – ${candidateName}`;
+  const appliedDate = job.applied_date || 'recently';
+  const body = `Dear Hiring Team at ${job.company_name},
+
+I hope you are having a productive week. I am following up on my application for the ${job.job_title} position that I submitted on ${appliedDate}.
+
+I remain exceptionally enthusiastic about the opportunity to contribute to ${job.company_name}. Given my background in scaling operational efficiency, streamlining cross-functional workflows, and driving measurable impact, I am eager to bring my experience to your team's upcoming roadmap.
+
+Please let me know if there are any additional work samples, metrics, or portfolio details I can provide to support my candidacy. Thank you again for your time and consideration, and I look forward to speaking soon.
+
+Best regards,
+${candidateName}`;
+
+  return { recipient, subject, body };
+}
+
 export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
   appliedJobs,
+  candidateName,
   onAddJob,
   onUpdateJob,
   onDeleteJob,
@@ -129,6 +177,35 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
   const [detailJobId, setDetailJobId] = useState<string | null>(null);
   const [dragJobId, setDragJobId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<ApplicationStatus | null>(null);
+
+  // Follow-Up Email Copilot State
+  const [followUpModalJob, setFollowUpModalJob] = useState<AppliedJobRecord | null>(null);
+  const [followUpCopied, setFollowUpCopied] = useState<boolean>(false);
+  const [followUpSuccess, setFollowUpSuccess] = useState<boolean>(false);
+
+  const effectiveCandidate = candidateName || currentResume?.full_name || 'Alex Rivera';
+
+  const openFollowUpModal = (job: AppliedJobRecord) => {
+    setFollowUpModalJob(job);
+    setFollowUpCopied(false);
+    setFollowUpSuccess(false);
+  };
+
+  const handleMarkAsFollowedUp = (job: AppliedJobRecord) => {
+    const todayStr = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    onUpdateJob(job.id, {
+      followed_up_at: todayStr,
+    });
+    setFollowUpSuccess(true);
+    setTimeout(() => {
+      setFollowUpSuccess(false);
+      setFollowUpModalJob(null);
+    }, 1200);
+  };
 
   const detailJob = useMemo(
     () => appliedJobs.find((j) => j.id === detailJobId) || null,
@@ -393,6 +470,33 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
             </span>
           )}
         </div>
+
+        {job.followed_up_at ? (
+          <div className="mt-2 pl-[22px]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/10 text-success text-[10px] font-medium border border-success/20">
+              <CheckCircle2 className="w-2.5 h-2.5" />
+              <span>Followed up on {job.followed_up_at}</span>
+            </span>
+          </div>
+        ) : isFollowUpDue(job) ? (
+          <div className="mt-2 pl-[22px] flex items-center justify-between gap-1 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-medium border border-amber-500/20">
+              <span>⏰ Follow up due (Applied {getDaysSinceApplied(job)} days ago)</span>
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openFollowUpModal(job);
+              }}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-full transition-colors cursor-pointer border border-amber-500/20"
+              title="Generate Follow-Up Email"
+            >
+              <Mail className="w-2.5 h-2.5" />
+              <span>Follow Up</span>
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -760,10 +864,31 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
+                    {job.followed_up_at ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Followed up on {job.followed_up_at}</span>
+                      </span>
+                    ) : isFollowUpDue(job) ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                        <span>⏰ Follow up due (Applied {getDaysSinceApplied(job)} days ago)</span>
+                      </span>
+                    ) : null}
                   </div>
 
-                  {/* Cross-Tab Jumps */}
-                  <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+                  {/* Cross-Tab Jumps & Follow Up */}
+                  <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end flex-wrap">
+                    {(job.status === 'Applied' || job.status === 'Under Review') && (
+                      <button
+                        type="button"
+                        onClick={() => openFollowUpModal(job)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer border border-amber-500/20"
+                        title="Generate tailored follow-up email"
+                      >
+                        <Mail className="w-3 h-3" />
+                        <span>Generate Follow-Up Email</span>
+                      </button>
+                    )}
                     {onSelectForTailoring && (
                       <button
                         onClick={() => onSelectForTailoring(job)}
@@ -866,6 +991,30 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+                {detailJob.followed_up_at ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-success bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Followed up on {detailJob.followed_up_at}</span>
+                  </span>
+                ) : isFollowUpDue(detailJob) ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    <span>⏰ Follow up due (Applied {getDaysSinceApplied(detailJob)} days ago)</span>
+                  </span>
+                ) : <div />}
+
+                {(detailJob.status === 'Applied' || detailJob.status === 'Under Review') && (
+                  <button
+                    type="button"
+                    onClick={() => openFollowUpModal(detailJob)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer border border-amber-500/20"
+                  >
+                    <Mail className="w-3 h-3" />
+                    <span>Generate Follow-Up Email</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1242,6 +1391,137 @@ export const AppliedJobsView: React.FC<AppliedJobsViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Follow-Up Email Generator Modal */}
+      {followUpModalJob && (
+        <div className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Generate Follow-Up Email"
+            className="mobile-dialog-panel bg-card rounded-3xl border border-border max-w-lg w-full p-6 shadow-2xl relative my-8 animate-in fade-in zoom-in-95 duration-200 space-y-4"
+          >
+            <button
+              type="button"
+              onClick={() => setFollowUpModalJob(null)}
+              className="absolute top-5 right-5 p-2 rounded-full text-subtle hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="apple-badge-blue text-[11px] font-mono">FOLLOW-UP COPILOT</span>
+              <h3 className="font-display font-semibold text-lg text-foreground">
+                Generate Follow-Up Email
+              </h3>
+            </div>
+            <p className="text-xs text-subtle -mt-2">
+              Polite, tailored follow-up check-in for{' '}
+              <strong className="text-foreground">{followUpModalJob.company_name}</strong> ·{' '}
+              {followUpModalJob.job_title}
+            </p>
+
+            {followUpSuccess ? (
+              <div className="text-center py-8 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-success/15 text-success flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <h4 className="font-display text-base font-bold text-foreground">
+                  Marked as Followed Up!
+                </h4>
+                <p className="text-xs text-subtle">
+                  Updated application activity with today's date.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                      Recipient
+                    </label>
+                    <div className="px-3.5 py-2 bg-surface rounded-xl text-xs text-foreground font-medium border border-border">
+                      {generateFollowUpEmail(followUpModalJob, effectiveCandidate).recipient}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                      Subject Line
+                    </label>
+                    <div className="px-3.5 py-2 bg-surface rounded-xl text-xs text-foreground font-medium border border-border select-all">
+                      {generateFollowUpEmail(followUpModalJob, effectiveCandidate).subject}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-subtle uppercase tracking-wider mb-1">
+                      Email Body
+                    </label>
+                    <textarea
+                      readOnly
+                      rows={8}
+                      value={generateFollowUpEmail(followUpModalJob, effectiveCandidate).body}
+                      className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-xl text-xs text-foreground leading-relaxed outline-none select-all font-sans resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const email = generateFollowUpEmail(followUpModalJob, effectiveCandidate);
+                        const fullText = `Subject: ${email.subject}\n\n${email.body}`;
+                        navigator.clipboard.writeText(fullText);
+                        setFollowUpCopied(true);
+                        setTimeout(() => setFollowUpCopied(false), 2000);
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 font-medium text-foreground bg-surface hover:bg-surface-2 border border-border rounded-full text-xs transition-colors cursor-pointer"
+                    >
+                      {followUpCopied ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                          <span>Copied Email</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-subtle" />
+                          <span>Copy Email</span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={`mailto:?subject=${encodeURIComponent(
+                        generateFollowUpEmail(followUpModalJob, effectiveCandidate).subject
+                      )}&body=${encodeURIComponent(
+                        generateFollowUpEmail(followUpModalJob, effectiveCandidate).body
+                      )}`}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 font-medium text-foreground bg-surface hover:bg-surface-2 border border-border rounded-full text-xs transition-colors"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-subtle" />
+                      <span>Open in Mail Client</span>
+                    </a>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAsFollowedUp(followUpModalJob)}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-full text-xs transition-colors shadow-sm cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Mark as Followed Up</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

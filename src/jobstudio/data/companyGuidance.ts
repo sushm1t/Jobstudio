@@ -2248,7 +2248,7 @@ export function synthesizeCompanyGuidance(
     id: slug,
     name: cleanName,
     values: finalValues,
-    guidance: `Role-anchored guidance dynamically synthesized for ${cleanName} in ${industry}. Synthesized from active role specifications, operating domain expectations, and core evaluation criteria.`,
+    guidance: `Tailored interview and culture dossier for ${cleanName} in ${industry}. Grounded in target role expectations, operational competencies, and domain practices.`,
     sources: applyUrl ? [{ label: `${cleanName} Job Listing`, url: applyUrl }] : [],
     checkedOn: new Date().toISOString().slice(0, 10),
     isRoleAnchored: true,

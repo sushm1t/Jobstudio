@@ -1,5 +1,5 @@
 // @ts-nocheck -- ported verbatim from the original project
-import { TailoredResumeData } from '../data/defaultData';
+import { TailoredResumeData, CoverLetterData } from '../data/defaultData';
 
 /**
  * Escapes XML / HTML entities for clean WordprocessingML rendering
@@ -289,6 +289,142 @@ ${eduText}
   `.trim();
 
   const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = safeFileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Exports tailored cover letter as a clean, professionally formatted Microsoft Word (.docx) document.
+ * Adheres to standard business letter typography with 1.0-inch margins, clear recipient and subject
+ * blocks, justified paragraphs, and sign-off.
+ */
+export function downloadCoverLetterAsDocx(
+  coverLetter: CoverLetterData,
+  candidateName: string = 'Candidate Name',
+  fileName: string = 'Cover_Letter.docx'
+): void {
+  const safeFileName = fileName.endsWith('.docx') ? fileName : `${fileName}.docx`;
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const recipientHtml = escapeXml(coverLetter.recipient || '')
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .map((line) => `<div style="margin-bottom: 2pt;">${line}</div>`)
+    .join('');
+
+  const paragraphsHtml = (coverLetter.body_paragraphs || [])
+    .map(
+      (p) =>
+        `<p style="font-size: 11pt; line-height: 1.5; color: #1e293b; margin-bottom: 12pt; text-align: justify;">${escapeXml(
+          p
+        )}</p>`
+    )
+    .join('');
+
+  const signoffHtml = escapeXml(coverLetter.signoff || '')
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .map((line) => `<div style="margin-bottom: 2pt;">${line}</div>`)
+    .join('');
+
+  const wordDocumentHtml = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office'
+      xmlns:w='urn:schemas-microsoft-com:office:word'
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset='utf-8'>
+  <title>${escapeXml(candidateName)} - Cover Letter</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    @page Section1 {
+      size: 8.5in 11.0in;
+      margin: 1.0in 1.0in 1.0in 1.0in;
+      mso-header-margin: 0.5in;
+      mso-footer-margin: 0.5in;
+      mso-paper-source: 0;
+    }
+    div.Section1 {
+      page: Section1;
+    }
+    body {
+      font-family: 'Calibri', 'Arial', sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      color: #1e293b;
+    }
+    h1 {
+      font-size: 20pt;
+      font-weight: bold;
+      color: #0f172a;
+      margin: 0 0 4pt 0;
+      letter-spacing: -0.5pt;
+    }
+    .date {
+      font-size: 10.5pt;
+      color: #64748b;
+      margin: 14pt 0;
+    }
+    .recipient {
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #334155;
+      margin-bottom: 16pt;
+    }
+    .subject {
+      font-size: 12pt;
+      font-weight: bold;
+      color: #0f172a;
+      margin: 16pt 0 14pt 0;
+    }
+    .signoff {
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #0f172a;
+      margin-top: 20pt;
+    }
+    hr {
+      border: 0;
+      border-top: 1px solid #cbd5e1;
+      margin: 8pt 0 14pt 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="Section1">
+    <h1>${escapeXml(candidateName.toUpperCase())}</h1>
+    <hr />
+    <div class="date">${escapeXml(today)}</div>
+    <div class="recipient">${recipientHtml}</div>
+    ${coverLetter.subject ? `<div class="subject">${escapeXml(coverLetter.subject)}</div>` : ''}
+    ${paragraphsHtml}
+    <div class="signoff">${signoffHtml}</div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const blob = new Blob(['\ufeff', wordDocumentHtml], {
+    type: 'application/vnd.ms-word;charset=utf-8',
+  });
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

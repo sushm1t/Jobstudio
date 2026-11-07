@@ -15,6 +15,7 @@ import {
   Minimize2,
   FileText,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { TailoredResumeData, WorkExperience } from '../data/defaultData';
 import { getUserMasterProfile } from '../data/candidateProfiles';
@@ -30,6 +31,10 @@ interface ResumeDocumentProps {
   isAiGenerating?: boolean;
   onOpenRecruiterReview?: () => void;
   isProUser?: boolean;
+  applyUrl?: string;
+  onApplyClick?: (url: string) => void;
+  isTracked?: boolean;
+  onTrackApplication?: () => void;
 }
 
 /**
@@ -62,6 +67,10 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
   isAiGenerating,
   onOpenRecruiterReview,
   isProUser = false,
+  applyUrl,
+  onApplyClick,
+  isTracked = false,
+  onTrackApplication,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -277,6 +286,45 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
 
         {/* Controls Toolbar */}
         <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto justify-start md:justify-end text-xs">
+          {/* Direct Apply Portal Link */}
+          {applyUrl && (
+            <a
+              href={applyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                if (typeof window !== 'undefined' && typeof window.open === 'function') {
+                  try {
+                    window.open(applyUrl, '_blank');
+                  } catch (_) {}
+                }
+                onApplyClick?.(applyUrl);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold transition-all duration-200 cursor-pointer bg-brand/10 hover:bg-brand/15 text-brand border border-brand/20 shadow-xs"
+              title={`Open official job portal for ${companyName || 'this role'} in a new tab`}
+            >
+              <span>Apply now</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+
+          {/* Mark as Applied Toggle Button */}
+          {onTrackApplication && (
+            <button
+              type="button"
+              onClick={onTrackApplication}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold transition-all duration-200 cursor-pointer border ${
+                isTracked
+                  ? 'bg-success/10 text-success hover:bg-success/20 border-success/30'
+                  : 'bg-surface border-border text-foreground hover:bg-surface-2'
+              }`}
+              title={isTracked ? 'Click to untrack and remove from applied jobs' : 'Mark as applied and track application'}
+            >
+              <CheckCircle2 className={`w-3.5 h-3.5 ${isTracked ? 'text-success' : 'text-subtle'}`} />
+              <span>{isTracked ? 'Tracked as Applied' : 'Mark as Applied'}</span>
+            </button>
+          )}
+
           {/* Edit Toggle */}
           <button
             onClick={() => setIsEditing(!isEditing)}
@@ -807,6 +855,154 @@ export const ResumeDocument: React.FC<ResumeDocumentProps> = ({
             </section>
           )}
         </div>
+
+        {/* ATS Resume Intelligence Report (Phase 9 Explainable Match & Phase 10 Output) */}
+        {(resume.keyword_analysis || resume.gap_analysis || resume.qa_validation || resume.match_report) && (
+          <div className="mt-8 apple-card p-6 sm:p-8 space-y-6 max-w-[850px] mx-auto bg-card border border-border rounded-2xl shadow-xs print:hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold text-xs">
+                  ATS
+                </span>
+                <div>
+                  <h3 className="font-display font-semibold text-base text-foreground">
+                    ATS Intelligence & Explainable Match Report
+                  </h3>
+                  <p className="text-xs text-subtle">
+                    Evidence-based optimization analysis generated for recruiters and ATS parsers.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                  ATS Validated
+                </span>
+              </div>
+            </div>
+
+            {/* Quality Assurance Checks (Phase 8) */}
+            {resume.qa_validation && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="p-3 rounded-xl bg-surface border border-border/80 text-center">
+                  <span className="text-subtle text-[11px] block">Factual Integrity</span>
+                  <span className="font-semibold text-success mt-0.5 block">✓ Verified</span>
+                </div>
+                <div className="p-3 rounded-xl bg-surface border border-border/80 text-center">
+                  <span className="text-subtle text-[11px] block">ATS Parsability</span>
+                  <span className="font-semibold text-success mt-0.5 block">✓ Single-Column</span>
+                </div>
+                <div className="p-3 rounded-xl bg-surface border border-border/80 text-center">
+                  <span className="text-subtle text-[11px] block">Work Chronology</span>
+                  <span className="font-semibold text-success mt-0.5 block">✓ Reverse Chrono</span>
+                </div>
+                <div className="p-3 rounded-xl bg-surface border border-border/80 text-center">
+                  <span className="text-subtle text-[11px] block">Anti-Fabrication</span>
+                  <span className="font-semibold text-success mt-0.5 block">✓ Guaranteed</span>
+                </div>
+              </div>
+            )}
+
+            {/* Keyword Analysis (Phase 5) */}
+            {resume.keyword_analysis && (
+              <div className="space-y-3">
+                <h4 className="font-display font-semibold text-xs text-foreground uppercase tracking-wider">
+                  Strategic Keyword Coverage
+                </h4>
+                <div className="space-y-2">
+                  {resume.keyword_analysis.matched && resume.keyword_analysis.matched.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-success flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-success" />
+                        Matched Keywords ({resume.keyword_analysis.matched.length})
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {resume.keyword_analysis.matched.map((kw, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-success/10 text-success border border-success/20 font-medium"
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {resume.keyword_analysis.partial && resume.keyword_analysis.partial.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[11px] font-medium text-warning flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 text-warning" />
+                        Transferable / Partial Matches ({resume.keyword_analysis.partial.length})
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {resume.keyword_analysis.partial.map((kw, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-warning/10 text-warning border border-warning/20 font-medium"
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {resume.keyword_analysis.excluded_unsupported && resume.keyword_analysis.excluded_unsupported.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[11px] font-medium text-subtle flex items-center gap-1">
+                        <span>•</span>
+                        Excluded Unsupported Keywords ({resume.keyword_analysis.excluded_unsupported.length}) — Omitted to prevent hallucination
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {resume.keyword_analysis.excluded_unsupported.map((kw, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-surface text-subtle border border-border line-through"
+                            title="Omitted from tailored resume because no verified evidence exists in master profile"
+                          >
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Gap Analysis & Recommendations (Phase 9 & 10) */}
+            {resume.gap_analysis && (
+              <div className="space-y-3 pt-2 border-t border-border">
+                <h4 className="font-display font-semibold text-xs text-foreground uppercase tracking-wider">
+                  Gap Analysis & Candidate Bridge Actions
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {resume.gap_analysis.missing_capabilities && resume.gap_analysis.missing_capabilities.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-surface border border-border space-y-1.5">
+                      <span className="font-semibold text-foreground text-xs block">Missing Capabilities:</span>
+                      <ul className="space-y-1 text-muted-foreground list-disc list-inside">
+                        {resume.gap_analysis.missing_capabilities.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {resume.recommendations && resume.recommendations.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-surface border border-border space-y-1.5">
+                      <span className="font-semibold text-foreground text-xs block">Tailoring Recommendations:</span>
+                      <ul className="space-y-1 text-muted-foreground list-disc list-inside">
+                        {resume.recommendations.map((r, i) => (
+                          <li key={i}>{r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

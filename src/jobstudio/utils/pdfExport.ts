@@ -522,3 +522,145 @@ ${coverLetter.body_paragraphs.join('\n\n')}
 
 ${coverLetter.signoff}`;
 }
+
+/**
+ * Generates an ATS-compliant, 100% vector-based PDF for tailored cover letters.
+ * Standard 8.5" x 11" US Letter format with clean typography, margins, header, and signature.
+ */
+export function generateVectorCoverLetterPdf(
+  coverLetter: CoverLetterData,
+  candidateName: string = 'Candidate Name',
+  options: PdfExportOptions = {}
+): jsPDF {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'letter',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth(); // 612 pt
+  const pageHeight = doc.internal.pageSize.getHeight(); // 792 pt
+
+  // Standard 0.75 in (54 pt) margins for business correspondence
+  const marginX = 54;
+  const marginTop = 54;
+  const marginBottom = 54;
+  const contentWidth = pageWidth - marginX * 2; // 504 pt
+  const maxY = pageHeight - marginBottom;
+
+  let y = marginTop;
+
+  function checkPageBreak(neededHeight: number): void {
+    if (y + neededHeight > maxY) {
+      doc.addPage();
+      y = marginTop;
+    }
+  }
+
+  // 1. Candidate Header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text(cleanPdfText(candidateName.toUpperCase()), marginX, y);
+  y += 22;
+
+  // Header Divider
+  doc.setDrawColor(203, 213, 225); // slate-300
+  doc.setLineWidth(1);
+  doc.line(marginX, y, pageWidth - marginX, y);
+  y += 24;
+
+  // 2. Date
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139); // slate-500
+  doc.text(today, marginX, y);
+  y += 20;
+
+  // 3. Recipient
+  if (coverLetter.recipient) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(51, 65, 85); // slate-700
+    const recipientLines = coverLetter.recipient.split('\n');
+    for (const rLine of recipientLines) {
+      const cleanLine = cleanPdfText(rLine.trim());
+      if (cleanLine) {
+        checkPageBreak(15);
+        doc.text(cleanLine, marginX, y);
+        y += 15;
+      }
+    }
+    y += 10;
+  }
+
+  // 4. Subject Line
+  if (coverLetter.subject) {
+    checkPageBreak(30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11.5);
+    doc.setTextColor(15, 23, 42); // slate-900
+    const subjectLines = doc.splitTextToSize(cleanPdfText(coverLetter.subject), contentWidth);
+    doc.text(subjectLines, marginX, y);
+    y += subjectLines.length * 16 + 12;
+  }
+
+  // 5. Body Paragraphs
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(30, 41, 59); // slate-800
+  for (const para of coverLetter.body_paragraphs || []) {
+    const cleanPara = cleanPdfText(para.trim());
+    if (!cleanPara) continue;
+
+    const paraLines = doc.splitTextToSize(cleanPara, contentWidth);
+    const paraHeight = paraLines.length * 15 + 14;
+    checkPageBreak(Math.min(paraHeight, 60)); // avoid orphan lines
+    doc.text(paraLines, marginX, y, { lineHeightFactor: 1.4 });
+    y += paraLines.length * 15 + 12;
+  }
+
+  // 6. Sign-off
+  if (coverLetter.signoff) {
+    checkPageBreak(50);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    const signoffLines = coverLetter.signoff.split('\n');
+    for (const sLine of signoffLines) {
+      const cleanLine = cleanPdfText(sLine.trim());
+      if (cleanLine) {
+        doc.text(cleanLine, marginX, y);
+        y += 15;
+      }
+    }
+  }
+
+  return doc;
+}
+
+/**
+ * Downloads the cover letter as an ATS-compliant, vector-based PDF file.
+ */
+export async function downloadCoverLetterAsPdf(
+  coverLetter: CoverLetterData,
+  candidateName: string = 'Candidate',
+  fileName: string = 'Cover_Letter.pdf'
+): Promise<boolean> {
+  try {
+    const doc = generateVectorCoverLetterPdf(coverLetter, candidateName);
+    doc.save(fileName);
+    return true;
+  } catch (error) {
+    console.error('Cover letter vector PDF generation error:', error);
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+    return false;
+  }
+}

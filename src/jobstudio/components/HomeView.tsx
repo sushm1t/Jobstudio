@@ -44,7 +44,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* =========================================================================
           EMBEDDED 3-TIER PRICING (Free $0 / Plus $9.99 / Pro $19.99)
          ========================================================================= */}
-      <section className="space-y-8 pt-8">
+      <section id="landing-pricing" className="space-y-8 pt-8">
         <div className="text-center space-y-3 max-w-2xl mx-auto">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-semibold tracking-wider uppercase font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -102,7 +102,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {currentPlan === 'free' && (
               <div className="absolute -top-3 left-6">
                 <span className="px-3 py-1 bg-surface border border-border text-foreground text-[10px] font-bold uppercase tracking-wider rounded-full shadow-xs">
-                  CURRENT TIER
+                  CURRENT PLAN
                 </span>
               </div>
             )}
@@ -132,19 +132,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <ul className="space-y-2 text-xs text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
-                    <span><strong>2 tailored resumes</strong> every month with ATS keyword alignment</span>
+                    <span><strong>2 tailored resumes per month</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
-                    <span>Search live jobs across Greenhouse, Ashby, Lever, and Remotive</span>
+                    <span><strong>1 custom cover letter draft</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
-                    <span>Access all 2026 Career Roadmaps (Stage 1 &amp; 2 foundations)</span>
+                    <span>Search live jobs across Greenhouse, Lever, Ashby, and SmartRecruiters</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
-                    <span>Clean ATS Vector PDF Export</span>
+                    <span>Foundational Career Roadmaps (Stages 1 &amp; 2)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
+                    <span>ATS-compliant Vector PDF exports</span>
                   </li>
                 </ul>
               </div>
@@ -199,7 +203,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <span className="text-xs font-semibold text-subtle">/ month</span>
                 </div>
                 <p className="text-[11px] text-subtle mt-1">
-                  {billingCycle === 'monthly' ? 'Billed monthly · Cancel anytime' : 'Billed annually ($95.88/yr) · Save 20%'}
+                  {billingCycle === 'monthly' ? 'Billed monthly · Cancel anytime' : 'Billed annually ($95.88/yr) · Save 20% on annual billing'}
                 </p>
               </div>
 
@@ -210,23 +214,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <ul className="space-y-2 text-xs text-foreground">
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>50 tailored resumes</strong> &amp; 25 cover letters / month</span>
+                    <span><strong>50 tailored resumes &amp; 25 cover letters/mo</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Full 3-Persona Recruiter Review</strong> (Recruiter, HM, Technical Lead)</span>
+                    <span><strong>Full 3-Persona Recruiter Review</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Full 100+ Global Company Guidance Library</strong></span>
+                    <span><strong>100+ Curated Company Focus Packs</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Clean PDF + Editable DOCX + Plaintext</strong></span>
+                    <span><strong>PDF, DOCX &amp; Plaintext Exports</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span>20 ATS Portal Answers / month (Greenhouse, Lever)</span>
+                    <span><strong>20 ATS Screening Answers/mo</strong></span>
                   </li>
                 </ul>
               </div>
@@ -244,7 +248,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   className="w-full py-3 px-4 rounded-full font-semibold text-xs transition-all bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Upgrade to Plus ($9.99/mo)</span>
+                  <span>Upgrade to Plus (${billingCycle === 'monthly' ? '9.99' : '7.99'}/mo)</span>
                 </button>
               )}
             </div>
@@ -293,7 +297,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <span className="text-xs font-semibold text-subtle">/ month</span>
                 </div>
                 <p className="text-[11px] text-subtle mt-1">
-                  {billingCycle === 'monthly' ? 'Billed monthly · Cancel anytime' : 'Billed annually ($191.88/yr) · Save 20%'}
+                  {billingCycle === 'monthly' ? 'Billed monthly · Cancel anytime' : 'Billed annually ($191.88/yr) · Save 20% on annual billing'}
                 </p>
               </div>
 
@@ -304,23 +308,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <ul className="space-y-2 text-xs text-foreground">
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Unlimited tailored resumes</strong> &amp; cover letters</span>
+                    <span><strong>Unlimited tailored resumes &amp; cover letters</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Offer &amp; Salary Negotiation Copilot</strong> (Counter-offer scripts)</span>
+                    <span><strong>Offer &amp; Salary Negotiation Copilot</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Behavioral Interview Practice &amp; STAR Coach</strong></span>
+                    <span><strong>Behavioral Interview STAR Coach</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Unlimited ATS Application Question Answers</strong></span>
+                    <span><strong>Unlimited ATS Application Answers</strong></span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0 mt-0.5" />
-                    <span><strong>Priority AI Processing Pipeline</strong> (Fastest generation)</span>
+                    <span><strong>Priority AI Generation Pipeline</strong></span>
                   </li>
                 </ul>
               </div>
@@ -338,7 +342,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   className="w-full py-3 px-4 rounded-full font-semibold text-xs transition-all bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Upgrade to Pro ($19.99/mo)</span>
+                  <span>Upgrade to Pro (${billingCycle === 'monthly' ? '19.99' : '15.99'}/mo)</span>
                 </button>
               )}
             </div>
@@ -361,7 +365,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span className="text-brand">Start tailoring in minutes.</span>
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
-            Evaluate your fit against real Greenhouse, Ashby, and Lever corporate listings, and export interview-ready, ATS-aligned applications in under 2 minutes.
+            Evaluate your fit against real Greenhouse, Lever, Ashby, and SmartRecruiters corporate listings, and export interview-ready, ATS-aligned applications in under 2 minutes.
           </p>
         </div>
 

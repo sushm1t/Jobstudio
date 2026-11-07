@@ -663,10 +663,8 @@ html.lenis, html.lenis body { height: auto; }
   .workspace-topbar { padding: 0 16px; height: 60px; position: sticky; top: 0; z-index: 40; }
   .workspace-breadcrumb, .workspace-plan-label { display: none; }
   .job-workspace .workspace-mobile-signout { display: inline-flex; }
-  .workspace-mobile-navigation { display: flex; position: relative; min-width: 0; }
-  .workspace-mobile-navigation select { appearance: none; width: 100%; max-width: 200px; padding: 8px 24px 8px 0; background: transparent; font-size: 13px; border: none; font-weight: 500; }
-  .workspace-mobile-navigation svg { position: absolute; right: 0; top: 10px; width: 14px; height: 14px; pointer-events: none; }
-  .job-workspace .workspace-main { padding: 24px 16px 40px; }
+  .workspace-mobile-navigation { display: none; }
+  .job-workspace .workspace-main { padding: 24px 16px 84px; }
   .job-workspace h1 { font-size: 24px; }
   .workspace-header-status { white-space: normal; }
   .job-workspace .workspace-main .workspace-company-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -720,7 +718,7 @@ html.lenis, html.lenis body { height: auto; }
 .tour-card-head { display: flex; justify-content: space-between; align-items: center; font-size: .75rem; color: var(--muted-foreground); margin-bottom: .25rem; }
 .tour-card-actions { display: flex; justify-content: space-between; gap: .5rem; margin-top: .75rem; }
 .tour-highlight { outline: 2px solid var(--primary) !important; outline-offset: 3px; border-radius: .5rem; position: relative; z-index: 1; }
-@media (max-width: 640px) { .job-workspace .workspace-main > .tour-card, .tour-card { left: .75rem; right: .75rem; bottom: .75rem; width: auto; max-width: none; } }
+@media (max-width: 640px) { .job-workspace .workspace-main > .tour-card, .tour-card { left: .75rem; right: .75rem; bottom: 4.75rem; width: auto; max-width: none; } }
 
 .job-workspace .workspace-main > .onboarding-checklist, .onboarding-checklist { position: fixed; margin: 0; right: 1.5rem; bottom: 1.5rem; z-index: 50; width: 17rem; max-width: 17rem; padding: 1rem; border: 1px solid var(--border); border-radius: .875rem; background: var(--popover); color: var(--popover-foreground); }
 .onboarding-checklist-head { display: flex; align-items: center; gap: .5rem; font-size: .875rem; }
@@ -733,7 +731,7 @@ html.lenis, html.lenis body { height: auto; }
 .onboarding-checklist li button svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
 .onboarding-checklist li button.is-done { color: var(--muted-foreground); text-decoration: line-through; }
 .onboarding-checklist li button.is-done svg { color: var(--primary); }
-@media (max-width: 640px) { .job-workspace .workspace-main > .onboarding-checklist, .onboarding-checklist { left: .75rem; right: .75rem; bottom: .75rem; width: auto; max-width: none; } }
+@media (max-width: 640px) { .job-workspace .workspace-main > .onboarding-checklist, .onboarding-checklist { left: .75rem; right: .75rem; bottom: 4.75rem; width: auto; max-width: none; } }
 
 /* Phone layouts: let content grow rather than squeeze or conceal its labels.
    Screen-only rules keep paper exports and desktop layouts unchanged. */
@@ -742,8 +740,6 @@ html.lenis, html.lenis body { height: auto; }
   .workspace-topbar > div:last-child { gap: 8px; flex-shrink: 0; }
   .workspace-topbar > div:last-child button { width: 36px; height: 36px; padding: 8px; flex-shrink: 0; }
   .workspace-topbar > div:last-child button span { display: none; }
-  .workspace-mobile-navigation { width: 100%; }
-  .workspace-mobile-navigation select { max-width: none; min-height: 44px; }
   .job-workspace .workspace-main :is(.truncate, [class*="line-clamp-"]):not(#printable-resume-container *) {
     overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
     -webkit-line-clamp: unset; line-clamp: unset; display: block; max-width: 100%;

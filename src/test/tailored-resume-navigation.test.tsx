@@ -2,6 +2,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import App from '@/jobstudio/App';
+import { createFreshUserProfile, saveUserMasterProfile } from '@/jobstudio/data/candidateProfiles';
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { auth: {
   getSession: async () => ({ data: { session: { user: { id: 'tailoring-user', email: 'tailoring@example.com', user_metadata: { full_name: 'Tailoring Tester' } } } } }),
@@ -24,6 +25,10 @@ it('keeps the generated resume when View Resume changes tabs', async () => {
   localStorage.setItem('jobstudio_logged_in', 'true');
   localStorage.setItem('jobstudio_user_email', 'tailoring@example.com');
   localStorage.setItem('jobstudio_user_name', 'Tailoring Tester');
+  saveUserMasterProfile({
+    ...createFreshUserProfile('tailoring@example.com', 'Tailoring Tester'),
+    masterProfileText: 'Senior Systems Engineer with 6+ years experience in distributed architectures.',
+  }, 'tailoring@example.com');
   vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => url === '/api/evaluate' ? {
     match_score: 45, company_name: 'Palantir', job_title: 'Backend Software Engineer', tailoring_recommendations: [],
   } : url === '/api/tailor' ? {
@@ -41,6 +46,12 @@ it('keeps the generated resume when View Resume changes tabs', async () => {
 
 it('withholds an 85-point preliminary score and exposes only the completed 32-point assessment', async () => {
   localStorage.setItem('jobstudio_logged_in', 'true');
+  localStorage.setItem('jobstudio_user_email', 'tailoring@example.com');
+  localStorage.setItem('jobstudio_user_name', 'Tailoring Tester');
+  saveUserMasterProfile({
+    ...createFreshUserProfile('tailoring@example.com', 'Tailoring Tester'),
+    masterProfileText: 'Senior Systems Engineer with 6+ years experience in distributed architectures.',
+  }, 'tailoring@example.com');
   vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: true, json: async () => url === '/api/evaluate' ? {
     match_score: 32, company_name: 'Spotify', job_title: 'Operations Manager', tailoring_recommendations: [],
   } : url === '/api/tailor' ? { tailored_summary: 'Tailored operations resume', skills: [], experiences: [] } : { questions: [] } })));

@@ -1,4 +1,5 @@
-import { PlayCircle, ArrowLeft, Briefcase, Bug, ChevronDown, Compass, FileText, HelpCircle, Layers, LogOut, Milestone, Sparkles, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { PlayCircle, ArrowLeft, Briefcase, Bug, Compass, FileText, HelpCircle, Layers, LogOut, Menu, Milestone, Sparkles, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export const sections = [
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export function WorkspaceNavigation(props: Props) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const plan = props.userPlan || (props.isProUser ? 'pro' : 'free');
   const current = sections.flatMap(section => section.items).find(item =>
     item.id === props.activeTab || (item.id === 'resume' && (props.activeTab === 'cover-letter' || props.activeTab === 'referral'))
@@ -51,6 +53,7 @@ export function WorkspaceNavigation(props: Props) {
     : current?.label || (props.activeTab === 'pricing' ? 'Pricing' : 'Workspace');
 
   return <>
+    {/* Desktop Sidebar (hidden on mobile) */}
     <aside className="workspace-sidebar no-print">
       <Button
         variant="ghost"
@@ -67,7 +70,7 @@ export function WorkspaceNavigation(props: Props) {
         <span className="workspace-avatar">{props.userName.split(' ').map(part => part[0]).slice(0, 2).join('')}</span>
         <div><strong>{props.userName.split(' ')[0]}'s workspace</strong><span>Personal workspace</span></div>
       </div>
-      {props.activeRole && (
+      {props.activeRole && props.activeTab !== 'evaluator' && (
         <div className="px-3 pb-3">
           <div className="workspace-active-badge" title={props.activeRole}>
             <span className="workspace-active-dot" />
@@ -129,51 +132,302 @@ export function WorkspaceNavigation(props: Props) {
         <div className="flex justify-between pt-2"><Button variant="ghost" size="sm" onClick={() => props.setActiveTab('home')} title="Open the public landing page"><ArrowLeft />View website</Button><Button variant="ghost" size="icon" title="Sign out" aria-label="Sign out" onClick={props.onLogout}><LogOut /></Button></div>
       </div>
     </aside>
+
+    {/* Topbar */}
     <header className="workspace-topbar no-print">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="workspace-breadcrumb">
+        <div className="workspace-breadcrumb flex items-center gap-1.5 text-xs text-subtle truncate">
           <span>Workspace</span>
           <span className="text-subtle">/</span>
-          <strong>{currentLabel}</strong>
+          <span className={props.activeRole ? 'text-subtle' : 'font-semibold text-foreground'}>{currentLabel}</span>
+          {props.activeRole && (
+            <>
+              <span className="text-subtle">/</span>
+              <strong className="text-foreground font-semibold truncate max-w-[220px]" title={props.activeRole}>
+                {props.activeRole.includes('@')
+                  ? props.activeRole.split('@')[1]?.trim()
+                  : props.activeRole.replace(/^Active:\s*/i, '').trim()}
+              </strong>
+            </>
+          )}
         </div>
-        {props.activeRole && (
-          <span className="workspace-active-badge hidden sm:inline-flex" title={props.activeRole}>
-            <span className="workspace-active-dot" />
-            <span className="truncate">{props.activeRole}</span>
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 min-w-0">
-        <label className="workspace-mobile-navigation">
-          <span className="sr-only">Workspace section</span>
-          <select
-            aria-label="Workspace section"
-            value={props.activeTab === 'cover-letter' || props.activeTab === 'referral' ? 'resume' : props.activeTab}
-            onChange={event => event.target.value === '__tour' ? props.onStartTour?.() : props.setActiveTab(event.target.value)}
-          >
-            {sections.map(section => (
-              <optgroup key={section.label} label={section.label}>
-                {section.items.map(item => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </optgroup>
-            ))}
-            <option value="home">Home</option>
-            {props.onStartTour && <option value="__tour">Take the tour</option>}
-          </select>
-          <ChevronDown />
-        </label>
-        {props.activeRole && (
-          <span className="workspace-active-badge text-[10px] py-0.5 px-2 max-w-[140px] truncate sm:hidden" title={props.activeRole}>
-            <span className="workspace-active-dot" />
-            <span className="truncate">{props.activeRole.replace('Active: ', '')}</span>
-          </span>
-        )}
       </div>
       <div className="flex items-center gap-3">
         <span className="workspace-plan-label">{plan === 'pro' ? 'Pro workspace' : plan === 'plus' ? 'Plus workspace' : 'Free workspace'}</span>
         <Button variant="outline" size="sm" className="workspace-mobile-signout" aria-label="Sign out" title="Sign out" onClick={props.onLogout}><LogOut /><span>Sign out</span></Button>
       </div>
     </header>
+
+    {/* Mobile Bottom Navigation Bar (md:hidden) */}
+    <nav
+      aria-label="Mobile workspace navigation"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border px-2 py-1.5 flex items-center justify-around shadow-2xl"
+    >
+      {/* 1. Profile */}
+      <button
+        type="button"
+        aria-label="Profile"
+        onClick={() => {
+          props.setActiveTab('profile');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+          props.activeTab === 'profile'
+            ? 'text-brand font-semibold'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <User className="w-5 h-5" />
+        <span className="text-[10px] leading-none">Profile</span>
+      </button>
+
+      {/* 2. Jobs */}
+      <button
+        type="button"
+        aria-label="Jobs"
+        onClick={() => {
+          props.setActiveTab('evaluator');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+          props.activeTab === 'evaluator'
+            ? 'text-brand font-semibold'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <Compass className="w-5 h-5" />
+        <span className="text-[10px] leading-none">Jobs</span>
+      </button>
+
+      {/* 3. Docs */}
+      <button
+        type="button"
+        aria-label="Docs"
+        onClick={() => {
+          props.setActiveTab('resume');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+          props.activeTab === 'resume' || props.activeTab === 'cover-letter' || props.activeTab === 'referral'
+            ? 'text-brand font-semibold'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <FileText className="w-5 h-5" />
+        <span className="text-[10px] leading-none">Docs</span>
+      </button>
+
+      {/* 4. Tracker */}
+      <button
+        type="button"
+        aria-label="Tracker"
+        onClick={() => {
+          props.setActiveTab('applied');
+          setIsMobileMenuOpen(false);
+        }}
+        className={`relative flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+          props.activeTab === 'applied'
+            ? 'text-brand font-semibold'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <div className="relative">
+          <Briefcase className="w-5 h-5" />
+          {props.appliedCount > 0 && (
+            <span className="absolute -top-1.5 -right-2 bg-brand text-background text-[9px] font-bold px-1.5 py-0.2 rounded-full min-w-[14px] text-center leading-tight">
+              {props.appliedCount}
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] leading-none">Tracker</span>
+      </button>
+
+      {/* 5. Menu */}
+      <button
+        type="button"
+        aria-label="Menu"
+        aria-expanded={isMobileMenuOpen}
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+          isMobileMenuOpen || ['roadmaps', 'screening', 'pricing'].includes(props.activeTab)
+            ? 'text-brand font-semibold'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <Menu className="w-5 h-5" />
+        <span className="text-[10px] leading-none">Menu</span>
+      </button>
+    </nav>
+
+    {/* Mobile More Drawer Sheet */}
+    {isMobileMenuOpen && (
+      <>
+        {/* Backdrop Overlay */}
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+
+        {/* Slide-Up Drawer */}
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="More navigation options"
+          className="fixed bottom-[56px] left-0 right-0 z-50 bg-card border-t border-border rounded-t-3xl shadow-2xl p-5 md:hidden space-y-4 max-h-[78vh] overflow-y-auto"
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto" />
+
+          {/* User profile & workspace status header */}
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-3">
+              <span className="workspace-avatar">{props.userName.split(' ').map(p => p[0]).slice(0, 2).join('')}</span>
+              <div>
+                <strong className="text-sm font-semibold text-foreground block">{props.userName.split(' ')[0]}'s workspace</strong>
+                <span className="text-xs text-subtle">{plan === 'pro' ? 'Pro plan · Unlimited tailoring' : plan === 'plus' ? 'Plus plan' : 'Free plan'}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-1.5 rounded-full text-subtle hover:text-foreground hover:bg-surface cursor-pointer"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Secondary Features Navigation */}
+          <div className="space-y-1">
+            {/* Career Roadmaps */}
+            <button
+              type="button"
+              onClick={() => {
+                props.setActiveTab('roadmaps');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3.5 p-3 rounded-2xl text-left text-sm font-medium transition-all cursor-pointer ${
+                props.activeTab === 'roadmaps' ? 'bg-primary/10 text-brand font-semibold' : 'text-foreground hover:bg-surface'
+              }`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0">
+                <Milestone className="w-4 h-4 text-brand" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="block font-semibold">Career Roadmaps</span>
+                <span className="text-xs text-subtle">Target skills & career progression</span>
+              </div>
+            </button>
+
+            {/* Interview Prep */}
+            <button
+              type="button"
+              onClick={() => {
+                props.setActiveTab('screening');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3.5 p-3 rounded-2xl text-left text-sm font-medium transition-all cursor-pointer ${
+                props.activeTab === 'screening' ? 'bg-primary/10 text-brand font-semibold' : 'text-foreground hover:bg-surface'
+              }`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0">
+                <HelpCircle className="w-4 h-4 text-brand" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="block font-semibold">Interview Prep</span>
+                <span className="text-xs text-subtle">Role questions & STAR behavioral prep</span>
+              </div>
+            </button>
+
+            {/* Pricing & Plans */}
+            <button
+              type="button"
+              onClick={() => {
+                props.setActiveTab('pricing');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3.5 p-3 rounded-2xl text-left text-sm font-medium transition-all cursor-pointer ${
+                props.activeTab === 'pricing' ? 'bg-primary/10 text-brand font-semibold' : 'text-foreground hover:bg-surface'
+              }`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-brand" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="block font-semibold">Pricing & Plans</span>
+                <span className="text-xs text-subtle">Subscription tiers and entitlements</span>
+              </div>
+            </button>
+
+            {/* Take the Tour */}
+            {props.onStartTour && (
+              <button
+                type="button"
+                onClick={() => {
+                  props.onStartTour?.();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-3.5 p-3 rounded-2xl text-left text-sm font-medium text-foreground hover:bg-surface transition-all cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0">
+                  <PlayCircle className="w-4 h-4 text-brand" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="block font-semibold">Take the Tour</span>
+                  <span className="text-xs text-subtle">Interactive 2-minute walkthrough</span>
+                </div>
+              </button>
+            )}
+
+            {/* Report a Bug */}
+            {props.onReportBug && (
+              <button
+                type="button"
+                onClick={() => {
+                  props.onReportBug?.();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-3.5 p-3 rounded-2xl text-left text-sm font-medium text-muted-foreground hover:text-amber-400 hover:bg-surface transition-all cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0">
+                  <Bug className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="block font-semibold">Report a Bug</span>
+                  <span className="text-xs text-subtle">Send feedback or report an issue</span>
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* Footer Actions: Landing page and Sign out */}
+          <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                props.setActiveTab('home');
+                setIsMobileMenuOpen(false);
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-subtle hover:text-foreground rounded-xl hover:bg-surface transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>View website</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                props.onLogout();
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-danger hover:bg-danger/10 rounded-xl transition-all cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </>
+    )}
   </>;
 }

@@ -48,6 +48,7 @@ interface ScreeningAnswersViewProps {
   onFetchInterviewPrep?: () => void;
   isFetchingInterviewPrep?: boolean;
   onTrackApplication?: () => void;
+  onApplyClick?: (url: string) => void;
   isTracked?: boolean;
   onAddScreeningAnswer?: (newAnswer: ScreeningAnswer) => void;
   onRemoveScreeningAnswer?: (index: number) => void;
@@ -68,6 +69,7 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
   onFetchInterviewPrep,
   isFetchingInterviewPrep = false,
   onTrackApplication,
+  onApplyClick,
   isTracked = false,
   onAddScreeningAnswer,
   onRemoveScreeningAnswer,
@@ -339,18 +341,18 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
       <div
         className="bg-card rounded-2xl border border-border/80 p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm"
       >
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-surface text-muted-foreground text-[11px] font-semibold rounded-md px-2 py-0.5 uppercase tracking-wider">
-              CAREER COPILOT &amp; INTERVIEWS
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="bg-brand/10 text-brand text-[11px] font-bold rounded-md px-2.5 py-0.5 uppercase tracking-wider font-mono">
+              INTERVIEW COPILOT
             </span>
             <h2 className="font-display text-base sm:text-lg font-bold text-foreground">
               ATS &amp; Interview
             </h2>
           </div>
-          <p className="text-xs text-subtle mt-1">
-            End-to-end interview intelligence, behavioral STAR scoring coach, and salary negotiation for{' '}
-            <strong className="text-muted-foreground">{companyName || 'your target opportunity'}</strong>.
+          <p className="text-xs text-subtle">
+            Tailored for <strong className="text-foreground">{jobTitle || 'Target Role'}</strong> at{' '}
+            <strong className="text-foreground">{companyName || 'your target opportunity'}</strong> · Grounded in your Master Profile
           </p>
         </div>
 
@@ -360,6 +362,14 @@ export const ScreeningAnswersView: React.FC<ScreeningAnswersViewProps> = ({
               href={applyUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => {
+                if (typeof window !== 'undefined' && typeof window.open === 'function') {
+                  try {
+                    window.open(applyUrl, '_blank');
+                  } catch (_) {}
+                }
+                onApplyClick?.(applyUrl);
+              }}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-colors cursor-pointer whitespace-nowrap justify-center shadow-xs"
               title={`Open official job portal for ${companyName || 'this role'} in a new tab`}
             >

@@ -76,3 +76,16 @@ export const endCloudSession = async () => {
   await flush();
   currentUserId = null;
 };
+
+/** Flushes any queued browser storage mutations immediately to Lovable Cloud. */
+export const triggerCloudSync = async () => {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  await flush();
+};
+
+/** Reports whether any localStorage changes are currently queued for sync. */
+export const hasPendingCloudSync = () => pending.size > 0;
+

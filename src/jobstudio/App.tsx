@@ -33,6 +33,7 @@ import {
   saveUserMasterProfile,
   profileRecordToResume,
   profileRecordToCandidateInfo,
+  SAMPLE_CANDIDATE_PROFILE,
 } from './data/candidateProfiles';
 import {
   PRESET_JOBS,
@@ -54,6 +55,8 @@ import { installApiAuth, fetchEntitlement } from './utils/apiAuth';
 import { WelcomeScreen } from './components/onboarding/WelcomeScreen';
 import { ProductTour } from './components/onboarding/ProductTour';
 import { GettingStartedChecklist } from './components/onboarding/GettingStartedChecklist';
+import { ProfileActivationModal } from './components/onboarding/ProfileActivationModal';
+import { PostApplyTrackingBanner } from './components/PostApplyTrackingBanner';
 import { TOUR_STEPS } from './components/onboarding/tourSteps';
 import { readOnboarding, shouldShowOnboarding, writeOnboarding, type OnboardingState } from './components/onboarding/onboardingState';
 import { readWorkspaceTab, rememberWorkspaceTab, clearWorkspaceTab } from './utils/workspaceNavigation';
@@ -422,6 +425,13 @@ export default function App() {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState<boolean>(false);
+  const [postApplyPrompt, setPostApplyPrompt] = useState<{
+    isOpen: boolean;
+    jobTitle: string;
+    companyName: string;
+    applyUrl?: string;
+  } | null>(null);
   const [isReportBugOpen, setIsReportBugOpen] = useState<boolean>(false);
 
   // 3-Tier Subscription (Free, Plus, Pro) & Tailoring Quota State (strictly user-scoped)
@@ -617,6 +627,17 @@ export default function App() {
     )
   );
 
+  const handleTriggerPostApplyPrompt = (url?: string) => {
+    const jobTitle = evaluation.job_title || activeOpportunity?.title || currentPreset?.title || 'Target Role';
+    const companyName = evaluation.company_name || activeOpportunity?.company || currentPreset?.company || '';
+    setPostApplyPrompt({
+      isOpen: true,
+      jobTitle,
+      companyName,
+      applyUrl: url || effectiveApplyUrl,
+    });
+  };
+
   const handleTrackCurrentJob = (customData?: {
     company_name?: string;
     job_title?: string;
@@ -624,6 +645,8 @@ export default function App() {
     platform?: string;
     apply_url?: string;
     match_score?: number;
+    resume_snapshot?: TailoredResumeData;
+    forceAdd?: boolean;
   }) => {
     const company = customData?.company_name || evaluation.company_name;
     const title = customData?.job_title || evaluation.job_title;
@@ -636,8 +659,23 @@ export default function App() {
     );
 
     if (existingIndex >= 0) {
-      // Toggle OFF: Remove from appliedJobs so button flips back to "Mark as applied"
-      setAppliedJobs((prev) => prev.filter((_, idx) => idx !== existingIndex));
+      if (customData?.forceAdd) {
+        // Keep tracked as applied and snapshot the current tailored resume
+        setAppliedJobs((prev) =>
+          prev.map((j, idx) => {
+            if (idx !== existingIndex) return j;
+            let updated = { ...j, status: 'Applied' as const };
+            const resumeToSnapshot = customData?.resume_snapshot || resume;
+            if (resumeToSnapshot) {
+              updated = withNewResumeVersion(updated, resumeToSnapshot, updated.match_score);
+            }
+            return updated;
+          })
+        );
+      } else {
+        // Toggle OFF: Remove from appliedJobs so button flips back to "Mark as applied"
+        setAppliedJobs((prev) => prev.filter((_, idx) => idx !== existingIndex));
+      }
     } else {
       // Toggle ON: Add to appliedJobs
       const resolvedApplyUrl =
@@ -645,7 +683,7 @@ export default function App() {
         effectiveApplyUrl ||
         (customUrl && customUrl.startsWith('http') ? customUrl : undefined);
 
-      const newRecord: AppliedJobRecord = withCreatedEvent({
+      let newRecord: AppliedJobRecord = withCreatedEvent({
         id: `app-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         company_name: company,
         job_title: title,
@@ -657,6 +695,13 @@ export default function App() {
         status: 'Applied',
         created_at: Date.now(),
       });
+
+      // Automatically snapshot current tailored resume state to the job record
+      const resumeToSnapshot = customData?.resume_snapshot || resume;
+      if (resumeToSnapshot) {
+        newRecord = withNewResumeVersion(newRecord, resumeToSnapshot, newRecord.match_score);
+      }
+
       setAppliedJobs((prev) => [newRecord, ...prev]);
     }
   };
@@ -753,6 +798,15 @@ export default function App() {
     setInterviewQuestions([]);
   };
 
+  const handleApplySampleProfile = () => {
+    const sample = SAMPLE_CANDIDATE_PROFILE;
+    saveUserMasterProfile(sample, userEmail);
+    setMasterProfileText(sample.masterProfileText);
+    setCandidateInfo(profileRecordToCandidateInfo(sample));
+    setResume(profileRecordToResume(sample));
+    setIsActivationModalOpen(false);
+  };
+
   // Call Gemini backend to evaluate & tailor
   const handleRunEvaluation = async (overrideJobText?: string) => {
     let jobDescription = typeof overrideJobText === 'string' && overrideJobText.trim()
@@ -765,6 +819,17 @@ export default function App() {
 
     if (!jobDescription) {
       alert('Please select a preset job or paste a job description.');
+      return;
+    }
+
+    // Activation Guardrail: if master profile is empty, prompt user to add their profile or explore with sample profile
+    const isProfileEmpty =
+      !masterProfileText ||
+      !masterProfileText.trim() ||
+      /No resume uploaded yet/i.test(masterProfileText);
+
+    if (isProfileEmpty) {
+      setIsActivationModalOpen(true);
       return;
     }
 
@@ -1008,7 +1073,7 @@ export default function App() {
       />}
 
       {/* Main Content Area */}
-      <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 ${activeTab !== 'home' && activeTab !== 'auth' ? 'workspace-main' : ''}`}>
+      <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8 ${activeTab !== 'home' && activeTab !== 'auth' ? 'workspace-main' : ''}`}>
         {isLoggedIn && activeTab === 'onboarding' && (
           <WelcomeScreen userName={userName} onStartTour={startTour} onSkip={skipWelcome} />
         )}
@@ -1088,12 +1153,15 @@ export default function App() {
             setCustomUrl={setCustomUrl}
             onEvaluate={handleRunEvaluation}
             isLoading={isEvaluating}
-            onProceedToResume={() => setActiveTab('resume')}
+            onProceedToResume={() => {
+              setActiveTab('resume');
+            }}
             onOpenTab={(tab: string) => setActiveTab(tab)}
             onResetWorkspace={handleResetWorkspace}
             onRemoveOpportunity={handleRemoveOpportunity}
             onClearOpportunities={handleClearAllOpportunities}
             onTrackApplication={handleTrackCurrentJob}
+            onApplyClick={handleTriggerPostApplyPrompt}
             isTracked={isCurrentJobTracked}
             userPlan={userPlan}
             isProUser={isProUser}
@@ -1163,6 +1231,14 @@ export default function App() {
                     href={effectiveApplyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (typeof window !== 'undefined' && typeof window.open === 'function') {
+                        try {
+                          window.open(effectiveApplyUrl, '_blank');
+                        } catch (_) {}
+                      }
+                      handleTriggerPostApplyPrompt(effectiveApplyUrl);
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs"
                     title={`Open official job portal for ${evaluation.company_name || 'this role'} in a new tab`}
                   >
@@ -1213,6 +1289,10 @@ export default function App() {
               }
             }}
             isProUser={isProUser}
+            applyUrl={effectiveApplyUrl}
+            onApplyClick={handleTriggerPostApplyPrompt}
+            isTracked={isCurrentJobTracked}
+            onTrackApplication={handleTrackCurrentJob}
           />
         )}
 
@@ -1252,6 +1332,7 @@ export default function App() {
             onFetchInterviewPrep={() => handleFetchInterviewPrep()}
             isFetchingInterviewPrep={isFetchingInterviewPrep}
             onTrackApplication={() => handleTrackCurrentJob()}
+            onApplyClick={handleTriggerPostApplyPrompt}
             isTracked={isCurrentJobTracked}
             onAddScreeningAnswer={(newAns) => setScreeningAnswers((prev) => [newAns, ...prev])}
             onRemoveScreeningAnswer={(idx) =>
@@ -1265,6 +1346,7 @@ export default function App() {
         {activeTab === 'applied' && (
           <AppliedJobsView
             appliedJobs={appliedJobs}
+            candidateName={resume.full_name || 'Alex Rivera'}
             onAddJob={handleAddAppliedJob}
             onUpdateJob={handleUpdateAppliedJob}
             onDeleteJob={handleDeleteAppliedJob}
@@ -1347,6 +1429,36 @@ export default function App() {
         candidateInfo={candidateInfo}
         setCandidateInfo={setCandidateInfo}
       />
+
+      {/* Activation Guardrail: Profile Required Before Tailoring */}
+      <ProfileActivationModal
+        isOpen={isActivationModalOpen}
+        onClose={() => setIsActivationModalOpen(false)}
+        onNavigateToProfile={() => {
+          setIsActivationModalOpen(false);
+          setActiveTab('profile');
+        }}
+        onApplySampleProfile={handleApplySampleProfile}
+      />
+
+      {/* Post-Apply Application Tracking Slide-over Banner */}
+      {postApplyPrompt && (
+        <PostApplyTrackingBanner
+          isOpen={postApplyPrompt.isOpen}
+          jobTitle={postApplyPrompt.jobTitle}
+          companyName={postApplyPrompt.companyName}
+          isTracked={isCurrentJobTracked}
+          onTrackAndSave={() => {
+            handleTrackCurrentJob({
+              company_name: postApplyPrompt.companyName,
+              job_title: postApplyPrompt.jobTitle,
+              apply_url: postApplyPrompt.applyUrl || effectiveApplyUrl,
+              forceAdd: true,
+            });
+          }}
+          onDismiss={() => setPostApplyPrompt(null)}
+        />
+      )}
 
       {/* Recruiter-Panel Multi-Persona Review Modal */}
       <RecruiterReviewModal

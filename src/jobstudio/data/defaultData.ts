@@ -31,8 +31,11 @@ export interface TailoredResumeData {
   phone: string;
   location: string;
   linkedin: string;
+  portfolio?: string;
   tailored_summary: string;
   skills: string[];
+  core_competencies?: string[];
+  selected_achievements?: string[];
   experiences: WorkExperience[];
   projects?: ProjectExperience[];
   education: {
@@ -41,6 +44,31 @@ export interface TailoredResumeData {
     year: string;
   }[];
   certifications: string[];
+  match_report?: {
+    overall_score: number;
+    category_scores?: Record<string, number>;
+    summary?: string;
+  };
+  keyword_analysis?: {
+    matched: string[];
+    partial: string[];
+    missing: string[];
+    excluded_unsupported: string[];
+  };
+  gap_analysis?: {
+    missing_capabilities: string[];
+    missing_experience: string[];
+    missing_certifications: string[];
+    improvement_areas: string[];
+  };
+  qa_validation?: {
+    factual_integrity_passed: boolean;
+    job_alignment_passed: boolean;
+    ats_compatibility_passed: boolean;
+    human_readability_passed: boolean;
+    issues?: string[];
+  };
+  recommendations?: string[];
 }
 
 export interface SkillRoadmapStep {
@@ -82,6 +110,12 @@ export interface JobEvaluationData {
   executive_summary?: string;
   skill_roadmap?: SkillRoadmapStep[];
   recommended_certifications?: RecommendedCertification[];
+  dimension_scores?: Record<string, { weight: number; score: number; notes?: string }>;
+  mandatory_gates?: Array<{ id: string; requirement: string; status: 'PASSED' | 'FAILED' | 'UNCERTAIN'; reason?: string }>;
+  is_gated?: boolean;
+  gate_reason?: string;
+  job_family?: string;
+  seniority_level?: string;
 }
 
 export interface CoverLetterData {
@@ -148,6 +182,7 @@ export interface AppliedJobRecord {
   salary?: string;
   notes?: string;
   interview_date?: string;
+  followed_up_at?: string;
   resume_versions?: ResumeVersionSnapshot[];
   events?: ApplicationEvent[];
   tailored_resume_summary?: string;
@@ -179,6 +214,8 @@ export interface ATSJobListing {
   skills?: string[];
   matchScore?: number;
   matchHighlight?: string;
+  verifiedLive?: boolean;
+  verifiedAt?: string;
 }
 
 export interface ATSCompanyEntry {

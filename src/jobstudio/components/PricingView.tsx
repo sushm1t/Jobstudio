@@ -18,6 +18,7 @@ import {
   HelpCircle as QuestionIcon,
   Download,
   Briefcase,
+  Loader2,
 } from 'lucide-react';
 
 interface PricingViewProps {
@@ -44,6 +45,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
   const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
   const [selectedCheckoutPlan, setSelectedCheckoutPlan] = useState<'plus' | 'pro'>('plus');
   const [checkoutSuccess, setCheckoutSuccess] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<Record<number, boolean>>({ 0: true });
 
   // Plus pricing
@@ -65,16 +67,22 @@ export const PricingView: React.FC<PricingViewProps> = ({
 
   const handleStartCheckout = (plan: 'plus' | 'pro') => {
     setSelectedCheckoutPlan(plan);
+    setCheckoutSuccess(false);
+    setIsProcessing(false);
     setShowCheckoutModal(true);
   };
 
   const handleConfirmUpgrade = () => {
-    setShowCheckoutModal(false);
     if (onUpgradeToPlan) {
       onUpgradeToPlan(selectedCheckoutPlan);
     } else {
       onUpgradeToPro();
     }
+    setIsProcessing(true);
+    setTimeout(() => {
+      setIsProcessing(false);
+      setCheckoutSuccess(true);
+    }, 1200);
   };
 
   const faqs = [
@@ -173,7 +181,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
           {currentPlan === 'free' && (
             <div className="absolute -top-3 left-6">
               <span className="px-3 py-1 bg-surface border border-border text-foreground text-[10px] font-bold uppercase tracking-wider rounded-full shadow-xs">
-                YOUR CURRENT PLAN
+                CURRENT PLAN
               </span>
             </div>
           )}
@@ -230,50 +238,44 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>2 Truthful AI Tailored Resumes</strong> / mo with ATS match score
+                    <strong>2 tailored resumes per month</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>Recruiter ATS Scan</strong>: Match score + top findings
+                    <strong>1 custom cover letter draft</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>1 Custom Cover Letter draft</strong> with sign-off
+                    Search live jobs across Greenhouse, Lever, Ashby, and SmartRecruiters
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>Live job search</strong> across Greenhouse, Lever, Ashby
+                    Foundational Career Roadmaps (Stages 1 &amp; 2)
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
                   <span>
-                    <strong>17 Career Roadmaps</strong> (Stage 1 &amp; 2 foundations)
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Clean ATS Vector PDF Export</strong>
+                    ATS-compliant Vector PDF exports
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
-                  <span>Clean DOCX &amp; ATS Plaintext Export</span>
+                  <span>PDF, DOCX &amp; Plaintext Exports</span>
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
-                  <span>Full 3-Persona Recruiter Panel Breakdown</span>
+                  <span>Full 3-Persona Recruiter Review</span>
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
-                  <span>100+ Global Company Focus Guidance</span>
+                  <span>100+ Curated Company Focus Packs</span>
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
@@ -281,7 +283,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
-                  <span>Behavioral Interview Practice Coach &amp; STAR Scoring</span>
+                  <span>Behavioral Interview STAR Coach</span>
                 </li>
               </ul>
             </div>
@@ -349,7 +351,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               <p className="text-[11px] text-subtle mt-1">
                 {billingCycle === 'monthly'
                   ? 'Billed monthly · Cancel anytime'
-                  : `$${plusAnnualTotal} billed yearly · Save $24/year`}
+                  : `$${plusAnnualTotal} billed yearly · Save 20% on annual billing`}
               </p>
             </div>
 
@@ -393,7 +395,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>50 Truthful AI Tailored Resumes</strong> / month
+                    <strong>50 tailored resumes &amp; 25 cover letters/mo</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -401,7 +403,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Full 3-Persona Recruiter-Panel Reviews</strong> (Recruiter, HM, Technical Lead)
+                    <strong>Full 3-Persona Recruiter Review</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -409,7 +411,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>25 Custom Role-Specific Cover Letters</strong> / month
+                    <strong>100+ Curated Company Focus Packs</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -417,7 +419,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Full 100+ Global Company Guidance Library</strong> (Google, Stripe, Revolut, etc.)
+                    <strong>PDF, DOCX &amp; Plaintext Exports</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -425,23 +427,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Clean PDF + Editable DOCX Export + ATS Plaintext</strong>
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong>All 17 Career Roadmaps</strong> (Stages 1–4 full access)
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong>20 ATS Application Portal Answers</strong> / month
+                    <strong>20 ATS Screening Answers/mo</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
@@ -450,7 +436,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 </li>
                 <li className="flex items-start gap-2.5 text-subtle">
                   <X className="w-4 h-4 text-subtle/40 shrink-0 mt-0.5" />
-                  <span>Behavioral STAR Mock Interview Practice Coach</span>
+                  <span>Behavioral Interview STAR Coach</span>
                 </li>
               </ul>
             </div>
@@ -472,7 +458,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 onClick={() => handleStartCheckout('plus')}
                 className="w-full py-3.5 px-4 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-all cursor-pointer shadow-elevated flex items-center justify-center gap-2 group"
               >
-                <span>Upgrade to Plus (${billingCycle === 'monthly' ? '$9.99' : '$7.99'}/mo)</span>
+                <span>Upgrade to Plus (${billingCycle === 'monthly' ? '9.99' : '7.99'}/mo)</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </button>
             )}
@@ -520,7 +506,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
               <p className="text-[11px] text-subtle mt-1">
                 {billingCycle === 'monthly'
                   ? 'Billed monthly · Cancel anytime'
-                  : `$${proAnnualTotal} billed yearly · Save $48/year`}
+                  : `$${proAnnualTotal} billed yearly · Save 20% on annual billing`}
               </p>
             </div>
 
@@ -546,7 +532,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Unlimited Truthful AI Tailored Resumes</strong> with deep ATS match scoring
+                    <strong>Unlimited tailored resumes &amp; cover letters</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -554,7 +540,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Unlimited 3-Persona Recruiter-Panel Reviews</strong> + Candidate Defense Scripts
+                    <strong>Offer &amp; Salary Negotiation Copilot</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -562,7 +548,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Offer &amp; Salary Negotiation Copilot</strong> (Counter-offer email generator, live phone scripts, objection handlers)
+                    <strong>Behavioral Interview STAR Coach</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -570,7 +556,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Behavioral Interview Practice &amp; STAR Coach</strong> (AI Bar Raiser scoring + Gold Standard model rewrites)
+                    <strong>Unlimited ATS Application Answers</strong>
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
@@ -578,31 +564,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                   </div>
                   <span>
-                    <strong>Unlimited Custom Cover Letters</strong> &amp; Exec LinkedIn InMails
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong>Unlimited ATS Application Question Answers</strong> (STAR stories, Why Company, embedded keywords)
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong>1-Click Applicant Dossier Autofill</strong> for fast application submissions
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand/15 text-brand flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong>Priority AI Processing</strong> with fast, unthrottled generation pipeline
+                    <strong>Priority AI Generation Pipeline</strong>
                   </span>
                 </li>
               </ul>
@@ -625,7 +587,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 onClick={() => handleStartCheckout('pro')}
                 className="w-full py-3.5 px-4 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white text-xs font-semibold transition-all cursor-pointer shadow-elevated flex items-center justify-center gap-2 group"
               >
-                <span>Upgrade to Pro (${billingCycle === 'monthly' ? '$19.99' : '$15.99'}/mo)</span>
+                <span>Upgrade to Pro (${billingCycle === 'monthly' ? '19.99' : '15.99'}/mo)</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </button>
             )}
@@ -782,7 +744,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
                 </td>
               </tr>
               <tr>
-                <td className="py-3 pr-4">Live ATS Job Explorer (Greenhouse, Lever, Ashby)</td>
+                <td className="py-3 pr-4">Live ATS Job Explorer (Greenhouse, Lever, Ashby, and SmartRecruiters)</td>
                 <td className="py-3 px-3 text-center text-success">✓ Full Search</td>
                 <td className="py-3 px-3 text-center text-success">✓ Full Search</td>
                 <td className="py-3 pl-3 text-center text-success">✓ Full Search + Priority Crawler</td>
@@ -854,7 +816,7 @@ export const PricingView: React.FC<PricingViewProps> = ({
             </button>
 
             {checkoutSuccess ? (
-              <div className="text-center py-6 space-y-3">
+              <div className="text-center py-6 space-y-4">
                 <div className="w-14 h-14 rounded-full bg-success/15 text-success flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
@@ -862,7 +824,34 @@ export const PricingView: React.FC<PricingViewProps> = ({
                   Welcome to Job Studio {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'}!
                 </h3>
                 <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                  Your {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'} account is now active. Enjoy higher limits and powerful copilot tools.
+                  Your increased tailoring quota and advanced copilot features are now active.
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCheckoutModal(false);
+                      setCheckoutSuccess(false);
+                      if (onNavigateToTab) {
+                        onNavigateToTab('evaluator');
+                      }
+                    }}
+                    className="w-full py-3 px-6 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold cursor-pointer transition-colors shadow-md"
+                  >
+                    Go to Job Evaluator
+                  </button>
+                </div>
+              </div>
+            ) : isProcessing ? (
+              <div className="text-center py-10 space-y-4">
+                <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center mx-auto">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+                <h3 className="font-display text-lg font-bold text-foreground">
+                  Activating {selectedCheckoutPlan === 'pro' ? 'Pro' : 'Plus'} Subscription...
+                </h3>
+                <p className="text-xs text-subtle">
+                  Securing your copilot pipeline and upgrading workspace quotas...
                 </p>
               </div>
             ) : (

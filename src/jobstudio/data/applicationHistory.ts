@@ -71,6 +71,7 @@ export function applyJobUpdate(
     'salary',
     'notes',
     'interview_date',
+    'followed_up_at',
   ];
   const changedDetailKeys = detailFields.filter(
     (key) =>
@@ -90,6 +91,7 @@ export function applyJobUpdate(
 }
 
 function describeDetailChange(keys: Array<keyof AppliedJobRecord>): string {
+  if (keys.includes('followed_up_at')) return 'Follow-up date recorded';
   if (keys.length === 1 && keys[0] === 'notes') return 'Notes updated';
   if (keys.includes('match_score')) return 'Application details edited (match score revised)';
   return 'Application details edited';

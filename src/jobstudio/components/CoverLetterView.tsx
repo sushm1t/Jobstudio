@@ -1,8 +1,9 @@
 // @ts-nocheck -- ported verbatim from the original project
 import React, { useState } from 'react';
-import { Copy, CheckCircle2, Download, FileText } from 'lucide-react';
+import { Copy, CheckCircle2, Download, FileText, Loader2 } from 'lucide-react';
 import { CoverLetterData } from '../data/defaultData';
-import { generatePlainTextCoverLetter } from '../utils/pdfExport';
+import { generatePlainTextCoverLetter, downloadCoverLetterAsPdf } from '../utils/pdfExport';
+import { downloadCoverLetterAsDocx } from '../utils/docxExport';
 
 interface CoverLetterViewProps {
   coverLetter: CoverLetterData;
@@ -18,6 +19,10 @@ export const CoverLetterView: React.FC<CoverLetterViewProps> = ({
   jobTitle,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfSuccess, setPdfSuccess] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
+  const [docxSuccess, setDocxSuccess] = useState(false);
 
   const handleCopy = () => {
     const text = generatePlainTextCoverLetter(coverLetter, candidateName);
@@ -26,15 +31,34 @@ export const CoverLetterView: React.FC<CoverLetterViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadTxt = () => {
-    const text = generatePlainTextCoverLetter(coverLetter, candidateName);
-    const element = document.createElement('a');
-    const file = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    element.href = URL.createObjectURL(file);
-    element.download = `Cover_Letter_${companyName.replace(/\s+/g, '_')}_${candidateName.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+  const handleExportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const fileName = `Cover_Letter_${(companyName || 'Company').replace(/\s+/g, '_')}_${(candidateName || 'Candidate').replace(/\s+/g, '_')}.pdf`;
+      await downloadCoverLetterAsPdf(coverLetter, candidateName, fileName);
+      setPdfSuccess(true);
+      setTimeout(() => setPdfSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to export cover letter PDF:', err);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleExportDocx = () => {
+    if (exportingDocx) return;
+    setExportingDocx(true);
+    try {
+      const fileName = `Cover_Letter_${(companyName || 'Company').replace(/\s+/g, '_')}_${(candidateName || 'Candidate').replace(/\s+/g, '_')}.docx`;
+      downloadCoverLetterAsDocx(coverLetter, candidateName, fileName);
+      setDocxSuccess(true);
+      setTimeout(() => setDocxSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to export cover letter DOCX:', err);
+    } finally {
+      setExportingDocx(false);
+    }
   };
 
   if (!coverLetter || !coverLetter.body_paragraphs || coverLetter.body_paragraphs.length === 0) {
@@ -69,10 +93,11 @@ export const CoverLetterView: React.FC<CoverLetterViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto text-xs">
+        <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto text-xs">
           <button
+            type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 px-4 py-2 font-medium text-foreground bg-surface hover:bg-surface-2 border border-border rounded-full transition-all duration-200 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-foreground bg-surface hover:bg-surface-2 border border-border rounded-full transition-all duration-200 cursor-pointer"
           >
             {copied ? (
               <>
@@ -82,23 +107,73 @@ export const CoverLetterView: React.FC<CoverLetterViewProps> = ({
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5 text-subtle" />
-                <span>Copy</span>
+                <span>Copy Text</span>
               </>
             )}
           </button>
 
           <button
-            onClick={handleDownloadTxt}
-            className="inline-flex items-center gap-1.5 px-4 py-2 font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all duration-200 cursor-pointer"
+            type="button"
+            onClick={handleExportPdf}
+            disabled={exportingPdf}
+            className="inline-flex items-center gap-1.5 px-4 py-2 font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-full transition-all duration-200 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download className="w-3.5 h-3.5 text-primary-foreground" />
-            <span>Export .txt</span>
+            {exportingPdf ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Generating PDF...</span>
+              </>
+            ) : pdfSuccess ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>PDF Downloaded</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5" />
+                <span>Export PDF</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportDocx}
+            disabled={exportingDocx}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-foreground bg-surface hover:bg-surface-2 border border-border rounded-full transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {exportingDocx ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-subtle" />
+                <span>Generating DOCX...</span>
+              </>
+            ) : docxSuccess ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                <span>DOCX Downloaded</span>
+              </>
+            ) : (
+              <>
+                <FileText className="w-3.5 h-3.5 text-subtle" />
+                <span>Export DOCX</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {/* Styled Printable Letter Paper */}
       <div className="workspace-letter-paper paper p-8 sm:p-14 leading-relaxed">
+        {/* Candidate Header */}
+        <div className="mb-6 pb-4 border-b border-border/60">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+            {candidateName}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+
         {/* Recipient */}
         <div className="text-xs sm:text-sm text-muted-foreground whitespace-pre-line mb-6 pb-4 border-b border-border/60">
           {coverLetter.recipient}
